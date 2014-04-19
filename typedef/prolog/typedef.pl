@@ -1,7 +1,9 @@
 :- module(typedef,
     [ op(1150,fx,type)
     , op(1120,xfx,--->)
+    , (type)/1
     ]).
+
 /** <module> Type definition framework
 
    This module provides a way to declare new types that hook into the
@@ -43,6 +45,8 @@
 %  so NewType is equivalent to OldType.
 %
 %  This is directive. It cannot be called.
+type(Spec) :- throw(error(context_error(nodirective, type(Spec)), _)).
+
 user:term_expansion(:- type(Type == Syn), typedef:user_type_syn(Type,Syn)).
 user:term_expansion(:- type(Type ---> Defs), Clauses) :- type_def(Type,Defs,Clauses,[]).
 
