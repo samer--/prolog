@@ -22,5 +22,5 @@ pack:
 
 dist-clean:
 
-install: packfile
+install: pack
 	swipl -g "pack_install('$(PACKFILE)'),halt"

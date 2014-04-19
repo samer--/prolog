@@ -123,7 +123,7 @@
       compute(0), compute(0,-).
 
 :- use_module(library(persistency)).
-:- use_module(typedef).
+:- use_module(library(typedef)).
 
 :- multifile memoised/4, asserter/4, retracter/4, computer/4.
 
