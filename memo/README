@@ -1,0 +1,42 @@
+This package provides library(memo), a tool for memoising deterministic
+predicates in memory or persistently on the file system.
+It also includes library(typedef), which provides support for defining
+algebraic data types that hook into the type-checking framework of
+library(error).
+
+See library(memo) module header for more information.
+
+---++++ Quick test
+
+This is a small test file that you can use to check if it works.
+==
+:- use_module(library(memo)).
+:- use_module(library(typedef)).
+
+:- type maybe(A) ---> nothing; just(A).
+:- volatile_memo sqrt1(+float, -maybe(float)).
+:- persistent_memo sqrt2( +float, -float).
+
+sqrt1(X,just(Y)) :- X>=0, !, Y is sqrt(X).
+sqrt1(_,nothing).
+
+% this will throw an exception if X<0
+sqrt2(X,Y) :- Y is sqrt(X).
+
+:- initialization 
+		db_attach('test.db',[]),  % attach database for persistent memo
+		debug(memo).              % tocheck memoisation operations
+==
+Then, you can make queries such as
+==
+?- sqrt1(16,X).   % leads to type error (16 is not a float)
+?- sqrt1(16.0,X). % computes X=4.0
+?- sqrt1(16.0,X). % looks up old result, X=4.0
+?- sqrt1(-4.0,X). % fails
+?- sqrt2(9.0,X).  % computes X=3.0 and stores persistently
+?- sqrt2(-4.0,X). % records exception and then rethrow is
+?- sqrt2(-4.0,X). % rethrows recorded exception
+==
+The debug messages should indicate that repeated computations are being
+avoided, even for failing goals, like =|sqrt1(-4.0,X)|=, and computations
+that throw exceptions, like =|sqrt2(-4.0,X)|=.

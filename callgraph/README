@@ -1,0 +1,64 @@
+This package provides library(callgraph), a tool for compiling a graph of calls between predicates in a module.
+
+---++++ Prerequisites
+
+The graph layout programs from the GraphViz library (http://graphviz.org/) are
+used to render the end result. Whilst you can produce a dot file without them,
+you will need them for the final rendering. 
+On Mac OS X with MacPorts installed, do this at the bash prompt.
+==
+$ sudo port install graphviz
+==
+On Debian based systems, do this:
+==
+$ sudo apt-get install graphviz
+==
+And so on.
+You will need a PDF viewer to see the results.
+
+
+
+---++++ Simple usage
+
+To produce a call graph as a PDF, make sure that both this module and the
+module you wish to analyse are loaded, then do this:
+==
+?- module_dotpdf(<module_name>,[]).
+==
+This will produce a PDF file <module_name>.pdf in the current directory.
+Often, the default layout program, dot, will produce a very wide graph.
+This can sometimes be alleviated by using the unflatten program from the
+Graphviz tools. In module_dotpdf/2, the default layout method does actually
+use unflatten without any parameters, but if this is not enough, you can
+provide values for the -f, -l and -c switches of unflatten (see the man
+page for unflatten for more details). For example, to produce a graph of 
+callgraph itself, you can try the following:
+==
+$ swipl
+?- use_module(library(callgraph)).
+?- module_dotpdf(callgraph,[method(unflatten([fl(4),c(4)]))]).
+==
+
+---++++ Output formats
+
+If you want the dot language source file, use module_dot/2 instead. The
+method option is then inapplicable.
+
+The code can also produce rendered graphs in any format supported by
+Graphviz, but this functionality is not currently exposed.
+
+---++++ Limitations
+
+The graph compilation relies on prolog_walk_code/1 to do the actual code
+analysis. This does a good job in most cases, using meta-predicate declarations
+or inferred meta-predicates to detect many high-order calling patterns.
+Ironically enough, callgraph fails to analyse itself fully because
+prolog_walk_code/1 does not detect that it itself calls a given predicate
+for each call detected. Thus, in the example, there is no edge from 
+assert_module_graph/1 to assert_edge/4.
+
+---++++ Planned enhancements
+
+The main thing to add next is to render graphs for multiple modules using dot's
+subgraph facility. Otherwise, the system for dealing with style attributes is
+a bit messy and could be cleaned up.

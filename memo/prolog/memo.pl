@@ -1,0 +1,354 @@
+:- module(memo,
+    [ memo/1,    memo/2
+    , browse/1,  browse/2
+    , clear/1,   clear/2
+    , compute/1, compute/2
+    , (volatile_memo)/1
+    , (persistent_memo)/1
+    % , hostname/1
+    , op(1150,fx,volatile_memo)
+    , op(1150,fx,persistent_memo)
+    ]).
+
+/** <module> Memoisation of deterministic predicates
+
+   This module provides the ability to store the results of expensive to run
+   deterministic predicates to save recomputation. The memo table can be volatile
+   (in memory only) and therefore lost when SWI terminates, or stored persistently
+   on disk using the facilities provided by library(persistency).
+
+   Suppose you have a predicate expensive/4 which is deterministic with two inputs 
+   and two outputs, eg, its PlDoc comment could look like this:
+   ==
+   %% expensive(+In1:atom, +In2:int, -Out1:float, -Out2:compound) is det.
+   ==
+   Then a volatile memo could be declared with the following directive:
+   ==
+   :- volatile_memo expensive( +atom, +int, -float, -compound).
+   ==
+   This causes a dynamic predicate expensive/5 to be declared (the extra
+   argument is for metadata about the computation that produced the result).
+   It also causes the definition of the predicate expensive/4 to be renamed to
+   compute_expensive/4, and a new expensive/4 is generated which looks in the
+   memo table (expensive/5) to avoid recomputations.
+
+   To declare a persistently memoised predicate, you would use
+   ==
+   :- persistent_memo expensive( +atom, +int, -float, -compound).
+   ==
+   This causes a persistent predicate expensive/5 to be declared via
+   facilities provided by library(persistency). Otherwise, things look
+   the same externally (there are some internal differences).
+   It is the caller's responsibility to attach a persistent database.
+
+   ---+++ Argument specifiers
+
+   Each volatile_memo/1 or persistent_memo/1 directive can contain one or more predicate
+   declarations, where each argument of the predicate declaration term specifies
+   an input or out argument of the predicate to be memoised. The predicate will
+   be treated as semi-deterministic in the sense that it will succeed at most
+   once for each combination of inputs. Each argument specifier must look like one of these:
+      *  +Type  
+      An input of type Type.
+      *  +Name:Type  
+      An input named Name of type Type.
+      *  -Type
+      An output of type Type.
+      *  -Name:Type  
+      An output named Name of type Type.
+
+   ---+++ Meta-level interface
+
+   Memoised predicates can be accessed at a 'meta-level' using some
+   meta-predicates which you can think of as modal operators.
+   
+   First of all, each memoised call to the base predicate has some recorded
+   meta-data whose type is =|metadata|=, defined below:
+   ==
+   metadata    == pair(comp_event,result).
+   pair(A,B)  ---> A-B.
+   result     ---> ok ; fail ; ex(any).
+   comp_event ---> comp(hostname,time,duration)
+                 ; comp(hostname,duration)
+                 ; none.
+   hostname == ground.
+   time     == float.
+   duration == float.
+   ==
+   Thus, the meta-data can record the computer on which the computation was
+   done, the time it was called (as returned by get_time/1), the duration of
+   the computation in seconds, and whether or not the computation succeeded, 
+   failed, or threw an exception. The fact that failures and exception-throwings
+   are recorded means that object level interface (eg expensive/4 in the example
+   above) avoids repeating unsuccessful computation as well as successful ones.
+   
+   The meta-level browse/1 and browse/2 allow you to access this information.
+   browse(Goal) is a nondeterministic predicate which unifies Goal with all the
+   successful calls in the memo table. browse(Goal,Meta) matches all calls in the
+   memo table including unsuccessful ones.
+
+   The meta-level clear/1 and clear/2 allow you to delete memo table entries.
+   The meta-level memo(Goal) is the same as the object level Goal, failing or
+   throwing an expection depending on what the underlying predicate does, but
+   the meta-level memo(Goal,Meta) catches failures and exceptions, returning the
+   meta-data in Meta.
+
+   Finally, the meta-level compute/1 by-passes all the memoisation machinery
+   and calls the original underlying predicate directly. This is useful in
+   cases where you absolutely need any side-effects caused by the original
+   computation. compute/2 is the same except that failures and exceptions are
+   reified as meta-data.
+
+   ---+++ Setting the host name
+
+   The meta-data includes the host name of the computer used to do the 
+   computations. On a Unix system, this should get picked up from the environment
+   automatically, using =|getenv('HOSTNAME',Hostname)|= (see getenv/2).
+   If this doesn't work, then you should set the host name explicitly using
+   the hostname/1 directive. It MUST be a directive, not a call, as it gets
+   compiled into the system for each memoised predicate, so you cannot change
+   it afterwards. This must be before any memoised predicate declarations, like this:
+   ==
+   :- hostname(deepthought).
+   ==
+   TODO:
+
+   - check for duplicate declarations
+   - check for missing predicate definitions
+*/
+:- meta_predicate 
+      memo(0), memo(0,-), 
+      browse(0), browse(0,-), 
+      clear(0),  clear(0,-),
+      compute(0), compute(0,-).
+
+:- use_module(library(persistency)).
+:- use_module(typedef).
+
+:- multifile memoised/4, asserter/4, retracter/4, computer/4.
+
+:- type pair(A,B) ---> A-B.
+:- type time     == float.
+:- type duration == float.
+:- type hostname == ground.
+:- type metadata == pair(comp_event,result).
+:- type result     ---> ok ; fail ; ex(any).
+:- type comp_event ---> comp(hostname,time,duration)
+                      ; comp(hostname,duration)
+                      ; none.
+
+
+:- dynamic hostname/1.
+
+
+init_hostname :-
+   (  predicate_property(user:hostname(_),_) -> hostname(H)
+   ;  getenv('HOSTNAME',H) -> true
+   ;  H=unknown
+   ),
+   assert(hostname(H)).
+
+
+%% volatile_memo(+Spec) is det.
+%
+%  Directive to declare memoised predicates. Spec can be a single memo predicate
+%  specifier or several comma separated ones, as with dynamic/1 etc, for example,
+%  ==
+%  :- volatile_memo pred1( ArgSpec1, ArgSpec2), 
+%          pred2(ArgSpec3,ArgSpec4,ArgSpec5).
+%  ==
+%  where ArgSpec1 etc are argument specifiers= as defined in the module
+%  header comment. It must look like +Type, -Type, +Name:Type or -Name:Type.
+%  Name, if given is not used.
+volatile_memo(Spec) :- throw(error(context_error(nodirective, volatile_memo(Spec)), _)).
+
+%% persistent_memo(+Spec) is det.
+%
+%  Directive to declare memoised predicates. Spec can be a single memo predicate
+%  specifier or several comma separated ones, as with dynamic/1 etc, for example,
+%  ==
+%  :- persistent_memo pred1( ArgSpec1, ArgSpec2), 
+%                     pred2( ArgSpec3, ArgSpec4, ArgSpec5).
+%  ==
+%  where ArgSpec1 etc are argument specifiers= as defined in the module
+%  header comment. It must look like +Type, -Type, +Name:Type or -Name:Type.
+%  Name, if given is only used for the declaration of the persistent memo table.
+persistent_memo(Spec) :- throw(error(context_error(nodirective, persistent_memo(Spec)), _)).
+
+%% browse(?Goal:callable, ?Meta:metadata) is nondet.
+%% browse(?Goal:callable) is nondet.
+%
+%  Looks up previous computations of memoised predicate Goal. browse/1 unifies Goal
+%  with all successful computations. browse/2 unifies Goal and Meta with all computations,
+%  including failed or exception-throwing computations. browse(Goal) is equivalent
+%  to browse(Goal, _-ok).
+browse(Module:Head) :- browse(Module:Head,_-ok).
+browse(Module:Head,Meta) :- memoised(Module,Head,Meta,MemoHead), call(Module:MemoHead).
+
+%% clear(@Goal:callable, @Meta:metadata) is det.
+%% clear(@Goal:callable) is det.
+%
+%  Clears all matching entries from the memo tables that unify with Goal. clear/2 additionally
+%  allows selection on the basis of meta-data. Deletion is NOT undone on backtracking.
+clear(Module:Head) :- clear(Module:Head,_).
+clear(Module:Head,Meta) :- 
+   must_be(nonvar,Head), 
+   retracter(Module,Head,Meta,RetractHead), 
+   call(Module:RetractHead).
+
+%% compute(+Goal:callable) is semidet.
+%
+%  Calls the original un-memoised predicate without checking or modifying memo-tables.
+compute(Module:Head) :- 
+   computer(Module,Head,Spec,ComputeHead),
+   type_and_mode_check(Spec,Head),
+   call(Module:ComputeHead).
+
+%% compute(+Goal:callable, -Meta:metadata) is det.
+%
+%  Calls the original un-memoised predicate without checking or modifying memo-tables.
+%  If the underlying predicate fails or throws an exception, Meta is set accordingly.
+compute(Module:Head,Meta) :- 
+   memoised(Module,Head,Meta,_),
+   computer(Module,Head,Spec,ComputeHead),
+   type_and_mode_check(Spec,Head),
+   timed(reify(Module:ComputeHead,Res),Comp),
+   Meta=Comp-Res.
+
+%% memo(+Goal:callable, -Meta:metadata) is det.
+%% memo(+Goal:callable) is semidet.
+%
+%  Calls memoised predicate if it has not been called before with these input arguments, storing
+%  the result, or looks up previous matching computations if they exist.
+%  Goal must be sufficiently instantiated to satisfy the underlying memoised predicate. 
+%  memo/1 and memo/2 behave differently if the underlying predicate fails or throws an
+%  exception. memo/1 _reflects_ this behaviour, failing or throwing the same exception, even
+%  the computation was not actually repeated but was retrieve from the memo table.
+%  memo/2 _reifies_ this behaviour, returing information in Meta.
+memo(Module:Head) :- memo(Module:Head,_-Res), reflect(Res).
+memo(Module:Head,Meta) :-
+   memoised(Module,Head,Meta,MemoHead),
+   computer(Module,Head,Spec,ComputeHead),
+   type_and_mode_check(Spec,Head),
+   (  call(Module:MemoHead) 
+   *->debug(memo,'found ~q.',[Module:Head])
+   ;  debug(memo,'computing ~q...',[Module:Head]),
+      timed(reify(Module:ComputeHead,Res),Comp),
+      asserter(Module,Head,Meta,AssertHead),
+      debug(memo,'storing (~w) ~q...',[Res,Module:Head]),
+      Meta=Comp-Res, call(Module:AssertHead)
+   ).
+
+reflect(ok) :- !.
+reflect(fail) :- !, fail.
+reflect(ex(Ex)) :- throw(Ex).
+
+compile_memo(_,Var, _) --> { var(Var), !, instantiation_error(Var) }.
+
+compile_memo(Type, (A,B), Module) --> !,
+   compile_memo(Type, A, Module),
+   compile_memo(Type, B, Module).
+
+compile_memo(volatile, Spec, Module) -->
+   {  % strip any arg names from spec
+      debug(memo,'registering volatile memo predicate ~q...',[Spec]),
+      Spec =.. [Name|ArgSpecs],
+      maplist(strip_name,ArgSpecs,ArgTypes),
+      Type =.. [Name|ArgTypes],
+
+      functor(Spec, Name, Arity),   
+      length(Args, Arity),
+      build_term([Name], Args,        Head),
+      build_term([Name], [Meta|Args], MemoHead),
+      functor(MemoHead, MemoName, MemoArity),
+
+      build_term([MemoName], [MetaA|Args], AssertHead),
+      build_term([MemoName], [Meta|Args], RetractHead),
+      build_term(['compute_',Name],Args, ComputeHead),
+      debug(memo,'-  backed  by ~q...',[MemoName/MemoArity]),
+      debug(memo,'-  computed by ~q...',[ComputeHead]),
+      hostname(Host), MetaA=comp(Host,_,_)-_
+   },
+   [ :- dynamic(MemoName/MemoArity),
+
+     memo:memoised(Module, Head, Meta, MemoHead),
+     memo:computer(Module, Head, Type, ComputeHead),
+     memo:asserter(Module, Head, MetaA, assertz(Module:AssertHead)),
+     memo:retracter(Module, Head, Meta, retractall(Module:RetractHead)),
+     (Head :- memo(Head))
+   ].
+
+compile_memo(persistent, Spec, Module) -->
+   {  % strip any arg names from spec
+      debug(memo,'registering persistent memo predicate ~q...',[Spec]),
+      Spec =.. [Name|ArgSpecs],
+      maplist(strip_name,ArgSpecs,ArgTypes),
+      Type =.. [Name|ArgTypes],
+
+      functor(Spec, Name, Arity),   
+      length(Args, Arity),
+      build_term([Name], Args, Head),
+      build_term([Name], [Meta|Args], MemoHead),
+      functor(MemoHead, MemoName, _),
+
+      build_term(['compute_', Name],     Args,        ComputeHead),
+      build_term(['assert_',  MemoName], [MetaA|Args], AssertHead),
+      build_term(['retractall_', MemoName], [Meta|Args], RetractHead),
+
+      maplist(mtype_to_ptype, ArgSpecs, PTypes),
+      PersistencySpec =.. [MemoName,meta:metadata | PTypes],
+      debug(memo,'-  backed  by ~q...',[PersistencySpec]),
+      debug(memo,'- computed by ~q...',[ComputeHead]),
+      expand_term( (:- persistent(PersistencySpec)), PersistClauses),
+      hostname(Host), MetaA=comp(Host,_,_)-_
+   },
+   phrase(PersistClauses),
+   [ memo:memoised(Module, Head, Meta, MemoHead),
+     memo:computer(Module, Head, Type, ComputeHead),
+     memo:asserter(Module, Head, MetaA, Module:AssertHead),
+     memo:retracter(Module, Head, Meta, Module:RetractHead),
+     (Head :- memo(Head))
+   ].
+
+build_term(NameParts,Args,Term) :- atomic_list_concat(NameParts,Name), Term =.. [Name|Args].
+
+mtype_to_ptype( +N:T, N:T) :- !.
+mtype_to_ptype( -N:T, N:partial(T)) :- !.
+mtype_to_ptype( +T, _:T).
+mtype_to_ptype( -T, _:partial(T)).
+strip_name(+_:T,+T) :- !.
+strip_name(-_:T,-T) :- !.
+strip_name(S,S) :- !.
+
+type_and_mode_check(Type,Head) :-
+   forall( arg(I,Type,ArgSpec), 
+      (  arg(I,Head,Arg), 
+         (  ArgSpec = +ArgType -> must_be(ArgType,Arg)
+         ;  ArgSpec = -_ -> must_be(var,Arg)))).
+
+user:term_expansion((:- volatile_memo(Spec)), Clauses) :-
+   prolog_load_context(module, Module),
+   phrase(compile_memo(volatile, Spec, Module), Clauses).
+
+user:term_expansion((:- persistent_memo(Spec)), Clauses) :-
+   prolog_load_context(module, Module),
+   phrase(compile_memo(persistent, Spec, Module), Clauses).
+
+user:term_expansion((:- hostname(H)), []) :- 
+   retractall(hostname(_)), assert(hostname(H)).
+
+user:term_expansion((Head :- Body),(ComputeHead :- Body)) :-
+   prolog_load_context(module, Module),
+   computer(Module,Head,_,ComputeHead).
+
+user:term_expansion(Head,ComputeHead) :-
+   prolog_load_context(module, Module),
+   computer(Module,Head,_,ComputeHead).
+
+timed(Goal,comp(_,T1,DT)) :- 
+   get_time(T1), call(Goal), 
+   get_time(T2), DT is T2-T1.
+
+reify(Goal,R) :- catch((Goal -> R=ok ; R=fail), Ex, R=ex(Ex)).
+
+:- initialization init_hostname.
