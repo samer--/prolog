@@ -1,0 +1,13 @@
+This package provides library(typedef), a small library for
+processing type declarations.
+
+See library(typedef) module header for more information.
+
+---++++ Quick test
+
+This is a small test file that you can use to check if it works.
+==
+:- use_module(library(typedef)).
+
+:- type maybe(A) ---> nothing; just(A).
+==
