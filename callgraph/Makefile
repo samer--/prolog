@@ -20,7 +20,7 @@ packfile:
 	cp -p README $(PACKNAME)
 	tar czf $(PACKFILE) $(PACKNAME)
 	rm -rf $(PACKNAME)
-	hg add $(PACKFILE)
+	git add $(PACKFILE)
 
 install: packfile
 	swipl -g "pack_install('$(PACKFILE)')"

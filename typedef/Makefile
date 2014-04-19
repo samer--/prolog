@@ -11,7 +11,8 @@ PACKFILE=release/$(PACKNAME)-$(VER).tgz
 
 all: packfile
 
-packfile:
+
+pack:
 	mkdir -p $(PACKNAME) $(PACKNAME)/prolog 
 	sed -e 's/<VER>/$(VER)/' pack.pl > $(PACKNAME)/pack.pl
 	cp -pR prolog $(PACKNAME)
@@ -20,5 +21,7 @@ packfile:
 	rm -rf $(PACKNAME)
 	git add $(PACKFILE)
 
-install: packfile
+dist-clean:
+
+install: pack
 	swipl -g "pack_install('$(PACKFILE)'),halt"
