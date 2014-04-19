@@ -225,6 +225,10 @@ compute(Module:Head,Meta) :-
 %  exception. memo/1 _reflects_ this behaviour, failing or throwing the same exception, even
 %  the computation was not actually repeated but was retrieve from the memo table.
 %  memo/2 _reifies_ this behaviour, returing information in Meta.
+%
+%  Note that the type and mode are checked strictly. An Input argument X declared with +T
+%  must satisfy must_ba(T,X). An output argument declared with a -T must an unbound
+%  variable. 
 memo(Module:Head) :- memo(Module:Head,_-Res), reflect(Res).
 memo(Module:Head,Meta) :-
    memoised(Module,Head,Meta,MemoHead),
