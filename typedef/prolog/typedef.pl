@@ -33,6 +33,13 @@
 :- op(1150,fx,type).
 :- op(1130,xfx, --->).
 
+% true if the module whose terms are being read has specifically
+% imported library(typedef).
+wants_typedef :-
+    prolog_load_context(module, Module),
+    Module \== typedef,  % we don't want typedef sugar ourselves
+    predicate_property(Module:type(_),imported_from(typedef)).
+
 %% type(Spec).
 %  Declares a new type. Spec can be one of two forms:
 %  ==
@@ -47,8 +54,11 @@
 %  This is directive. It cannot be called.
 type(Spec) :- throw(error(context_error(nodirective, type(Spec)), _)).
 
-user:term_expansion(:- type(Type == Syn), typedef:user_type_syn(Type,Syn)).
-user:term_expansion(:- type(Type ---> Defs), Clauses) :- type_def(Type,Defs,Clauses,[]).
+user:term_expansion(:- type(Type == Syn), typedef:user_type_syn(Type,Syn)) :-
+    wants_typedef.
+user:term_expansion(:- type(Type ---> Defs), Clauses) :-
+    wants_typedef,
+    type_def(Type,Defs,Clauses,[]).
 
 type_def(Type,Defs) -->
    [ typedef:user_type_def(Type) ],
