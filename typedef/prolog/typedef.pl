@@ -27,18 +27,28 @@
    The result types can be used with must_be/2 and therefore in the record
    declarations provided by library(record) and the peristency declarations
    provided by library(persistency).
+
+   TODO
+   - Consider allowing duplicate type definitions if the definitions are the same.
+   - Consider extending partial(T) type.
 */
 
-:- multifile user_type_def/1, user_type_constructor/2.
+:- multifile user_type_syn/2, user_type_def/1, user_type_constructor/2.
 :- op(1150,fx,type).
 :- op(1130,xfx, --->).
 
 % true if the module whose terms are being read has specifically
 % imported library(typedef).
 wants_typedef :-
-    prolog_load_context(module, Module),
-    Module \== typedef,  % we don't want typedef sugar ourselves
-    predicate_property(Module:type(_),imported_from(typedef)).
+   prolog_load_context(module, Module),
+   Module \== typedef,  % we don't want typedef sugar ourselves
+   predicate_property(Module:type(_),imported_from(typedef)).
+
+check_not_defined(Type) :-
+   (  (user_type_syn(Type,_); user_type_def(Type))
+   -> throw(error(duplicate_type(Type),(type)/1))
+   ;  true
+   ).
 
 %% type(Spec).
 %  Declares a new type. Spec can be one of two forms:
@@ -51,18 +61,20 @@ wants_typedef :-
 %  arguments for that constructor. The second form declares a type synonym,
 %  so NewType is equivalent to OldType.
 %
+%  It is an error to declare the same type more than once, even if the definition
+%  is the same. Type name space is flat, not module scoped.
 %  This is directive. It cannot be called.
 type(Spec) :- throw(error(context_error(nodirective, type(Spec)), _)).
 
-user:term_expansion(:- type(Type == Syn), Clause) :-
-    wants_typedef,
-    Clause = (
-        error:has_type(Type, Value) :-
-            error:has_type(Syn, Value)
-    ).
+user:term_expansion(:- type(Type == Syn), [C1,C2]) :-
+   wants_typedef,
+   check_not_defined(Type),
+   C1 = typedef:user_type_syn(Type,Syn),
+   C2 = (error:has_type(Type, Value) :- error:has_type(Syn, Value)).
 user:term_expansion(:- type(Type ---> Defs), Clauses) :-
-    wants_typedef,
-    type_def(Type,Defs,Clauses,[]).
+   wants_typedef,
+   check_not_defined(Type),
+   type_def(Type,Defs,Clauses,[]).
 
 type_def(Type,Defs) -->
    [ typedef:user_type_def(Type) ],
@@ -84,3 +96,7 @@ has_type(Type,Term) :-
       functor(Term,F,A),
       forall( arg(N,Cons,ArgType), (arg(N,Term,ArgVal), error:has_type(ArgType,ArgVal)))
    ).
+
+prolog:message(error(duplicate_type(Type),_)) -->
+   {numbervars(Type,0,_)},
+   [ 'Redefinition of type ~w.'-[Type], nl].
