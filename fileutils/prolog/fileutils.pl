@@ -122,7 +122,7 @@ with_output_to_file(File,Goal) :- with_output_to_file(File,Goal,[]).
 with_output_to_file(File,Goal,Opts) :- 
 	select_option(mode(Mode),Opts,Opts1,write),
 	must_be(oneof([write,append]),Mode),
-   with_stream(S, open(File,Mode,S,Opts1), Goal).
+   with_stream(S, open(File,Mode,S,Opts1), with_output_to(S,Goal)).
 
 
 %% with_input_from_file( +File, :Goal) is semidet.
