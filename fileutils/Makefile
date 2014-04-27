@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=fileutils
-VER=0.1.1
+VER=0.1.2
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 

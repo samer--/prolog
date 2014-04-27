@@ -19,14 +19,7 @@
    This module provides a number of meta-predicates for directing the
    input or output streams of arbitrary goals from or to files or
    streams. It also provides some predicates for finding files in
-   the file system.
-
-   In this module, the type =|spec|= denotes terms of the sort
-   understood by expand_file_search_path/2, that is, either atoms
-   representing relative or absolute paths, possibly including the
-   special characters understood by expand_file_name/2, or unary
-   terms corresponding to clauses of file_search_path/2, which then
-   expand to atoms, possibly including wildcards.
+   the file system, and for matching files on the basis of extension.
 
    ---++++ Types
 
