@@ -9,7 +9,7 @@ VER=0.1.2
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
-all: packfile
+all: pack
 
 
 pack:

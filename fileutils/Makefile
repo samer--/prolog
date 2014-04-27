@@ -4,22 +4,24 @@
 # in a non-standard place, set PLLD to the appropriate plld invokation, eg
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
-PACKNAME=callgraph
-VER=0.2.2
+PACKNAME=fileutils
+VER=0.1.1
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
-main: 
-	make -C c
+all: pack
+
 
 pack:
 	mkdir -p $(PACKNAME) $(PACKNAME)/prolog 
-	sed -e "s/<VER>/$(VER)/" < pack.pl > $(PACKNAME)/pack.pl
+	sed -e 's/<VER>/$(VER)/' pack.pl > $(PACKNAME)/pack.pl
 	cp -pR prolog $(PACKNAME)
 	cp -p README $(PACKNAME)
 	tar czf $(PACKFILE) $(PACKNAME)
 	rm -rf $(PACKNAME)
 	git add $(PACKFILE)
 
+dist-clean:
+
 install: pack
-	swipl -g "pack_install('$(PACKFILE)'), halt"
+	swipl -g "pack_install('$(PACKFILE)'),halt"

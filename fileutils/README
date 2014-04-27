@@ -1,0 +1,5 @@
+This package provides library(fileutils), some small utilities that extend
+SWIs built-in facilities from library(readutil) and with_output_to/2 etc.
+
+See library(fileutils) module header for more information.
+
