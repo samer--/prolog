@@ -32,7 +32,7 @@
    Department of Computer Science, UCL, 2014
  */
 
-:- use_module(fileutils).
+:- use_module(library(fileutils)).
 :- use_module(dcgu).
 
 
