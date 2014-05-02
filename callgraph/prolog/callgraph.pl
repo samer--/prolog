@@ -1,10 +1,6 @@
 :- module(callgraph, 
 	[	module_dotpdf/2
    ,  module_dot/2
-   % ,  assert_module_graph/1
-   % ,  current_ugraph/1
-   % ,  current_dot/3
-   % ,  module_graphml/1
 	]).
 
 /** <module> Visualisation of inter-predicate call graphs
@@ -44,107 +40,135 @@
 
    Three parts to this:
    1. Using prolog_walk_code/1 to compile a database of inter-predicate calls
-      into dynamic predicates calls/2, mutates/2, reads/2 and writes/2.
+      into dynamic predicate edge/3.
    2. Possible transformations of graph (eg pruning).
    3. Collect information about desired modules/predicates into a Dot graph
       structure as defined by dotdct.pl
+
+   ---+++ Types used internally
+   
+   *  pred_head
+      Predicate specifier as Modue:Head where Head is a term with same 
+      name and arity of the predicate concerned.
+   *  module
+      Module name as an atom.
+   *  record_head
+      Term like Key:Term, reference to recorded database terms with
+      Term and given Key.
+   *  node
+      Node name as Atom:Name/Arity.
+   ==
+   module == atom.
+   functor   ---> atom/natural.
+   pred_head ---> module:term.
+   node      ---> atom:functor.
+   record_head ---> atom:term.
+   edge_spec ---> dynamic(module,pred_head,list(edge_type))
+                ; recorded(edge_type,record_head).
+   edge_type ---> calls ; mutates ; reads ; writes.
+   ==
 */
 
 
 :- use_module('library/dcgu').
 :- use_module('library/dot').
-% :- use_module(library(graphml_ugraph)).
 
 % ------------ Building the call graph in the Prolog database -----------------------
 
-:- dynamic calls/2.
-:- dynamic mutates/2.
-:- dynamic reads/2, writes/2.
+:- dynamic edge/3.
+%% edge( -T:edge_type, -Source:node, -Target:node) is nondet.
+%  Dynamic predicate for storing edges discoverd by code analysis.
 
-%% assert_module_graph(+ModuleName) is det.
-%  Analyses module ModuleName (using prolog_walk_code/1) asserting information about the
-%  call graph to a set of private dynamic predicates.
-assert_module_graph(Mod) :-
-   retract_call_graph,
-	prolog_walk_code([ trace_reference(_), module(Mod), on_trace(assert_edge(Mod)), source(false) ]),
-	predicate_property(calls(_,_), number_of_clauses(N)),
-	format('Got ~D edges~n', [N]).
+retract_graph :- retractall(edge(_,_,_)).
 
-retract_call_graph :-
-   retractall(calls(_,_)),
-   retractall(mutates(_,_)),
-   retractall(reads(_,_)),
-   retractall(writes(_,_)).
+%% assert_graph(+Modules:list(atom)) is det.
+%  Analyses modules (using prolog_walk_code/1) asserting information about the
+%  call graph to a set of private dynamic predicates. 
+assert_graph(Mods) :-
+   retract_graph,
+   forall( member(Mod,Mods),
+      prolog_walk_code([ trace_reference(_), module(Mod), on_trace(trace_call(Mods)), source(false) ])
+   ),
+	predicate_property(edge(_,_,_), number_of_clauses(N)),
+	format('Got ~D edges.~n', [N]).
 
-% Irreflexive version of calls.
-calls_ir(Caller,Callee) :-
-   calls(Caller,Callee),
-   Caller\=Callee.
 
-%% mutator(+Goal,-Pred) is semidet.
-%  True when Goal changes predicate Pred.
-mutator(assert(H:-_),H) :- !.
-mutator(assertz(H:-_),H) :- !.
-mutator(asserta(H:-_),H) :- !.
-mutator(assert(H),H) :- !.
-mutator(assertz(H),H).
-mutator(asserta(H),H).
-mutator(retract(H),H).
-mutator(retractall(H),H).
-caller(retract(H), H).
+%% trace_call(+Mods:list(module), +Goal:pred_head, +Caller:pred_head, +Context) is det.
+%  Callback predicate for prolog_walk_code/1.
+trace_call(Mods, M1:H1, M2:H2, _) :-
+   memberchk(M1,Mods), memberchk(M2,Mods), 
+   head_node(M2:H2,Caller),
+   (classify(M1:H1,Class) -> true; Class=normal(M1:H1)),
+   assert_edges(Class,Caller,Mods).
+trace_call(_,Goal,Caller,_) :-
+   debug(callgraph,'Ignoring ~q ---> ~q.',[Caller,Goal]).
 
-reader(recorded(Key,Term,_), Node) :- goal_pred(Key:Term,Node).
-reader(recorded(Key,Term), Node) :- goal_pred(Key:Term,Node).
-writer(recorda(Key,Term,_), Node) :- goal_pred(Key:Term,Node).
-writer(recorda(Key,Term), Node) :- goal_pred(Key:Term,Node).
-writer(recordz(Key,Term,_), Node) :- goal_pred(Key:Term,Node).
-writer(recordz(Key,Term), Node) :- goal_pred(Key:Term,Node).
-writer(record(Key,Term,_), Node) :- goal_pred(Key:Term,Node).
-writer(record(Key,Term), Node) :- goal_pred(Key:Term,Node).
 
-assert_edge(M, M:Head, M:Caller, _Where) :-
-   writer(Head,Node), !,
-   goal_pred(M:Caller,CallerFA),
-   assert_fact(writes(CallerFA,Node)).
+%% classify( +G:pred_head, -E:edge_spec) is semidet.
+%  Goal Classification predicate. 
+classify(M:assert(C),       dynamic(M,C,[mutates])).
+classify(M:assertz(C),      dynamic(M,C,[mutates])).
+classify(M:asserta(C),      dynamic(M,C,[mutates])).
+classify(M:retractall(C),   dynamic(M,C,[mutates])).
+classify(M:retract(C),      dynamic(M,C,[mutates,calls])).
+classify(_:recorded(K,T,_), recorded(reads,K:T)).
+classify(_:recorda(K,T,_),  recorded(writes,K:T)).
+classify(_:recorda(K,T),    recorded(writes,K:T)).
+classify(_:recordz(K,T,_),  recorded(writes,K:T)).
+classify(_:recordz(K,T),    recorded(writes,K:T)).
 
-assert_edge(M, M:Head, M:Caller, _Where) :-
-   reader(Head,Node), !,
-   goal_pred(M:Caller,CallerFA),
-   assert_fact(reads(CallerFA,Node)).
+%% assert_edges(+E:edge_spec, +Caller:node, +Mods:list(module)) is det.
+%  Assert relevant edges (if any) for call from Caller to target specified by E.
+assert_edges(recorded(T,Spec),Caller,_)   :- head_node(Spec,N), assert_edge(T,Caller,N).
+assert_edges(dynamic(M,C,Ts), Caller, Ms) :- mod_clause_head(M,C,H), assert_types(Ts,H,Caller,Ms).
+assert_edges(normal(Goal), Caller, Ms)    :- goal_pred_head(Goal,H), assert_types([calls],H,Caller,Ms).
+assert_edges(_,_,_). % catch all if other clauses fail
 
-assert_edge(M, M:Head, M:Modifier, _Where) :-
-   mutator(Head,Modified), !,
-   goal_pred(M:Modified,ModifiedFA),
-   goal_pred(M:Modifier,ModifierFA),
-   assert_fact(mutates(ModifierFA,ModifiedFA)),
-   (  caller(Head,Modified) 
-   -> assert_fact(calls(ModifierFA,ModifiedFA))
-   ).
+%% mod_clause_head( +M:module, +C:clause, -H:pred_head) is det.
+%  Combines a clause (as supplied to assert/retract) with its source
+%  module to get the head (including module) of the dynamic predicate being
+%  modified. Basically, it allows any module specified in C to to 
+%  override M.
+mod_clause_head(_, (M:H:-_), M:H) :- !.
+mod_clause_head(_, (M:H), M:H) :- !.
+mod_clause_head(M, (H:-_), M:H) :- !.
+mod_clause_head(M, H, M:H).
 
-% matches calls within module M.
-assert_edge(M, M:Callee, M:Caller, _Where) :-
-   \+predicate_property(M:Callee, built_in),
-   \+predicate_property(M:Callee, imported_from(_)), !,
-   goal_pred(M:Callee,CalleeFA),
-   goal_pred(M:Caller,CallerFA),
-   assert_fact(calls(CallerFA,CalleeFA)).
+%% assert_types(+Ts:list(edge_type), +Target:pred_head, +Caller:node, +Mods:list(module)) is semidet.
+%  Assert edges of types in Ts from Caller to Target, but only if the 
+%  home module of Target is a member of Mods.
+assert_types(Types,M3:H,Caller,Mods) :-
+   memberchk(M3,Mods),
+   head_node(M3:H,Node),
+   forall(member(T,Types), assert_edge(T,Caller,Node)).
 
-% do nothing silently for other calls
-assert_edge(_,_,_,_).
+%% goal_pred_head( +Goal:pred_head, -Pred:pred_head) is semidet.
+% matches a goal to it's ultimate, non-built in source predicate.
+% Fails if predicate is built in.
+goal_pred_head(M1:H,M3:H) :-
+   \+predicate_property(M1:H, built_in),
+   (predicate_property(M1:H, imported_from(M3)) -> true; M3=M1).
 
-% asserts fact if not already asserted.
-assert_fact(Head) :- call(Head) -> true; assertz(Head).
+%% assert_edge(+T:edge_type, +N1:node, +N2:node) is det.
+% asserts edge if not already asserted.
+assert_edge(T,N1,N2) :- edge(T,N1,N2) -> true; assertz(edge(T,N1,N2)).
 
-goal_pred(M:H,M:F/A) :- nonvar(M), (nonvar(H);ground(F/A)), functor(H,F,A).
+%% head_node( +H:head, -P:node) is det.
+%% head_node( -H:head, +P:node) is det.
+%  convert predicate or record head from head term to functor/arity.
+%  ==
+%  head ---> atom:term.
+%  ==
+head_node(M:H,M:F/A) :- must_be(nonvar,M), (nonvar(H);ground(F/A)), functor(H,F,A).
 
 
 % ----------------------- GraphML output ----------------------
 % Leaving this out for the time being.
 
 % module_graphml(Mod) :-
-%    assert_module_graph(Mod),
+%    assert_graph([Mod]),
 %    current_ugraph(Graph),
-%    retract_call_graph,
+%    retract_graph,
 %    format(atom(File),'~w.graphml',[Mod]),
 %    graphml_write_ugraph(File, nomap, [], Graph).
 
@@ -225,10 +249,10 @@ goal_pred(M:H,M:F/A) :- nonvar(M), (nonvar(H);ground(F/A)), functor(H,F,A).
 %               ; diagonals ; filled ; striped ; wedged. 
 % ==
 module_dot(Mod,Opts) :-
-   assert_module_graph(Mod),
+   assert_graph([Mod]),
    (option(prune(true),Opts) -> prune_subtrees; true),
    current_dot(Mod,Opts,Graph),
-   retract_call_graph,
+   retract_graph,
    format(atom(File),'~w.dot',[Mod]),
    graph_dot(Graph,File).
 
@@ -249,11 +273,11 @@ module_dot(Mod,Opts) :-
 %     The unflatten methods filter the graph through unflatten before passing
 %     on to dot.
 module_dotpdf(Mod,Opts) :-
-   assert_module_graph(Mod),
+   assert_graph([Mod]),
    option(method(Method),Opts,unflatten),
    (option(prune(true),Opts) -> prune_subtrees; true),
    current_dot(Mod,Opts,Graph),
-   retract_call_graph,
+   retract_graph,
    dotrun(Method,pdf,Graph,Mod).
 
 
@@ -272,8 +296,8 @@ node_decl(Opts,Mod,Pred,Attrs) :-
    declarable_node(Opts,Mod,Pred),
    pred_attr(Opts,Mod:Pred,Attrs).
 
-read_edge(Mod,_Opts,Pred,DBTerm) :- reads(Mod:Pred, DBTerm).
-write_edge(Mod,_Opts,Pred,DBTerm) :- writes(Mod:Pred, DBTerm).
+read_edge(Mod,_Opts,Pred,DBTerm) :- edge(reads,Mod:Pred, DBTerm).
+write_edge(Mod,_Opts,Pred,DBTerm) :- edge(writes,Mod:Pred, DBTerm).
 
 declarable_node(Opts,M,Pred) :-
    option(hide_list(HideList),Opts,[]),
@@ -283,21 +307,21 @@ declarable_node(Opts,M,Pred) :-
    ),
    \+predicate_property(M:Head, built_in),
    \+predicate_property(M:Head, imported_from(_)),
-   goal_pred(M:Head,M:Pred),
+   head_node(M:Head,M:Pred),
    \+member(Pred, ['$mode'/2,'$pldoc'/4, '$pldoc_link'/2]),
    \+member(Pred,HideList).
 
 visible_call(Mod,Opts,Caller,Callee) :-
    option(hide_list(L),Opts,[]),
    option(recursive(T),Opts,false),
-   calls(Mod:Caller,Mod:Callee),
+   edge(calls,Mod:Caller,Mod:Callee),
    (T=false -> Caller\=Callee; true),
    \+member(Caller,L),
    \+member(Callee,L).
 
 visible_mutation(Mod,Opts,P1,P2) :-
    option(hide_list(L),Opts,[]),
-   mutates(Mod:P1,Mod:P2),
+   edge(mutates,Mod:P1,Mod:P2),
    \+member(P1,L),
    \+member(P2,L).
 
@@ -318,7 +342,7 @@ esetof(A,B,C) :- setof(A,B,C) *-> true; C=[].
 list([]) --> [].
 list([X|XS]) --> [X], list(XS).
 
-db_node(N) :- reads(_,N); writes(_,N).
+db_node(N) :- edge(reads,_,N); edge(writes,_,N).
 
 global_opts(_,graph) --> [].
 global_opts(O,node) --> {font(normal,O,F)}, [node_opts([ shape=at(box), fontname=qq(F) ])].
@@ -347,7 +371,7 @@ edgeopt(O,writes) --> {option(write_style(S),O,dashed)}, [ style = qq(at(S)) ].
 edgeopt(O,reads) --> {option(read_style(S),O,solid)}, [ style = qq(at(S)) ].
 
 pred_attr(O,Pred,Attrs1) :-
-   goal_pred(Goal,Pred),
+   head_node(Goal,Pred),
    phrase( (  if( predicate_property(Goal,dynamic), predopt(O,dynamic)),
               if( predicate_property(Goal,multifile), predopt(O,multifile)),
               if( predicate_property(Goal,exported), predopt(O,exported))), 
@@ -381,16 +405,15 @@ do_until(P) :-
    ).
 
 prunable(Node) :-
-   setof( Parent, calls(Parent,Node), [_]), % node has exactly one caller
-   \+calls(Node,_), % no children
-   \+mutates(Node,_), % doesn't affect dynamic preds
-   goal_pred(G,Node),
+   setof( Parent, edge(calls,Parent,Node), [_]), % node has exactly one caller
+   \+edge(_,Node,_), % edges out 
+   head_node(G,Node),
    \+predicate_property(G,dynamic),
    \+predicate_property(G,multifile),
    \+predicate_property(G,exported).
 
 %% prune_subtrees is det.
-%  Operates on the currently asserted graph (see assert_module_graph/1). It searches
+%  Operates on the currently asserted graph (see assert_graph/1). It searches
 %  for any part of the call graph which is a pure tree, and removes all the nodes below
 %  the root. Thus, any 'leaf' predicate which is only ever called by one 'parent' is
 %  removed. This is step is repeated until there are no more leaf predicates. The idea
@@ -399,6 +422,6 @@ prune_subtrees :- do_until(prune_subtrees).
 
 prune_subtrees(false) :-
    bagof(Node, prunable(Node), Nodes), !,
-   forall(member(N,Nodes), (writeln(pruning:N), retractall(calls(_,N)))).
+   forall(member(N,Nodes), (writeln(pruning:N), retractall(edge(calls,_,N)))).
 
 prune_subtrees(true).
