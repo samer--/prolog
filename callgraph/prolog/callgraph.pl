@@ -1,13 +1,15 @@
 :- module(callgraph, 
 	[	module_dotpdf/2
+   ,  modules_dotpdf/3
    ,  module_dot/2
+   ,  modules_dot/3
 	]).
 
 /** <module> Visualisation of inter-predicate call graphs
 
    ---++ Usage
-   This module allows you to produce a call graph of a module, where
-   nodes (boxes) represent predicates in the module and an edge between
+   This module allows you to produce a call graph of one or more modules, where
+   nodes (boxes) represent predicates and an edge between
    two predicates indicates that one (the source end) calls the other
    (the pointy end).
 
@@ -32,6 +34,13 @@
 
    See module_dot/2 for options that affect graph content and style, and
    module_dotpdf/2 for options that affect rendering.
+
+   ---++ Multi-module graphs
+
+   The predicates modules_dotpdf/3 and modules_dot/3 support graphing multiple
+   modules. Each module is drawn inside a box (a Graphviz cluster). Items in
+   the recorded database are outside the module system. They can optionally
+   be collected into one cluster or into several clusters by key.
 
    ---++ Implementation notes
 
@@ -86,8 +95,9 @@ retract_graph :- retractall(edge(_,_,_)).
 %  call graph to a set of private dynamic predicates. 
 assert_graph(Mods) :-
    retract_graph,
-   forall( member(Mod,Mods),
-      prolog_walk_code([ trace_reference(_), module(Mod), on_trace(trace_call(Mods)), source(false) ])
+   sort(Mods,Mods1), % to get rid of duplicates
+   forall( member(Mod,Mods1),
+      prolog_walk_code([ trace_reference(_), module(Mod), on_trace(trace_call(Mods1)), source(false) ])
    ),
 	predicate_property(edge(_,_,_), number_of_clauses(N)),
 	format('Got ~D edges.~n', [N]).
@@ -96,7 +106,8 @@ assert_graph(Mods) :-
 %% trace_call(+Mods:list(module), +Goal:pred_head, +Caller:pred_head, +Context) is det.
 %  Callback predicate for prolog_walk_code/1.
 trace_call(Mods, M1:H1, M2:H2, _) :-
-   memberchk(M1,Mods), memberchk(M2,Mods), 
+   debug(callgraph,'Considering ~w <--- ~w.',[M1:H1,M2:H2]),
+   %memberchk(M1,Mods), memberchk(M2,Mods), 
    head_node(M2:H2,Caller),
    (classify(M1:H1,Class) -> true; Class=normal(M1:H1)),
    assert_edges(Class,Caller,Mods).
@@ -119,10 +130,14 @@ classify(_:recordz(K,T),    recorded(writes,K:T)).
 
 %% assert_edges(+E:edge_spec, +Caller:node, +Mods:list(module)) is det.
 %  Assert relevant edges (if any) for call from Caller to target specified by E.
-assert_edges(recorded(T,Spec),Caller,_)   :- head_node(Spec,N), assert_edge(T,Caller,N).
+assert_edges(recorded(T,Spec),Caller,_)   :- rec_spec_node(Spec,N), assert_edge(T,Caller,N).
 assert_edges(dynamic(M,C,Ts), Caller, Ms) :- mod_clause_head(M,C,H), assert_types(Ts,H,Caller,Ms).
 assert_edges(normal(Goal), Caller, Ms)    :- goal_pred_head(Goal,H), assert_types([calls],H,Caller,Ms).
 assert_edges(_,_,_). % catch all if other clauses fail
+
+rec_spec_node(Key:Term,Node) :-
+   (  var(Key) -> K='unknown'; K=Key),
+   (  var(Term) -> Node=K:unknown; head_node(K:Term,Node)).
 
 %% mod_clause_head( +M:module, +C:clause, -H:pred_head) is det.
 %  Combines a clause (as supplied to assert/retract) with its source
@@ -137,8 +152,8 @@ mod_clause_head(M, H, M:H).
 %% assert_types(+Ts:list(edge_type), +Target:pred_head, +Caller:node, +Mods:list(module)) is semidet.
 %  Assert edges of types in Ts from Caller to Target, but only if the 
 %  home module of Target is a member of Mods.
-assert_types(Types,M3:H,Caller,Mods) :-
-   memberchk(M3,Mods),
+assert_types(Types,M3:H,Caller,_Mods) :-
+   %memberchk(M3,Mods),
    head_node(M3:H,Node),
    forall(member(T,Types), assert_edge(T,Caller,Node)).
 
@@ -151,7 +166,10 @@ goal_pred_head(M1:H,M3:H) :-
 
 %% assert_edge(+T:edge_type, +N1:node, +N2:node) is det.
 % asserts edge if not already asserted.
-assert_edge(T,N1,N2) :- edge(T,N1,N2) -> true; assertz(edge(T,N1,N2)).
+assert_edge(T,N1,N2) :- 
+   (  edge(T,N1,N2) -> true
+   ;  debug(callgraph,'Adding edge: ~w --> ~w.',[N1,N2]),
+      assertz(edge(T,N1,N2))).
 
 %% head_node( +H:head, -P:node) is det.
 %% head_node( -H:head, +P:node) is det.
@@ -160,6 +178,35 @@ assert_edge(T,N1,N2) :- edge(T,N1,N2) -> true; assertz(edge(T,N1,N2)).
 %  head ---> atom:term.
 %  ==
 head_node(M:H,M:F/A) :- must_be(nonvar,M), (nonvar(H);ground(F/A)), functor(H,F,A).
+
+
+
+%% prune_subtrees is det.
+%  Operates on the currently asserted graph (see assert_graph/1). It searches
+%  for any part of the call graph which is a pure tree, and removes all the nodes below
+%  the root. Thus, any 'leaf' predicate which is only ever called by one 'parent' is
+%  removed. This is step is repeated until there are no more leaf predicates. The idea
+%  is that the child tree can be considered 'private' to its parent.
+prune_subtrees :- do_until(prune_subtrees).
+
+prune_subtrees(false) :-
+   bagof(Node, prunable(Node), Nodes), !,
+   forall(member(N,Nodes), (writeln(pruning:N), retractall(edge(calls,_,N)))).
+prune_subtrees(true).
+
+prunable(Node) :-
+   setof( Parent, edge(calls,Parent,Node), [_]), % node has exactly one caller
+   \+edge(_,Node,_), % edges out 
+   head_node(G,Node),
+   \+predicate_property(G,dynamic),
+   \+predicate_property(G,multifile),
+   \+predicate_property(G,exported).
+
+do_until(P) :-
+   call(P,Flag),
+   (  Flag=true -> true
+   ;  do_until(P)
+   ).
 
 
 % ----------------------- GraphML output ----------------------
@@ -249,10 +296,7 @@ head_node(M:H,M:F/A) :- must_be(nonvar,M), (nonvar(H);ground(F/A)), functor(H,F,
 %               ; diagonals ; filled ; striped ; wedged. 
 % ==
 module_dot(Mod,Opts) :-
-   assert_graph([Mod]),
-   (option(prune(true),Opts) -> prune_subtrees; true),
-   current_dot(Mod,Opts,Graph),
-   retract_graph,
+   module_graph(Mod,Opts,Graph),
    format(atom(File),'~w.dot',[Mod]),
    graph_dot(Graph,File).
 
@@ -273,31 +317,125 @@ module_dot(Mod,Opts) :-
 %     The unflatten methods filter the graph through unflatten before passing
 %     on to dot.
 module_dotpdf(Mod,Opts) :-
-   assert_graph([Mod]),
+   module_graph(Mod,Opts,Graph),
    option(method(Method),Opts,unflatten),
-   (option(prune(true),Opts) -> prune_subtrees; true),
-   current_dot(Mod,Opts,Graph),
-   retract_graph,
    dotrun(Method,pdf,Graph,Mod).
 
+%% modules_dot(+Modules:list(module),+Opts,+Name) is det.
+%
+%  Mostly like module_dot/2, but takes a list of module names instead of
+%  a single module name. Output is written to a dot file named Name.
+%  It understands the same options, but in addition:
+%     * cluster_recorded(Flag:oneof([false,true,by_key])) / false
+%       If true, then all recorded items are collected into a seperate cluster.
+%       If by_key, then all recorded items are collected multiple clusters, one
+%       for each distinct key..
+modules_dot(Mods,Opts,Name) :-
+   modules_graph(Mods,Opts,Name,Graph),
+   format(atom(File),'~w.dot',[Name]),
+   graph_dot(Graph,File).
 
-%% current_dot(+Mod,+Opts,-DotGraph) is det.
-%  Returns the currently asserted graph as a dot graph structure,
+%% modules_dotpdf(+Modules:list(module),+Opts,+Name) is det.
+%
+%  Mostly like module_dotpdf/2, but takes a list of module names instead of
+%  a single module name. Output is written to a PDF file named Name.
+%  It understands the same options, but in addition:
+%     * cluster_recorded(Flag:oneof([false,true,by_key])) / false
+%       If true, then all recorded items are collected into a seperate cluster.
+%       If by_key, then all recorded items are collected multiple clusters, one
+%       for each distinct key..
+modules_dotpdf(Mods,Opts,Name) :-
+   modules_graph(Mods,Opts,Name,Graph),
+   option(method(Method),Opts,unflatten),
+   dotrun(Method,pdf,Graph,Name).
+
+
+module_graph(Mod,Opts,digraph(Mod,Statements)) :-
+   assert_graph([Mod]),
+   (option(prune(true),Opts) -> prune_subtrees; true),
+   phrase((
+         seqmap(global_opts(Opts),[graph,node,edge]),
+         recorded_nodes(Opts),
+         module_statements(Opts,Mod),     
+         module_recorded_edges(Opts,Mod)
+      ), Statements, []),
+   retract_graph.
+
+modules_graph(Mods,Opts,Name,digraph(Name,Statements)) :-
+   assert_graph(Mods),
+   (option(prune(true),Opts) -> prune_subtrees; true),
+   option(cluster_recorded(CR),Opts,false),
+   phrase((
+         seqmap(global_opts(Opts),[graph,node,edge]), % global attributes
+         recorded_nodes(Opts),
+         seqmap(module_subgraph(Opts),Mods),
+         seqmap(modules_module_edges(Opts,Mods),Mods),
+         recorded_edges(CR,Opts,Mods)
+      ), Statements, []),
+   retract_graph.
+
+recorded_edges(false,Opts,Mods) --> seqmap(module_recorded_edges(Opts),Mods).
+recorded_edges(true,Opts,Mods) --> in_cluster(Opts,recorded, recorded, recorded_edges(false,Opts,Mods)).
+recorded_edges(by_key,Opts,Mods) --> 
+   {esetof(Key,recorded_key(Key),Keys)},
+   seqmap(recorded_key_edges(Opts,Mods),Keys).
+
+recorded_key_edges(Opts,Mods,Key) -->
+   {atom_concat(recorded_,Key,ClusterName)},
+   in_cluster(Opts,ClusterName, key(Key), seqmap(key_module_recorded_edges(Opts,Key),Mods)).
+
+recorded_node(Node) :- edge(reads,_,Node); edge(writes,_,Node).
+recorded_key(Key) :- recorded_node(Key:_).
+
+modules_module_edges(Opts,Mods,M1) -->
+   seqmap(inter_module_edges(Opts,M1),Mods).
+
+inter_module_edges(Opts,M1,M2) -->
+   ({M1@<M2} -> module_module_edges(Opts,M1,M2);[]).
+
+module_subgraph(Opts,Mod) -->
+   in_cluster(Opts,Mod, module(Mod), module_statements(Opts,Mod)). 
+
+% declare recorded nodes
+recorded_nodes(Opts) -->
+   {predopt(Opts,recorded,RecNodeAttr,[])},
+   {esetof(with_opts(node(N),RecNodeAttr), recorded_node(N), RecNodes)}, 
+   list(RecNodes).
+
+%% module_statements(+Opts,+Mod)// is det.
+%  Outputs the currently asserted graph as a dot graph structure,
 %  using the given options and restricting the graph to module Mod.
 %  The options are documented under module_dot/2.
-current_dot(Mod,Opts,digraph(Mod,Graph)) :-
-   predopt(Opts,recorded,DBNodeAttr,[]),
-   setof(with_opts(node(Pred),Attrs), node_decl(Opts,Mod,Pred,Attrs), Decls),
-   esetof(with_opts(node(N),DBNodeAttr), db_node(N), DBNodes),
-   writeln(DBNodes),
-   module_graph(Mod,Opts,Decls,DBNodes,Graph,[]).
+module_statements(Opts,Mod) -->
+   module_nodes(Opts,Mod),
+   module_module_edges(Opts,Mod,Mod).
+
+module_nodes(Opts,Mod) -->
+   % declare other declarable nodes
+   {esetof(with_opts(node(Pred),Attrs), node_decl(Opts,Mod,Pred,Attrs), Decls)}, 
+   list(Decls).
+
+module_recorded_edges(Opts,Mod) -->
+   key_module_recorded_edges(Opts,_,Mod,reads),
+   key_module_recorded_edges(Opts,_,Mod,writes).
+
+key_module_recorded_edges(Opts,Key,Mod) -->
+   key_module_recorded_edges(Opts,Key,Mod,reads),
+   key_module_recorded_edges(Opts,Key,Mod,writes).
+
+key_module_recorded_edges(Opts,Key,Mod,Type) -->
+   {edgeopt(Opts,Type,RAttr,[])},
+   findall(with_opts(arrow(Pred,Key:Term),RAttr), edge(Type,Mod:Pred,Key:Term)).
+
+module_module_edges(Opts,M1,M2) -->
+   {edgeopt(Opts,mutates,MAttr,[])},
+   findall(with_opts(arrow(Mutator,Mutatee),MAttr), visible_mutation(Opts,M1:Mutator,M2:Mutatee)),
+   findall(arrow(Caller,Callee), visible_call(Opts,M1:Caller,M2:Callee)).
 
 node_decl(Opts,Mod,Pred,Attrs) :-
    declarable_node(Opts,Mod,Pred),
+   debug(callgraph,'Declarable node: ~w.',[Mod:Pred]),
    pred_attr(Opts,Mod:Pred,Attrs).
-
-read_edge(Mod,_Opts,Pred,DBTerm) :- edge(reads,Mod:Pred, DBTerm).
-write_edge(Mod,_Opts,Pred,DBTerm) :- edge(writes,Mod:Pred, DBTerm).
 
 declarable_node(Opts,M,Pred) :-
    option(hide_list(HideList),Opts,[]),
@@ -311,38 +449,29 @@ declarable_node(Opts,M,Pred) :-
    \+member(Pred, ['$mode'/2,'$pldoc'/4, '$pldoc_link'/2]),
    \+member(Pred,HideList).
 
-visible_call(Mod,Opts,Caller,Callee) :-
+declarable_node(Opts,M,Pred) :-
+   option(hide_list(HideList),Opts,[]),
+   (edge(reads,M:Pred,_); edge(writes,M:Pred,_)),
+   \+edge(calls,_,M:Pred),
+   \+edge(calls,M:Pred,_),
+   \+edge(mutates,M:Pred,_),
+   \+member(Pred,HideList).
+
+visible_call(Opts,M1:Caller,M2:Callee) :-
    option(hide_list(L),Opts,[]),
    option(recursive(T),Opts,false),
-   edge(calls,Mod:Caller,Mod:Callee),
+   edge(calls,M1:Caller,M2:Callee),
    (T=false -> Caller\=Callee; true),
    \+member(Caller,L),
    \+member(Callee,L).
 
-visible_mutation(Mod,Opts,P1,P2) :-
+visible_mutation(Opts,M1:P1,M2:P2) :-
    option(hide_list(L),Opts,[]),
-   edge(mutates,Mod:P1,Mod:P2),
+   edge(mutates,M1:P1,M2:P2),
    \+member(P1,L),
    \+member(P2,L).
 
-module_graph(Mod,Opts,Decls,DBNodes) -->
-   {  edgeopt(Opts,mutates,MAttr,[]),
-      edgeopt(Opts,reads,RAttr,[]),
-      edgeopt(Opts,writes,WAttr,[])
-   },
-   seqmap(global_opts(Opts),[graph,node,edge]), % global attributes
-   list(Decls), list(DBNodes),
-   findall(arrow(Caller,Callee), visible_call(Mod,Opts,Caller,Callee)),
-   findall(with_opts(arrow(Mutator,Mutatee),MAttr), visible_mutation(Mod,Opts,Mutator,Mutatee)),
-   findall(with_opts(arrow(Pred,DBTerm),RAttr),     read_edge(Mod,Opts,Pred,DBTerm)),
-   findall(with_opts(arrow(Pred,DBTerm),WAttr),     write_edge(Mod,Opts,Pred,DBTerm)).
 
-esetof(A,B,C) :- setof(A,B,C) *-> true; C=[].
-
-list([]) --> [].
-list([X|XS]) --> [X], list(XS).
-
-db_node(N) :- edge(reads,_,N); edge(writes,_,N).
 
 global_opts(_,graph) --> [].
 global_opts(O,node) --> {font(normal,O,F)}, [node_opts([ shape=at(box), fontname=qq(F) ])].
@@ -376,7 +505,7 @@ pred_attr(O,Pred,Attrs1) :-
               if( predicate_property(Goal,multifile), predopt(O,multifile)),
               if( predicate_property(Goal,exported), predopt(O,exported))), 
            Attrs, []),
-   Attrs = [_|_],
+           %   Attrs = [_|_],
    compile_attrs(Attrs,[],Attrs1).
 
 compile_attrs([],A,A).
@@ -398,30 +527,18 @@ font(normal,O,F) :- phrase(font_family(O),F,[]).
 font(italic,O,F) :- phrase((font_family(O)," Italic"),F,[]).
 font(bold,O,F)   :- phrase((font_family(O)," Bold"),F,[]).
 
-do_until(P) :-
-   call(P,Flag),
-   (  Flag=true -> true
-   ;  do_until(P)
-   ).
+in_cluster(Opts,Name, Label, Phrase) -->
+   {atom_concat(cluster_,Name,SubName)},
+   {phrase((subgraph_opts(Opts),Phrase),Statements,[])},
+   [subgraph(SubName,[label=qq(wr(Label)) | Statements])].
 
-prunable(Node) :-
-   setof( Parent, edge(calls,Parent,Node), [_]), % node has exactly one caller
-   \+edge(_,Node,_), % edges out 
-   head_node(G,Node),
-   \+predicate_property(G,dynamic),
-   \+predicate_property(G,multifile),
-   \+predicate_property(G,exported).
+subgraph_opts(Opts) -->
+   {font(bold,Opts,F)},
+   [labeljust=qq(at(l))],
+   [fontname=qq(F)]. 
 
-%% prune_subtrees is det.
-%  Operates on the currently asserted graph (see assert_graph/1). It searches
-%  for any part of the call graph which is a pure tree, and removes all the nodes below
-%  the root. Thus, any 'leaf' predicate which is only ever called by one 'parent' is
-%  removed. This is step is repeated until there are no more leaf predicates. The idea
-%  is that the child tree can be considered 'private' to its parent.
-prune_subtrees :- do_until(prune_subtrees).
+% general utilities
+esetof(A,B,C) :- setof(A,B,C) *-> true; C=[].
 
-prune_subtrees(false) :-
-   bagof(Node, prunable(Node), Nodes), !,
-   forall(member(N,Nodes), (writeln(pruning:N), retractall(edge(calls,_,N)))).
-
-prune_subtrees(true).
+list([]) --> [].
+list([X|XS]) --> [X], list(XS).
