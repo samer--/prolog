@@ -15,6 +15,9 @@ test_pdf :-
 test_dot :-
 	module_dot(callgraph,[]).
 
+test_multi :-
+	modules_dotpdf([callgraph,dot],[method(unflatten([fl(4),c(4)]))],callgraph_dot).
+
 %% test_xdot is det.
 %  Writes callgraph.dot in the current directry and then
 %  calls xdot to display it. Will bork if xdot not present.

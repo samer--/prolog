@@ -1,0 +1,102 @@
+digraph callgraph_dot
+{
+	overlap=false;
+	spline=true;
+	contentrate=true;
+	node [shape=box,fontname="Times"];
+	edge [arrowhead=vee];
+	subgraph cluster_callgraph
+{
+	label="module(callgraph)";
+	labeljust="l";
+	fontname="Times Bold";
+	"edge/3" [style="filled",fontname="Times Italic",shape=box];
+	"module_dot/2" [fontname="Times Bold",style="bold"];
+	"module_dotpdf/2" [fontname="Times Bold",style="bold"];
+	"font_family/3" -> "__aux_seqmap/5_[]_out+0/3";
+	"modules_dot/3" -> "modules_graph/4";
+	"prune_subtrees/1" -> "prunable/1";
+	"module_subgraph/4" -> "subgraph_opts/3";
+	"module_subgraph/4" -> "module_statements/4";
+	"modules_dotpdf/3" -> "modules_graph/4";
+	"visible_mutation/4" -> "edge/3";
+	"module_dot/2" -> "module_graph/3";
+	"pred_attr/3" -> "head_node/2";
+	"pred_attr/3" -> "predopt/4";
+	"pred_attr/3" -> "compile_attrs/3";
+	"compile_attrs/3" -> "combine_styles/3";
+	"subgraph_opts/3" -> "font/3";
+	"prune_subtrees/0" -> "do_until/1";
+	"prune_subtrees/0" -> "prune_subtrees/1";
+	"global_opts/4" -> "font/3";
+	"font/3" -> "font_family/3";
+	"assert_types/4" -> "head_node/2";
+	"assert_types/4" -> "assert_edge/3";
+	"visible_call/4" -> "edge/3";
+	"rec_node/1" -> "edge/3";
+	"declarable_node/3" -> "head_node/2";
+	"modules_graph/4" -> "assert_graph/1";
+	"modules_graph/4" -> "prune_subtrees/0";
+	"modules_graph/4" -> "global_opts/4";
+	"modules_graph/4" -> "module_subgraph/4";
+	"modules_graph/4" -> "retract_graph/0";
+	"predopt/4" -> "font/3";
+	"module_graph/3" -> "assert_graph/1";
+	"module_graph/3" -> "prune_subtrees/0";
+	"module_graph/3" -> "global_opts/4";
+	"module_graph/3" -> "module_statements/4";
+	"module_graph/3" -> "retract_graph/0";
+	"assert_edges/3" -> "head_node/2";
+	"assert_edges/3" -> "assert_edge/3";
+	"assert_edges/3" -> "mod_clause_head/3";
+	"assert_edges/3" -> "assert_types/4";
+	"assert_edges/3" -> "goal_pred_head/2";
+	"assert_graph/1" -> "retract_graph/0";
+	"trace_call/4" -> "head_node/2";
+	"trace_call/4" -> "classify/2";
+	"trace_call/4" -> "assert_edges/3";
+	"module_statements/4" -> "predopt/4";
+	"module_statements/4" -> "esetof/3";
+	"module_statements/4" -> "rec_node/1";
+	"module_statements/4" -> "list/3";
+	"module_statements/4" -> "node_decl/4";
+	"module_statements/4" -> "visible_call/4";
+	"module_statements/4" -> "edgeopt/4";
+	"module_statements/4" -> "visible_mutation/4";
+	"module_statements/4" -> "edge/3";
+	"node_decl/4" -> "declarable_node/3";
+	"node_decl/4" -> "pred_attr/3";
+	"prunable/1" -> "edge/3";
+	"prunable/1" -> "head_node/2";
+	"assert_edge/3" -> "edge/3";
+	"module_dotpdf/2" -> "module_graph/3";
+	"prune_subtrees/1" -> "edge/3" [style="dashed"];
+	"retract_graph/0" -> "edge/3" [style="dashed"];
+	"assert_edge/3" -> "edge/3" [style="dashed"];
+
+}
+;
+	subgraph cluster_dot
+{
+	label="module(dot)";
+	labeljust="l";
+	fontname="Times Bold";
+	"dotrun/4" [fontname="Times Bold",style="bold"];
+	"graph_dot/2" [fontname="Times Bold",style="bold"];
+	"dot_method/2" -> "uopt/3";
+	"edge_opts/3" -> "with_opts/4";
+	"dotlist/3" -> "dotblock/3";
+	"dotlist/3" -> "dotline/3";
+	"subgraph/4" -> "dotblock/3";
+	"arrow/4" -> "node/3";
+	"with_opts/4" -> "optlist/3";
+	"line/4" -> "node/3";
+	"node_opts/3" -> "with_opts/4";
+	"dotblock/3" -> "dotlist/3";
+	"dotrun/4" -> "dot_method/2";
+	"digraph/4" -> "dotblock/3";
+
+}
+;
+
+}
