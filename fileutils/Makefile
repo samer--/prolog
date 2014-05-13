@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=fileutils
-VER=0.1.3
+VER=0.1.4
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
@@ -24,4 +24,8 @@ pack:
 dist-clean:
 
 install: pack
-	swipl -g "pack_install('$(PACKFILE)'),halt"
+	swipl -f none -g "pack_install('$(PACKFILE)'),halt"
+
+commit:
+	chmod -w $(PACKFILE)
+	git commit -a

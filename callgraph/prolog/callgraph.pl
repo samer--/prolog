@@ -78,6 +78,49 @@
    ==
 */
 
+:- predicate_options(module_dot/2,2,[pass_to(module_graph/3,2)]).
+:- predicate_options(module_dotpdf/2,2,[method(any),pass_to(module_graph/3,2)]).
+:- predicate_options(modules_dot/3,2,[pass_to(modules_graph/4,2)]).
+:- predicate_options(modules_dotpdf/3,2,[method(any),pass_to(modules_graph/4,2)]).
+
+:- predicate_options(module_graph/3,2,
+      [  prune(boolean)
+      ,  hide_list(list)
+      ,  recursive(boolean)
+      ,  arrowhead(atom)
+      ,  font(list(integer))
+      ,  pass_to(predopt//2,1)
+      ,  pass_to(edgeopt//2,1)
+      ]).
+
+:- predicate_options(modules_graph/4,2,
+      [  cluster_recorded(oneof([false,by_key,true]))
+      ,  prune(boolean)
+      ,  hide_list(list)
+      ,  recursive(boolean)
+      ,  arrowhead(atom)
+      ,  font(list(integer))
+      ,  pass_to(predopt//2,1)
+      ,  pass_to(edgeopt//2,1)
+      ]).
+
+:- predicate_options(predopt//2,1,
+      [  dynamic_style(atom)
+      ,  dynamic_shape(atom)
+      ,  export_style(atom)
+      ,  multifile_style(atom)
+      ,  multifile_shape(atom)
+      ,  recorded_style(atom)
+      ,  recorded_shape(atom)
+      ,  font(list(integer))
+      ]).
+
+:- predicate_options(edgeopt//2,1,
+      [  mutate_style(atom)
+      ,  read_style(atom)
+      ,  write_style(atom)
+      ]).
+
 
 :- use_module('library/dcgu').
 :- use_module('library/dot').
@@ -296,6 +339,7 @@ do_until(P) :-
 %               ; diagonals ; filled ; striped ; wedged. 
 % ==
 module_dot(Mod,Opts) :-
+   check_options(module_dot/2,2,Opts),
    module_graph(Mod,Opts,Graph),
    format(atom(File),'~w.dot',[Mod]),
    graph_dot(Graph,File).
@@ -317,6 +361,7 @@ module_dot(Mod,Opts) :-
 %     The unflatten methods filter the graph through unflatten before passing
 %     on to dot.
 module_dotpdf(Mod,Opts) :-
+   check_options(module_dotpdf/2,2,Opts),
    module_graph(Mod,Opts,Graph),
    option(method(Method),Opts,unflatten),
    dotrun(Method,pdf,Graph,Mod).
@@ -331,6 +376,7 @@ module_dotpdf(Mod,Opts) :-
 %       If by_key, then all recorded items are collected multiple clusters, one
 %       for each distinct key..
 modules_dot(Mods,Opts,Name) :-
+   check_options(modules_dot/3,2,Opts),
    modules_graph(Mods,Opts,Name,Graph),
    format(atom(File),'~w.dot',[Name]),
    graph_dot(Graph,File).
@@ -345,10 +391,12 @@ modules_dot(Mods,Opts,Name) :-
 %       If by_key, then all recorded items are collected multiple clusters, one
 %       for each distinct key..
 modules_dotpdf(Mods,Opts,Name) :-
+   check_options(modules_dotpdf/3,2,Opts),
    modules_graph(Mods,Opts,Name,Graph),
    option(method(Method),Opts,unflatten),
    dotrun(Method,pdf,Graph,Name).
 
+check_options(Pred,Arg,Opts) :- maplist(check_predicate_option(Pred,Arg),Opts).
 
 module_graph(Mod,Opts,digraph(Mod,Statements)) :-
    assert_graph([Mod]),
@@ -446,7 +494,7 @@ declarable_node(Opts,M,Pred) :-
    \+predicate_property(M:Head, built_in),
    \+predicate_property(M:Head, imported_from(_)),
    head_node(M:Head,M:Pred),
-   \+member(Pred, ['$mode'/2,'$pldoc'/4, '$pldoc_link'/2]),
+   \+member(Pred, ['$mode'/2,'$pldoc'/4, '$pldoc_link'/2, '$pred_option'/4]),
    \+member(Pred,HideList).
 
 declarable_node(Opts,M,Pred) :-

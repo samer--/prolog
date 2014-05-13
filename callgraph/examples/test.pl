@@ -1,6 +1,6 @@
 :- use_module(library(callgraph)).
 
-/** 
+/* 
    Use these to test callgraph.
 */
 

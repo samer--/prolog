@@ -118,10 +118,16 @@ remove_var(V,[X|Xs],[X|Ys]) :- remove_var(V,Xs,Ys).
 %  However, if the option mode(Mode) is present, it is removed from the
 %  list (leaving Opts1) and the file is opened as with open(File,Mode,Opts1,Str).
 %  The default mode is write.
+
+:- predicate_options(with_output_to_file/3,3,
+      [  mode(oneof([write,append]))
+      ,  pass_to(open/4,4)
+      ]).
+
 with_output_to_file(File,Goal) :- with_output_to_file(File,Goal,[]).
 with_output_to_file(File,Goal,Opts) :- 
+   maplist(check_predicate_option(with_output_to_file/3,3),Opts),
 	select_option(mode(Mode),Opts,Opts1,write),
-	must_be(oneof([write,append]),Mode),
    with_stream(S, open(File,Mode,S,Opts1), with_output_to(S,Goal)).
 
 
@@ -130,6 +136,9 @@ with_output_to_file(File,Goal,Opts) :-
 %
 %  Call Goal redirecting output to the file File, which is opened as with
 %  open(File,write,Str) or open(File,write,Opts,Str).
+
+:- predicate_options(with_input_from_file/3,3,[pass_to(open/4,4)]).
+
 with_input_from_file(File,Goal) :- with_input_from_file(File,Goal,[]).
 with_input_from_file(File,Goal,Opts) :- 
 	with_stream( S, open(File,read,S,Opts), with_input_from(S,Goal)).
