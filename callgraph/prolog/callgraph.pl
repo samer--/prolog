@@ -173,9 +173,11 @@ classify(_:recordz(K,T),    recorded(writes,K:T)).
 
 %% assert_edges(+E:edge_spec, +Caller:node, +Mods:list(module)) is det.
 %  Assert relevant edges (if any) for call from Caller to target specified by E.
-assert_edges(recorded(T,Spec),Caller,_)   :- rec_spec_node(Spec,N), assert_edge(T,Caller,N).
-assert_edges(dynamic(M,C,Ts), Caller, Ms) :- mod_clause_head(M,C,H), assert_types(Ts,H,Caller,Ms).
 assert_edges(normal(Goal), Caller, Ms)    :- goal_pred_head(Goal,H), assert_types([calls],H,Caller,Ms).
+assert_edges(recorded(T,Spec),Caller,_)   :- rec_spec_node(Spec,N), assert_edge(T,Caller,N).
+assert_edges(dynamic(M,C,Ts), Caller, Ms) :- 
+   nonvar(C), mod_clause_head(M,C,H), 
+   assert_types(Ts,H,Caller,Ms).
 assert_edges(_,_,_). % catch all if other clauses fail
 
 rec_spec_node(Key:Term,Node) :-
