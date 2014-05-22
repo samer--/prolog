@@ -126,6 +126,7 @@
 
 :- use_module(library(persistency)).
 :- use_module(library(typedef)).
+:- use_module(library(settings)).
 
 :- multifile memoised/4, asserter/4, retracter/4, computer/4.
 
@@ -139,6 +140,9 @@
                       ; comp(hostname,duration)
                       ; none.
 
+
+:- setting(confirmation_style, list(ground), [bold,fg(red)], 'Confirmation message style options.').
+:- setting(confirmation_threshold, integer, 1, 'Maximum entries for silent clear_all deletion.').
 
 :- dynamic hostname/1.
 
@@ -192,18 +196,25 @@ browse(Module:Head,Meta) :- memoised(Module,Head,Meta,MemoHead), call(Module:Mem
 %
 %  Clears all matching entries from the memo tables that unify with Goal. clear_all/2 additionally
 %  allows selection on the basis of meta-data. Deletion is NOT undone on backtracking.
-%  Asks for confirmation if more than 1 entry is to be deleted.
+%
+%  Asks for confirmation if more than N entries are to be deleted, where N is determined
+%  by the setting memo:confirmation_threshold (see library(settings)). The default is 1.
+%  The confirmation message is printed with ansi_format/3 using a style determined by setting
+%  memo:confirmation_style, whose default is [bold,fg(red)]. The user must type "yes" and
+%  press return continue, otherwise an =|operation_cancelled|= is thrown.
 clear_all(Module:Head) :- clear_all(Module:Head,_).
 clear_all(Module:Head,Meta) :- 
    must_be(nonvar,Head), 
    memoised(Module,Head,Meta,MemoHead),
    retracter(Module,Head,Meta,RetractHead), 
    aggregate_all(count,Module:MemoHead,Count),
-   (Count>1 -> confirm(format('Will delete ~d entries.',[Count])); true),
+   setting(confirmation_threshold,Thresh),
+   (Count>Thresh -> confirm(format('Will delete ~d entries.',[Count])); true),
    call(Module:RetractHead).
 
 confirm(Printer) :-
-   ansi_format([fg(red)],'~@ Type "yes" [return] to proceed: ',[Printer]), 
+   setting(confirmation_style,Style),
+   ansi_format(Style,'~@ Type "yes" [return] to proceed: ',[Printer]), 
    read_line_to_codes(user_input,Response),
    (Response\="yes" -> throw(operation_cancelled); true).
 
