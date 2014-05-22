@@ -1,4 +1,4 @@
-:- module(dcgu, [
+:- module(dcgu1, [
 		writedcg/1
 
 	,	nop/2
@@ -429,9 +429,9 @@ rep_nocopy(N,P) --> call(P), {succ(M,N)}, rep_nocopy(M,P).
 % Sep is inserted strictly betweened elements of L. seq(L) is equivalent
 % to seq(L,nop).
 
-seq(L,_)     --> {dcgu:empty(L)}.
-seq(L,_)     --> {dcgu:singleton(L,H)}, H.
-seq(L,S)     --> {dcgu:properlist(L,H,T)}, H, S, seq(T,S).
+seq(L,_)     --> {dcgu1:empty(L)}.
+seq(L,_)     --> {dcgu1:singleton(L,H)}, H.
+seq(L,S)     --> {dcgu1:properlist(L,H,T)}, H, S, seq(T,S).
 seq(L)       --> seq(L,nop).         % if no separator specified, use nop.
 
 
@@ -440,9 +440,9 @@ seq(L)       --> seq(L,nop).         % if no separator specified, use nop.
 %
 % @see seq//2.
 
-seq_n(0,L,_)   --> {dcgu:empty(L)}.
-seq_n(1,L,_)   --> {dcgu:singleton(L,H)}, H.
-seq_n(N,L,S)   --> {dcgu:properlist(L,H,T)}, H, S, seq_n(M,T,S), {succ(M,N)}.
+seq_n(0,L,_)   --> {dcgu1:empty(L)}.
+seq_n(1,L,_)   --> {dcgu1:singleton(L,H)}, H.
+seq_n(N,L,S)   --> {dcgu1:properlist(L,H,T)}, H, S, seq_n(M,T,S), {succ(M,N)}.
 
 %% smap(+F,+L:list)// is nondet.
 %  Equivalent to seq(map(F,L),nop).
@@ -586,7 +586,7 @@ seqmap_with_sep_first_call(P,[A1|AX],AX) --> call(P,A1).
 seqmap_with_sep_first_call(P,[A1|AX],[B1|BX],AX,BX) --> call(P,A1,B1).
 seqmap_with_sep_first_call(P,[A1|AX],[B1|BX],[C1|CX],AX,BX,CX) --> call(P,A1,B1,C1).
 
-expand_seqmap_with_sep(Sep, Pred, SeqmapArgs, (dcgu:FirstCall,dcgu:SeqmapCall)) :-
+expand_seqmap_with_sep(Sep, Pred, SeqmapArgs, (dcgu1:FirstCall,dcgu1:SeqmapCall)) :-
 	prolog_load_context(module,Context),
 	(Sep=SMod:Sep1 -> true; SMod=Context, Sep1=Sep),
 	(Pred=CMod:Pred1 -> true; CMod=Context, Pred1=Pred),
