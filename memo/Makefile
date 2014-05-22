@@ -5,17 +5,19 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=memo
-VER=0.1.5
+VER=0.2.0
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
 all: pack
 
-pack:
+packdir:
 	mkdir -p $(PACKNAME) $(PACKNAME)/prolog 
-	sed -e 's/<VER>/$(VER)/' pack.pl > $(PACKNAME)/pack.pl
-	cp -pR prolog $(PACKNAME)
+	sed -e "s/<VER>/$(VER)/g" < pack.pl | sed -e "s/<PACKNAME>/$(PACKNAME)/g" > $(PACKNAME)/pack.pl
+	rsync -ar --delete --exclude '.*' prolog $(PACKNAME)
 	cp -p README $(PACKNAME)
+
+pack: packdir
 	tar czf $(PACKFILE) $(PACKNAME)
 	rm -rf $(PACKNAME)
 	git add $(PACKFILE)
@@ -24,3 +26,7 @@ dist-clean:
 
 install: pack
 	swipl -g "pack_install('$(PACKFILE)'),halt"
+
+install-git: install
+	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
+

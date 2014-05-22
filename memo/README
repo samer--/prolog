@@ -40,3 +40,15 @@ Then, you can make queries such as
 The debug messages should indicate that repeated computations are being
 avoided, even for failing goals, like =|sqrt1(-4.0,X)|=, and computations
 that throw exceptions, like =|sqrt2(-4.0,X)|=.
+
+
+---++++ Changes in v0.2
+
+	* clear/1 and clear/2 have been renamed to clear_all/1 and clear_all/2 to conform
+	to similar convention for retractall/1, findall/3, aggregate_all/3 etc.
+
+	* clear_all/1 and clear_all/2 now ask for explicit confirmation if deleting
+	more than one memo table entry.
+
+	* recompute_all/3 has been added for easy recomputation of matching entries. This
+	  makes it easier to recover after fixing bugs in the computation.

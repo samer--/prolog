@@ -1,8 +1,9 @@
 :- module(memo,
     [ memo/1,    memo/2
     , browse/1,  browse/2
-    , clear/1,   clear/2
+    , clear_all/1,   clear_all/2
     , compute/1, compute/2
+    , recompute_all/3
     , (volatile_memo)/1
     , (persistent_memo)/1
     % , hostname/1
@@ -87,7 +88,7 @@
    successful calls in the memo table. browse(Goal,Meta) matches all calls in the
    memo table including unsuccessful ones.
 
-   The meta-level clear/1 and clear/2 allow you to delete memo table entries.
+   The meta-level clear_all/1 and clear_all/2 allow you to delete memo table entries.
    The meta-level memo(Goal) is the same as the object level Goal, failing or
    throwing an expection depending on what the underlying predicate does, but
    the meta-level memo(Goal,Meta) catches failures and exceptions, returning the
@@ -119,8 +120,9 @@
 :- meta_predicate 
       memo(0), memo(0,-), 
       browse(0), browse(0,-), 
-      clear(0),  clear(0,-),
-      compute(0), compute(0,-).
+      clear_all(0),  clear_all(0,-),
+      compute(0), compute(0,-),
+      recompute_all(0,-,-).
 
 :- use_module(library(persistency)).
 :- use_module(library(typedef)).
@@ -185,16 +187,25 @@ persistent_memo(Spec) :- throw(error(context_error(nodirective, persistent_memo(
 browse(Module:Head) :- browse(Module:Head,_-ok).
 browse(Module:Head,Meta) :- memoised(Module,Head,Meta,MemoHead), call(Module:MemoHead).
 
-%% clear(@Goal:callable, @Meta:metadata) is det.
-%% clear(@Goal:callable) is det.
+%% clear_all(@Goal:callable, @Meta:metadata) is det.
+%% clear_all(@Goal:callable) is det.
 %
-%  Clears all matching entries from the memo tables that unify with Goal. clear/2 additionally
+%  Clears all matching entries from the memo tables that unify with Goal. clear_all/2 additionally
 %  allows selection on the basis of meta-data. Deletion is NOT undone on backtracking.
-clear(Module:Head) :- clear(Module:Head,_).
-clear(Module:Head,Meta) :- 
+%  Asks for confirmation if more than 1 entry is to be deleted.
+clear_all(Module:Head) :- clear_all(Module:Head,_).
+clear_all(Module:Head,Meta) :- 
    must_be(nonvar,Head), 
+   memoised(Module,Head,Meta,MemoHead),
    retracter(Module,Head,Meta,RetractHead), 
+   aggregate_all(count,Module:MemoHead,Count),
+   (Count>1 -> confirm(format('Will delete ~d entries.',[Count])); true),
    call(Module:RetractHead).
+
+confirm(Printer) :-
+   ansi_format([fg(red)],'~@ Type "yes" [return] to proceed: ',[Printer]), 
+   read_line_to_codes(user_input,Response),
+   (Response\="yes" -> throw(operation_cancelled); true).
 
 %% compute(+Goal:callable) is semidet.
 %
@@ -214,6 +225,43 @@ compute(Module:Head,Meta) :-
    type_and_mode_check(Spec,Head),
    timed(reify(Module:ComputeHead,Res),Comp),
    Meta=Comp-Res.
+
+
+%% recompute_all(+Goal:callable, @Meta:metadata, @Res:result) is semidet.
+%
+%  Recomputes all memoised computations matching Goal and Meta. This will recompute all
+%  the entries that would have been returned by browse/2. The only extra condition is that
+%  Goal cannot be unbound on entry -- only one determinate predicate can be recomputed at a time.
+%  The old entry is removed only after the new computation produces a result that unifies
+%  with Res. Otherwise, the recomputed version is discarded.
+recompute_all(Module:Head,Meta,Res) :- 
+   must_be(nonvar,Head),
+   memoised(Module,Head,Meta,MemoHead),
+   retracter(Module,Head,Meta,RetractHead), % to remove old computation
+   computer(Module,Head,Spec,_), % just to get Spec
+   forall( Module:MemoHead, (
+      unbind_outputs(Spec,Head,Head1),
+      computer(Module,Head1,_,ComputeHead),
+      debug(memo,'recomputing ~q...',[Module:Head1]),
+      (  timed(reify(Module:ComputeHead,Res),Comp) 
+      -> debug(memo,'storing (~w) ~q...',[Res,Module:Head1]),
+         asserter(Module,Head1,Comp-Res,AssertHead), 
+         call(Module:RetractHead), % ideally these would be atomic
+         call(Module:AssertHead)
+      ;  debug(memo,'rejecting (~w) ~q...',[Res,Module:Head1])
+      )
+   )).
+
+
+% copies Head0 to Head1, but leaves output arguments unbound.
+unbind_outputs(Type,Head0,Head1) :-
+   Type=..[Name|Types],
+   Head0=..[Name|Args0],
+   maplist(copy_if_input,Types,Args0,Args1),
+   Head1=..[Name|Args1].
+
+copy_if_input(+_,X,X). 
+copy_if_input(-_,_,_).
 
 %% memo(+Goal:callable, -Meta:metadata) is det.
 %% memo(+Goal:callable) is semidet.
