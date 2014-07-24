@@ -2,6 +2,8 @@
     [ op(1150,fx,type)
     , op(1120,xfx,--->)
     , (type)/1
+    , current_type/1
+    , current_type_constructor/2
     ]).
 
 /** <module> Type definition framework
@@ -65,6 +67,31 @@ check_not_defined(Type) :-
 %  is the same. Type name space is flat, not module scoped.
 %  This is directive. It cannot be called.
 type(Spec) :- throw(error(context_error(nodirective, type(Spec)), _)).
+
+%% current_type(+Type) is semidet.
+%% current_type(-Type) is multi.
+%
+%  True if Type is a currently defined type.  For example,
+%
+%      :- type foo ---> one ; two ; three.
+%      :- type bar ---> hello ; goodbye.
+%      ?- current_type(Type).
+%      Type = foo ;
+%      Type = bar .
+current_type(Type) :-
+    user_type_def(Type).
+
+%% current_type_constructor(?T, ?Constructor)
+%
+%  True if a type T allows the Constructor.  For example,
+%
+%      :- type foo ---> one ; two ; three.
+%      :- type bar ---> hello ; goodbye.
+%      ?- current_type_constructor(bar, C).
+%      C = hello ;
+%      C = goodbye .
+current_type_constructor(Type, Constructor) :-
+    user_type_constructor(Type, Constructor).
 
 user:term_expansion(:- type(Type == Syn), [C1,C2]) :-
    wants_typedef,
