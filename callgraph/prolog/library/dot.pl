@@ -33,8 +33,10 @@
  */
 
 :- use_module(library(fileutils)).
-:- use_module(dcgu).
+:- use_module(library(dcg_core)).
+:- use_module(library(dcg_codes)).
 
+:- set_prolog_flag(double_quote, codes).
 
 digraph(Name,G) -->
 	"digraph ", wr(Name), cr,
@@ -55,12 +57,12 @@ dotlist([L|LS]) -->
 	dotlist(LS).
 
 
-with_opts(A,Opts) --> phrase(A), sp, sqbr(optlist(Opts)).
-optlist(L) --> seq(L,",").
+with_opts(A,Opts) --> phrase(A), " ", sqbr(optlist(Opts)).
+optlist(L) --> seqmap_with_sep(",",call,L).
 
 node_opts(Opts) --> with_opts(at(node), Opts).
 edge_opts(Opts) --> with_opts(at(edge), Opts).
-nq(A)   --> wr(A).
+% nq(A)   --> wr(A).
 node(A) --> qq(wr(A)).
 arrow(A,B) --> node(A), " -> ", node(B).
 line(A,B)  --> node(A), " -- ", node(B).

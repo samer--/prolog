@@ -122,7 +122,8 @@
       ]).
 
 
-:- use_module('library/dcgu').
+:- use_module(library(dcg_core)).
+:- use_module(library(dcg_codes)).
 :- use_module('library/dot').
 
 % ------------ Building the call graph in the Prolog database -----------------------
@@ -441,7 +442,7 @@ modules_module_edges(Opts,Mods,M1) -->
    seqmap(inter_module_edges(Opts,M1),Mods).
 
 inter_module_edges(Opts,M1,M2) -->
-   ({M1@<M2} -> module_module_edges(Opts,M1,M2);[]).
+   ({M1\=M2} -> module_module_edges(Opts,M1,M2);[]).
 
 module_subgraph(Opts,Mod) -->
    in_cluster(Opts,Mod, module(Mod), module_statements(Opts,Mod)). 
@@ -590,5 +591,3 @@ subgraph_opts(Opts) -->
 % general utilities
 esetof(A,B,C) :- setof(A,B,C) *-> true; C=[].
 
-list([]) --> [].
-list([X|XS]) --> [X], list(XS).

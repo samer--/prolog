@@ -1,0 +1,4 @@
+.swipl_history
+*.aux
+*.log
+.DS_Store
