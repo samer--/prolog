@@ -27,7 +27,7 @@ install: pack
 	swipl -f none -g "pack_install('$(PACKFILE)'),halt"
 
 install-git: 
-	(git commit $(PACKFILE) && git push $(PACKFILE)) || echo 'Up to date'
+	(git commit $(PACKFILE) || echo 'Local up to date') && (git push $(PACKFILE)) || echo 'Remote up to date')
 	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
 
 commit:
