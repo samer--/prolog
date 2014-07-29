@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=dcgutils
-VER=0.0.1
+VER=0.0.2
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
@@ -25,7 +25,7 @@ pack: packdir
 install: pack
 	swipl -g "pack_install('$(PACKFILE)'), halt"
 
-install-git: install
+install-git: 
 	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
 
 dist-clean:

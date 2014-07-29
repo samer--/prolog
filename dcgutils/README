@@ -18,7 +18,7 @@ It is organised into several modules:
 	processes on sequences.
 *	library(dcg_pair)
 	Operators for working with DCGs over pair states.
-*  library(dcg_shell)
+*	library(dcg_shell)
 	Provides a top-level read-eval-print loop similar to the Prolog top-level,
 	but for running DCG goals and managing the current 'state'.
 *	library(snobol)
