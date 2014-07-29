@@ -26,6 +26,7 @@ install: pack
 	swipl -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 
+	git commit $(PACKFILE) && git push $(PACKFILE)
 	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
 
 dist-clean:
