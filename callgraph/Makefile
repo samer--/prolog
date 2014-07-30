@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=callgraph
-VER=0.2.9
+VER=0.3.0
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
@@ -26,6 +26,6 @@ install: pack
 	swipl -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 
-	(git commit $(PACKFILE) || echo 'Local up to date') && (git push $(PACKFILE)) || echo 'Remote up to date')
+	(git commit $(PACKFILE) || echo 'Local up to date') && (git push $(PACKFILE) || echo 'Remote up to date')
 	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
 
