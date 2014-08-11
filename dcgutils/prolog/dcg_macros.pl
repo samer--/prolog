@@ -37,8 +37,8 @@ system:goal_expansion( A >> B, (A,B) ).
 system:goal_expansion( set_with(C,_,S2), Call) :- mk_call(C,[S2],Call).
 system:goal_expansion( trans(A1,A2,S1,S2), (S1=A1,S2=A2) ). 
 system:goal_expansion( //(P1,P2,S1,S2), (G1,G2)) :- 
-	nonvar(P1), P1=..[F1|A1], append(A1,[S1,S2],B1), G1=..[F1|B1],
-	nonvar(P2), P2=..[F2|A2], append(A2,[S1,S2],B2), G2=..[F2|B2].
+	expand_goal(call_dcg(P1,S1,S2),G1),
+	expand_goal(call_dcg(P2,S1,S2),G2).
 
 mk_call(C,XX,Call) :- var(C), !, mk_call(call(C),XX,Call).
 mk_call(M:C,XX,M:Call) :- !, mk_call(C,XX,Call).

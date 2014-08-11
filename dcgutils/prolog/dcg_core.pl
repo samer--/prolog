@@ -190,7 +190,7 @@ fail(_,_) :- fail.
 %% >>(G1:phrase(S), G2:phrase(S))// is nondet.
 % Sequential conjuction of phrases G1 and G2, equivalent to (G1,G2),
 % but sometimes more convenient in terms of operator priorities.
-A >> B --> A, B.
+A >> B --> call_dcg(A), call_dcg(B).
 
 %% //(+P1:phrase(A), +P2:phrase(A), ?S1:list(A), ?S2:list(A)) is nondet.
 %
@@ -210,11 +210,11 @@ A >> B --> A, B.
 %% maybe(P:phrase(_))// is det.
 %  Try P, if it fails, then do nothing. If it succeeds,
 %  cut choicepoints and continue.
-maybe(P)  --> P -> nop; nop.
+maybe(P)  --> call_dcg(P) -> nop; nop.
 
 %% opt(P:phrase(_))// is nondet.
 %  P or nothing. Like maybe but does not cut if P succeeds.
-opt(P)  --> P; nop.
+opt(P)  --> call_dcg(P); nop.
 
 %% if(G:pred,P,Q)// is det.
 %% if(G:pred,P)// is det.
@@ -222,8 +222,8 @@ opt(P)  --> P; nop.
 %  If Prolog goal =|call(G)|= succeeds, do P, otherwise, do Q.
 %  if(G,P) is equivalent to if(G,P,nop), i.e. does nothing
 %  if P fails.
-if(A,B,C) --> {call(A)} -> B; C. % used to have nonvar(A)
-if(A,B)   --> {call(A)} -> B; nop.
+if(A,B,C) --> {call(A)} -> call_dcg(B); call_dcg(C). % used to have nonvar(A)
+if(A,B)   --> {call(A)} -> call_dcg(B); nop.
 
 
 % do_then_call( +S:phrase, +P:phrase(A), X:A)// is nondet.
@@ -231,9 +231,9 @@ if(A,B)   --> {call(A)} -> B; nop.
 % do_then_call( +S:phrase, +P:phrase(A,B,C), X:A, Y:B, Z:C)// is nondet.
 %
 %  Call phrase S, then call phrase P with arguments A, B, C etc.
-do_then_call(S,P,A) --> S, call(P,A).
-do_then_call(S,P,A,B) --> S, call(P,A,B).
-do_then_call(S,P,A,B,C) --> S, call(P,A,B,C).
+do_then_call(S,P,A) --> call_dcg(S), call(P,A).
+do_then_call(S,P,A,B) --> call_dcg(S), call(P,A,B).
+do_then_call(S,P,A,B,C) --> call_dcg(S), call(P,A,B,C).
 
 
 lift(P) --> { call(P) }.
@@ -245,7 +245,7 @@ lift(P,X,Y) --> { call(P,X,Y) }.
 %
 %  Run phrase sequentially as many times as possible until it fails.
 %  Any choice points left by G are cut.
-exhaust(G) --> G -> exhaust(G); nop.
+exhaust(G) --> call_dcg(G) -> exhaust(G); nop.
 
 
 %% until( +Q:pred, +P:phrase(_))// is det.
