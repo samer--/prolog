@@ -173,15 +173,15 @@ lazy_nth1(I, [],     M,T-More, X) :-
 %% mb_query(+T:mb_class,+Req:request(T,A),+Opts:options,-Result:A) is det.
 %
 %  Execute a query against the Musicbrainz server, requesting entities of class
-%  Class. The request term Req specifies a lookup, browse, or search query.
+%  T. The request term Req is a ground term specifying a lookup, browse, or search query.
 %  Supplied options must be appropriate for the given query type.
-%  Each request is associated with a return type, which is the type of the item returned by query/4.
+%  Each request is associated with a return type, which is the type of Result returned by query/4.
 %
 %  The request terms and their types are:
 %  ==
-%  lookup(atom)      :: request(A,element(A)).
-%  browse(atom,atom) :: request(A,items(A)).
-%  search(text)      :: request(A,items(A)).
+%  lookup(atom)          :: request(A,element(A)).
+%  browse(mb_class,atom) :: request(A,items(A)).
+%  search(text)          :: request(A,items(A)).
 %
 %  items(A) == pair(natural,list(element(A))).
 %  pair(X,Y) ---> X-Y.
