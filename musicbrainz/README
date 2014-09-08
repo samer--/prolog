@@ -1,0 +1,14 @@
+
+This package provides access to the Musicbrainz XML web service.
+See musicbrainz.pl for details.
+
+---++++ Prerequisites
+
+You need the SWI Prolog SGML and HTTP libraries.
+
+
+---++++ Planned enhancements
+
+	*	Generate Prolog exceptions if Musicbrainz returns an error document.
+	*	Add more facets for extracting data from XML elements.
+
