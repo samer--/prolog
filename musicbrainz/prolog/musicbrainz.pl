@@ -227,6 +227,7 @@ doc_items(Class,Root,Total-Items) :-
 
 % would like to use http_open, but it doesn't handle MBZ error documents properly.
 get_xml(URLSpec,Doc) :- 
+   debug(musicbrainz,'Query URL: ~w',[URLSpec]),
    http_get([port(80)|URLSpec],Doc,[content_type('text/xml'),dialect(xml)]).
 
 % get_xml(URLSpec,Doc) :-
@@ -255,7 +256,7 @@ mb_facet(E,Facet) :- var(Facet), !,
    % orderly scan through all the components of the element.
    (Spec=attr(_,_); Spec=elem(_,_,_)),
    call(Spec,E), 
-   (  facet(Facet,Spec,Goal) -> call(Goal)
+   (  facet(Facet,Spec,Goal) *-> call(Goal)
    ;  debug(musicbrainz,'Unrecognised information: ~w',[Spec]),
       fail
    ).
@@ -284,7 +285,7 @@ facet( gender(Y),  elem(gender,   _, X), get_text(X,Y)).
 facet( country(Y), elem(country,  _, X), get_text(X,Y)).
 facet( born(Y),    elem('life-span', _, X), xp(X,begin(text),Y)).
 facet( died(Y),    elem('life-span', _, X), xp(X,end(text),Y)).
-facet( dead,       elem('life-span', _, X), xp(X,ended(text),true)).
+% facet( dead,       elem('life-span', _, X), xp(X,ended(text),true)).
 facet( title(Y),   elem(title,    _, X), get_text(X,Y)).
 facet( date(Y),    elem(date,     _, X), get_text(X,Y)).
 facet( alias(Y),          elem('alias-list',_, X),    xp(X,alias(text),Y)).
