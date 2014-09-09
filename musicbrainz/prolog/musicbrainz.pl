@@ -102,7 +102,7 @@
   (C) Samer Abdallah, UCL (2014)
  */
 
-:- use_module(library(http/http_open)).
+:- use_module(library(http/http_client)).
 :- use_module(library(http/http_sgml_plugin)).
 :- use_module(library(xpath)).
 
@@ -143,6 +143,13 @@ mb_lookup(Class,Id,Item) :- mb_query(Class,lookup(Id),[],Item).
 %
 %  Progress through the whole result set is given in P.
 %  The elements returned can be examined using mb_facet/2.
+
+mb_query(Class,Req,Opts,I/Total,Item) :- ground(I), !,
+   select_option(auto_page(_),Opts,Opts1,true),
+   select_option(limit(_),Opts1,Opts2,1),
+   select_option(offset(_),Opts2,Opts3,0),
+   succ(Offset,I),
+   mb_query(Class,Req,[limit(1),offset(Offset)|Opts3],Total-[Item]).
 
 mb_query(Class,Req,Opts,I/Total,Item) :-
    setting(limit,DL),
@@ -190,8 +197,10 @@ lazy_nth1(I, [],     M,T-More, X) :-
 mb_query(Class,Req,Opts,Return) :-
    request_params(Req,Opts,Decode,PathParts,Params),
    concat_atom(['/ws/2/',Class|PathParts],Path),
-   get_xml([host('musicbrainz.org'), path(Path), search(Params)], [], [Root]),
-   call(Decode,Class,Root,Return).
+   get_xml([host('musicbrainz.org'), path(Path), search(Params)], [Root]),
+   (  Root=element(error,_,_) -> throw(mb_error(Root))
+   ;  call(Decode,Class,Root,Return)
+   ).
 
 
 %% request_params(+R:request(A), +O:list(option), +Decode:pred(+atom,+dom,-A), -T:list(atom), -P:list(param)) is det.
@@ -216,13 +225,16 @@ doc_items(Class,Root,Total-Items) :-
    mb_facet(List,count(Total)),
    List=element(_,_,Items).
 
-% get_xml(URLSpec,Doc) :- http_get([port(80)|URLSpec],Doc,[content_type('text/xml')]).
-get_xml(URLSpec,Opts,Doc) :-
-   debug(musicbrainz,'Query URL: ~w',[URLSpec]),
-   setup_call_cleanup( 
-      http_open(URLSpec,Stream,[]),
-      load_xml(Stream,Doc,Opts),
-      close(Stream)).
+% would like to use http_open, but it doesn't handle MBZ error documents properly.
+get_xml(URLSpec,Doc) :- 
+   http_get([port(80)|URLSpec],Doc,[content_type('text/xml'),dialect(xml)]).
+
+% get_xml(URLSpec,Doc) :-
+%    debug(musicbrainz,'Query URL: ~w',[URLSpec]),
+%    setup_call_cleanup( 
+%       http_open(URLSpec,Stream,[]),
+%       load_xml(Stream,Doc,[]),
+%       close(Stream)).
 
 %% mb_facet( +E:element, ?Facet:facet) is nondet.
 %
