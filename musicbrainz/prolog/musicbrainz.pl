@@ -214,8 +214,10 @@ mb_query(Class,Req,Opts,Return) :-
 request_params(lookup(Id),       Opts, doc_item,  ['/',Id], Params)  :- process_options([inc],Opts,Params).
 request_params(browse(Class,Id), Opts, doc_items, [], [Class=Id|Params]) :- process_options([limit,offset,inc],Opts,Params).
 request_params(search(Query),    Opts, doc_items, [], [query=Q|Params]) :- 
-   (  atomic(Query) -> Q=Query 
-   ;  (  current_module(lucene) -> lucene:lucene(Query,Q)
+   (  atom(Query) -> Q=Query 
+   ;  string(Query) -> string_codes(Query,QQ)
+   ;  (  current_module(lucene) 
+      -> lucene:lucene(Query,QQ), string_codes(QQ,Q)
       ;  throw(error(lucene_module_not_loaded)))),
    process_options([limit,offset],Opts,Params).
 

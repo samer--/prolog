@@ -2,37 +2,87 @@
 
 /** <module> A DCG for generating Lucene searches
 
-	See https://lucene.apache.org/core/4_3_0/queryparser/org/apache/lucene/queryparser/classic/package-summary.html#package_description
-
-   This code is very preliminary, for two reasons:
-
-   Firstly, it cannot yet parse because (a) the grammar has a left-recursive production rule,
-   and (b) deterministic parsing of operators with precedence rules
-   combined with parentheses for disambiguation would 
-   mean that generation is nondeterministic.
-
-   Secondly, the Lucene grammar is just not making any sense
-   to me at the moment. It seems very illogical and ill-defined.
-
-   News just in: Lucene's parser is totally fucked up. Look at these--they show how
-   various queries are parsed. Boolean operators get reduced to - and + in a _really_
-   bizarre way.
+   Right. First of, forget everything you know about Lucene's search syntax.
+   It's a load of bollocks. Especially the boolean operators. After spending
+   the best part of a day trawling throught the Lucene source code, which is
+   a shocking mess, I have determined, to the best of my abilities, a data type
+   which represents the internal structure of a Lucene query. Basically, a query
+   is a triple of a modifier (Lucene +, -, or <none>), a numerical boost (Lucene ^
+   operator), and a, for want of a better name, a 'part'. I could have called it
+   a query 'component', but 'part' is a shorter word that means the same thing.
+   A part is either a primitive
+   term coupled with a field name( (:)/2 constructor), or a composite part 
+   consisting of a list of sub-queries (comp/1 constructor). So, we have:
    ==
-   $ qlucene "(apple AND bear) OR (cherry AND donut) AND (echo OR jelly)"
-   Searching for: (+apple +bear) +(+cherry +donut) +(echo jelly)
+   :- type query ---> q(modifier,boost,part).
+   :- type part  ---> comp(list(query))
+                    ; field:prim.
 
-   $ qlucene "(apple AND bear) OR ((cherry AND donut) AND (echo OR jelly))"
-   Searching for: (+apple +bear) (+(+cherry +donut) +(echo jelly))
-
-   $ qlucene "((apple AND bear) OR (cherry AND donut)) AND (echo OR jelly)"
-   Searching for: +((+apple +bear) (+cherry +donut)) +(echo jelly)
-
-   $ qlucene "((apple AND bear) OR (cherry AND donut)) AND NOT (echo OR jelly)"
-   Searching for: +((+apple +bear) (+cherry +donut)) -(echo jelly)
-
-   $ qlucene "((apple AND bear) OR (cherry AND donut))  NOT (echo OR jelly)"
-   Searching for: ((+apple +bear) (+cherry +donut)) -(echo jelly)
+   :- type modifier ---> plus, minus, none.
+   :- type boost == nonneg.
    ==
+   Note that the 'field' argument of the (:)/2 part constructor is inherently
+   defaulty: if no field is specified, the search agent fills it in with an
+   application specific default.
+
+   The primitives cover all those obtainable using the Lucene syntax
+   and are as follows:
+   ==
+   :- type prim  ---> word(word)           % bare, unquoted literl word
+                    ; glob(pattern)        % word with wildcards * and ?
+                    ; re(pattern)          % regular expression /.../
+                    ; fuzzy(word,integer)  % fuzzy word match <...>~N
+                    ; range_inc(word,word) % inclusive range [A TO B]
+                    ; range_exc(word,word) % exclusive range {A TO B}
+                    ; phrase(list(word),integer) % quoted multi word with slop
+                    .
+   ==
+
+   Building queries out of these constructors is a bit of a chore, so next
+   we have an term language and associated evaluator which takes an expression
+   and produces a valid query term. This can be thought of as a set of functions
+   which return queries. Every function in the language produces a value of type
+   =|query|=. Some of them leave the field and modifier arguments unbound. If they
+   are unbound at the end of the process, they take on default values. 
+   The functions and literals are as follows:
+   ==
+   <any atomic literal> :: query  % primitive word with unbound modifier and field
+   (@)  :: atomic -> query          % wildcard pattern with unbound modifier and field
+   (\)  :: atomic -> query          % regular expression with unbound modifier and field
+   (/)  :: atomic, number -> query  % fuzzy match with unbound modifier and field 
+   (//) :: atomic, number -> query  % quoted phrase with unbound modifier and field
+   (+)  :: atomic, atomic -> query  % inclusive range with unbound modifier and field
+   (-)  :: atomic, atomic -> query  % exclusive range with unbound modifier and field
+   (+)  :: query -> query           % unifies query modifier with plus
+   (-)  :: query -> query           % unifies query modifier with minus
+   (:)  :: atom, query              % unifies all field arguments recursively
+   (^)  :: query, number            % multiplies boost factor
+   list(query) :: query             % a list of queries evaluates to a composite query 
+                                    % with unbound modifier.
+   ==
+   A few notes are in order. 
+   1. Unlike Lucene's ~ postfix operator, the (/)/2 operator must have a number for
+      the permissible edit distance parameter. Lucene's default is 2.
+   2. Unlike Lucene's bare quoted term, the (//)/2 must have a number to use as a 
+      'slop' parameter. Supplying zero replicates Lucene's treatment of a bare quoted phrase.
+   3. (+)/2 and (-)/2 cannot be composed: this is a contradiction that results in 
+      error. (+)/2 and (-)/2 are both idempotent.
+   4. Two different field names cannot both be applied to the primitive. Considering that
+      the (:)/2 operator is applied recursively into sub-queries, this means that each
+      node in the syntax tree can have at most one field name on the path from it to the root.
+      This is different from Lucene's parser, which allows one field name to override
+      another.
+   5. I've taken the liberty of making multiple boosts on the same query combine multiplicatively,
+      much like ordinary mathematical exponentiation. This is different from Lucene, where
+      a later boost overrides an earlier boost. I think this way makes more sense.
+
+   So that's the basics of it. There might still be some problems in the DCG
+   when it comes to handling character escapes. Remarkably, weighing in at some 40
+   lines of Prolog code and a tiny fraction of the amount of the code in the Java
+   implementation, it seems to parse Lucene queries more or less correctly. 
+
+   See (if you must) 
+      https://lucene.apache.org/core/4_3_0/queryparser/org/apache/lucene/queryparser/classic/package-summary.html#package_description
 */
 
 :- use_module(library(dcg/basics)).
@@ -42,60 +92,70 @@
 :- set_prolog_flag(double_quotes, codes).
 
 lucene(E,String) :-
-   (  var(String) -> phrase(lucene(E),Codes,[]), string_codes(String,Codes)
-   ;  throw(error(lucene_parsing_not_supported)),
-      string_codes(String,Codes), phrase(lucene(E),Codes,[])
+   (  var(String) 
+   -> eval(E,Q), 
+      once(phrase(lucene(Q),Codes,[])),
+      string_codes(String,Codes)
+   ;  string_codes(String,Codes), phrase(lucene(E),Codes,[])
    ).
 
-% Bypass all processing, just spit out a literal atom or string
-lucene(Atom) --> {atomic(Atom)}, !, atom(Atom).
-lucene(Expr) --> query(Q).
 
-query(Clauses) --> "(", seqmap_with_sep(" ",cl,Clauses), ")".
+eval(W,  q(_,1,_:word(W))) :- atomic(W).
+eval(@G, q(_,1,_:glob(G))) :- insist(atomic(G)).
+eval(\RE,  q(_,1,_:re(RE))) :- insist(atomic(RE)).
+eval(W/S,  q(_,1,_:fuzzy(W,S))) :- atomic(W), insist(number(S)).
+eval(Ws//D, q(_,1,_:phrase(Ws,D))) :- insist(maplist(atomic,Ws)), insist(number(D)).
+eval(Min-Max, q(_,1,_:range_exc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
+eval(Min+Max, q(_,1,_:range_inc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
 
-cl($(T))          --> word(T).
-cl(F:V)           --> field_name(F), ":", query(V).
-cl(re(Regexp))    --> "/", regexp(Regexp), "/".
-cl(fuzzy(Word))   --> word(Word), "~".
-cl(fuzzy(Word,P)) --> word(Word), "~", integer(P).
-cl(prox(Words,D)) --> "\"", seqmap_with_sep(" ",word,Words), "\"", "~", integer(D).
-cl(range_inc(Min,Max)) --> sqbr((word(Min), " TO ", word(Max))).
-cl(range_exc(Min,Max)) --> brace((word(Min), " TO ", word(Max))).
+eval(F:E, C) :- eval(E,C), apply_field(F,C).
+eval(Es, q(_,1,comp(Cs2))) :- is_list(Es), maplist(eval,Es,Cs2).
+eval(E1^B, q(M,B2,Q)) :- eval(E1,q(M,B1,Q)), B2 is B1*B.
+eval(+E, q(plus,B,Q)) :- eval(E,q(M,B,Q)), insist(M=plus).
+eval(-E, q(minus,B,Q)) :- eval(E,q(M,B,Q)), insist(M=minus).
+eval(q(M,B,Q),q(M,B,Q)).
 
-cl(E^Boost) --> query(E), "^", number(Boost).
-cl((E1,E2)) --> query(E1), " AND ", query(E2).
-cl((E1;E2)) --> query(E1), " OR ", query(E).
-cl(\+(E))   --> "NOT ", query(E).
-cl(inc(E))  --> "+", cl(E).
-cl(exc(E))  --> "-", cl(E).
-cl(phr(Ws)) --> "\"", seqmap_with_sep(" ",word,Ws), "\"".
+insist(G) :- call(G) -> true; throw(failed(G)).
 
-regexp(RE) --> 
-   (  {var(RE)} 
-   -> re_codes(Codes), {string_codes(RE,Codes)}
-   ;  {string_codes(RE,Codes)}, re_codes(Codes)
+apply_field(F,q(_,_,F:_)).
+apply_field(F,q(_,_,comp(Cs))) :- maplist(apply_field(F),Cs).
+
+clist((A,B), [A|C]) :- !, clist(B,C).
+clist(A, [A]).
+
+lucene(Top) --> query(Top).
+
+query(q(Mod,Boost,Part)) --> mod(Mod), part(Part), boost(Boost).
+
+mod(none) --> "".
+mod(plus) --> "+".
+mod(minus) --> "-".
+
+boost(Boost) --> {Boost=1}; "^", number(Boost).
+
+part(default(_):Prim) --> prim(Prim).
+part(Field:Prim)   --> field(Field), ":", prim(Prim).
+part(comp(Clauses)) --> "(", seqmap_with_sep(" ",query,Clauses), ")".
+
+prim(word(W))   --> word(W).
+prim(glob(G))   --> bidi(G,glob_codes,string_codes).
+prim(re(RE))    --> "/", bidi(RE,re_codes,string_codes), "/".
+prim(fuzzy(W,P)) --> word(W), "~", integer(P).
+prim(range_inc(Min,Max)) --> sqbr((word(Min), " TO ", word(Max))).
+prim(range_exc(Min,Max)) --> brace((word(Min), " TO ", word(Max))).
+prim(phrase(Words,D)) --> 
+   "\"", seqmap_with_sep(" ",word,Words), "\"",
+   ( {D=0}; "~", integer(D)).
+
+word(W) --> bidi(W,word_codes,string_codes).
+field(F) --> bidi(F,field_codes,string_codes).
+
+% beginnings of parsing ability...
+bidi(Sem,DoCodes,DoSem) -->
+   (  {var(Sem)} 
+   -> call(DoCodes,Codes), {call(DoSem,Sem,Codes)}
+   ;  {call(DoSem,Sem,Codes)}, call(DoCodes,Codes)
    ).
-
-word(W) --> 
-   (  {var(W)} 
-   -> word_codes(Codes), {\+keyword(Codes), string_codes(W,Codes)}
-   ;  {string_codes(W,Codes), \+keyword(Codes)}, word_codes(Codes)
-   ).
-
-field_name(F) --> 
-   (  {var(F)} 
-   -> field_name_codes(Codes), {\+keyword(Codes), string_codes(F,Codes)}
-   ;  {atom_codes(F,Codes), \+keyword(Codes)}, field_name_codes(Codes)
-   ).
-
-re_codes(Codes) --> escaped_codes(back_slash,"/\\",Codes).
-word_codes([C1|Cs]) --> escaped_codes(back_slash," +-&|!(){}[]^\"~*?:\\",[C1|Cs]).
-field_name_codes([C1|Cs]) --> escaped_codes(fail," +-&|!(){}[]^\"~*?:\\",[C1|Cs]).
-
-keyword("OR").
-keyword("AND").
-keyword("NOT").
-keyword("TO").
 
 %% escaped_codes(+Esc:esc,+Special:list(code),+Codes:list(code))// is det.
 %% escaped_codes(+Esc:esc,+Special:list(code),-Codes:list(code))// is nondet.
@@ -127,4 +187,12 @@ back_slash([0'\\,C|T],T) --> [0'\\,C].
 %% fail(@H,@T) is semidet.
 %  goal representing no escape sequences: it always fails.
 fail(_,_) --> {fail}.
+
+% Tentative parsers for different kinds of character sequence
+% I'm not sure Lucene's parser actually recognises some of these escape sequences..
+% I've made it so that field names can't have any funny characters in them.
+word_codes([C1|Cs])  --> escaped_codes(back_slash," /+-&|!(){}[]^\"~:\\*?",[C1|Cs]).
+glob_codes([C1|Cs])  --> escaped_codes(back_slash," /+-&|!(){}[]^\"~:\\",[C1|Cs]).
+re_codes(Codes)      --> escaped_codes(back_slash,"/\\",Codes).
+field_codes([C1|Cs]) --> escaped_codes(fail," /+-&|!(){}[]^\"~?:\\",[C1|Cs]).
 
