@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=musicbrainz
-VER=0.1.5
+VER=0.1.6
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 

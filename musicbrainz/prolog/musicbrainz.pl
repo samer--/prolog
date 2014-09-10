@@ -215,7 +215,7 @@ request_params(lookup(Id),       Opts, doc_item,  ['/',Id], Params)  :- process_
 request_params(browse(Class,Id), Opts, doc_items, [], [Class=Id|Params]) :- process_options([limit,offset,inc],Opts,Params).
 request_params(search(Query),    Opts, doc_items, [], [query=Q|Params]) :- 
    (  atom(Query) -> Q=Query 
-   ;  string(Query) -> string_codes(Query,QQ)
+   ;  string(Query) -> string_codes(Query,Q)
    ;  (  current_module(lucene) 
       -> lucene:lucene(Query,QQ), string_codes(QQ,Q)
       ;  throw(error(lucene_module_not_loaded)))),
