@@ -5,6 +5,7 @@
    ,  mb_browse/4
    ,  mb_lookup/3
    ,  mb_facet/2
+   ,  mbid/2
 	]).
 
 /** <module> Interface to Musicbrainz XML web service
@@ -51,8 +52,11 @@
       with the given artist. Returns a list of elements and a number giving the total number 
       of matches.
    *  search(+SeachTerm:text)
-      Full text search ffor the given text (an atom or string).
+      Full text search for the given text (an atom or string).
       Returns a list of elements and a number giving the total number of matches.
+      If the search term is not atomic and the module lucene is
+      loaded, then Term will be interpreted as a term describing a Lucene search
+      as implemented in the module lucene.pl.
 
    ---+++ Options
 
@@ -209,7 +213,11 @@ mb_query(Class,Req,Opts,Return) :-
 %  for that request. Only options valid for the given request are permitted.
 request_params(lookup(Id),       Opts, doc_item,  ['/',Id], Params)  :- process_options([inc],Opts,Params).
 request_params(browse(Class,Id), Opts, doc_items, [], [Class=Id|Params]) :- process_options([limit,offset,inc],Opts,Params).
-request_params(search(Query),    Opts, doc_items, [], [query=Query|Params]) :- process_options([limit,offset],Opts,Params).
+request_params(search(Query),    Opts, doc_items, [], [query=Q|Params]) :- 
+   (  atomic(Query) -> Q=Query 
+   ;  (  current_module(lucene) -> lucene:lucene(Query,Q)
+      ;  throw(error(lucene_module_not_loaded)))),
+   process_options([limit,offset],Opts,Params).
 
 % Convert list of valid Name=Value pairs and produce params for HTTP query.
 process_options(ValidOpts,Opts,Params) :- process_options(ValidOpts,Opts,Params,[]).
@@ -227,7 +235,7 @@ doc_items(Class,Root,Total-Items) :-
 
 % would like to use http_open, but it doesn't handle MBZ error documents properly.
 get_xml(URLSpec,Doc) :- 
-   debug(musicbrainz,'Query URL: ~w',[URLSpec]),
+   debug(musicbrainz,'Query URL: ~q',[URLSpec]),
    http_get([port(80)|URLSpec],Doc,[content_type('text/xml'),dialect(xml)]).
 
 % get_xml(URLSpec,Doc) :-
@@ -257,7 +265,7 @@ mb_facet(E,Facet) :- var(Facet), !,
    (Spec=attr(_,_); Spec=elem(_,_,_)),
    call(Spec,E), 
    (  facet(Facet,Spec,Goal) *-> call(Goal)
-   ;  debug(musicbrainz,'Unrecognised information: ~w',[Spec]),
+   ;  debug(musicbrainz,'Unrecognised information: ~q',[Spec]),
       fail
    ).
 
@@ -266,6 +274,7 @@ mb_facet(E,Facet) :-
    facet(Facet,Spec,Goal), 
    call(Spec,E),
    call(Goal).
+
 
 % goals for extracting attributes and subelements from an element
 attr(Name,Value,element(_,Attrs,_)) :- member(Name=Value,Attrs). 
@@ -288,13 +297,42 @@ facet( died(Y),    elem('life-span', _, X), xp(X,end(text),Y)).
 % facet( dead,       elem('life-span', _, X), xp(X,ended(text),true)).
 facet( title(Y),   elem(title,    _, X), get_text(X,Y)).
 facet( date(Y),    elem(date,     _, X), get_text(X,Y)).
+facet( length(Y),  elem(length,   _, [X]), atom_number(X,Y)).
 facet( alias(Y),          elem('alias-list',_, X),    xp(X,alias(text),Y)).
 facet( sort_name(Y),      elem('sort-name', _, X),    get_text(X,Y)).
 facet( disambiguation(Y), elem(disambiguation, _, X), get_text(X,Y)).
 facet( area(Id,Facets),   elem(area,As,Es),           get_area(As,Es,Id,Facets)).
+facet( credit(artist,E),  elem('artist-credit',_, X),  xp(X,'name-credit'/artist,E)).
+facet( release(E),        elem('release-list',_, X),  xp(X,release,E)).
 
 get_text(Elems,Text) :- xp(Elems,/self(text),Text).
 get_area(As,Es,Id,F2) :-
    findall(F,mb_facet(element(area,As,Es),F),F1),
    select(id(Id),F1,F2).
 xp(Elems,Selector,Val) :- xpath(element(e,[],Elems),Selector,Val).
+
+%% mbid(+E:element(_), -Id:atom) is semidet.
+%  Short accessor for entity Id.
+mbid(E,Id) :- mb_facet(E,id(Id)).
+
+%% mb_class(-T:mb_class) is nondet.
+%  Registry of core entity types.
+mb_class(label).
+mb_class(artist).
+mb_class(work).
+mb_class(recording).
+mb_class(release).
+mb_class('release-group').
+mb_class(area).
+mb_class(url).
+
+% For more convenient display of elements.
+user:portray(E) :-
+   E=element(T,_,_), mb_class(T),
+   mb_facet(E,id(Id)),
+   (  mb_facet(E,name(Name))
+   -> format('<mb:~w/~w|~w>',[T,Id,Name])
+   ;  mb_facet(E,title(Title))
+   -> format('<mb:~w/~w|~w>',[T,Id,Title])
+   ;  format('<mb:~w/~w>',[T,Id])
+   ).
