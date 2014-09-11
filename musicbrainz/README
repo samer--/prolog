@@ -1,6 +1,8 @@
 
 This package provides access to the Musicbrainz XML web service.
-See musicbrainz.pl for details.
+See musicbrainz.pl for details. It also provides a language for
+building Lucene queries, which Musicbrainz for doing complex
+searches. See lucene.pl.
 
 ---++++ Prerequisites
 
@@ -9,6 +11,8 @@ You need the SWI Prolog SGML and HTTP libraries.
 
 ---++++ Planned enhancements
 
-	*	Generate Prolog exceptions if Musicbrainz returns an error document.
 	*	Add more facets for extracting data from XML elements.
+	*	Do some checking to enforce valid queries, eg checking that the fields
+		in a Lucene query match the entity type being searched for, checking
+		that includes match the entity type being retrieved.
 

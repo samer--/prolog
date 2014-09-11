@@ -17,6 +17,22 @@
    level predicates that combine the two for common query patterns,
    insulating (mostly) the user from the idiosyncracies of XML..
 
+   ---+++ Quick start
+
+   First, some examples: search for artists with 'Coltrane' in their name
+   and get their full name:
+   ==
+   ?- mb_search(artist,'Coltrane',Score,Id,E), mb_facet(E,name(Name)).
+   ==
+   Lucene search for releases with 'blue' in the title and 'monk' in the artist,
+   then retrieve all facets (with debug on to show search string and report
+   unrecognised facets, also use mb_query/5 to get progress indicator):
+   ==
+   ?- debug(musicbrainz).
+   ?- mb_query(release,search([blue, -artist:trane]),[],Prog,E), 
+      forall(mb_facet(E,F),(print(F),nl)).
+   ==
+
    ---+++ Queries
 
    The Musicbrainz XML web service is described at 
@@ -217,7 +233,7 @@ request_params(search(Query),    Opts, doc_items, [], [query=Q|Params]) :-
    (  atom(Query) -> Q=Query 
    ;  string(Query) -> string_codes(Query,Q)
    ;  (  current_module(lucene) 
-      -> lucene:lucene(Query,QQ), string_codes(QQ,Q)
+      -> lucene:lucene(Query,QQ), atom_string(Q,QQ)
       ;  throw(error(lucene_module_not_loaded)))),
    process_options([limit,offset],Opts,Params).
 
@@ -306,6 +322,8 @@ facet( disambiguation(Y), elem(disambiguation, _, X), get_text(X,Y)).
 facet( area(Id,Facets),   elem(area,As,Es),           get_area(As,Es,Id,Facets)).
 facet( credit(artist,E),  elem('artist-credit',_, X),  xp(X,'name-credit'/artist,E)).
 facet( release(E),        elem('release-list',_, X),  xp(X,release,E)).
+facet( status(Y),    elem(status,  _, X),    get_text(X,Y)).
+facet( packaging(Y), elem(packaging,  _, X), get_text(X,Y)).
 
 get_text(Elems,Text) :- xp(Elems,/self(text),Text).
 get_area(As,Es,Id,F2) :-

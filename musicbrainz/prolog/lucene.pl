@@ -79,11 +79,16 @@
    So that's the basics of it. There might still be some problems in the DCG
    when it comes to handling character escapes. Remarkably, weighing in at some 40
    lines of Prolog code and a tiny fraction of the amount of the code in the Java
-   implementation, it seems to parse Lucene queries more or less correctly. 
+   implementation, it seems to parse much of the Lucene query syntax more or less correctly,
+   except for the boolean operators, which Lucene does not handle in any sensible way
+   and are best avoided. Also, it does not parse field names applied to componound queries
+   or the postfix '~' operator.
 
    See (if you must) 
       https://lucene.apache.org/core/4_3_0/queryparser/org/apache/lucene/queryparser/classic/package-summary.html#package_description
 */
+
+:- meta_predicate bidi(?,//,0,?,?).
 
 :- use_module(library(dcg/basics)).
 :- use_module(library(dcg_core)).
@@ -96,7 +101,8 @@ lucene(E,String) :-
    -> eval(E,Q), 
       once(phrase(lucene(Q),Codes,[])),
       string_codes(String,Codes)
-   ;  string_codes(String,Codes), phrase(lucene(E),Codes,[])
+   ;  string_codes(String,Codes), 
+      phrase(lucene(E),Codes,[])
    ).
 
 
@@ -108,6 +114,8 @@ eval(Ws//D, q(_,1,_:phrase(Ws,D))) :- insist(maplist(atomic,Ws)), insist(number(
 eval(Min-Max, q(_,1,_:range_exc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
 eval(Min+Max, q(_,1,_:range_inc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
 
+eval(+F:E, C) :- eval(+(F:E),C). % kludge to fix operator precedence
+eval(-F:E, C) :- eval(-(F:E),C). % kludge to fix operator precedence
 eval(F:E, C) :- eval(E,C), apply_field(F,C).
 eval(Es, q(_,1,comp(Cs2))) :- is_list(Es), maplist(eval,Es,Cs2).
 eval(E1^B, q(M,B2,Q)) :- eval(E1,q(M,B1,Q)), B2 is B1*B.
@@ -122,6 +130,11 @@ apply_field(F,q(_,_,comp(Cs))) :- maplist(apply_field(F),Cs).
 
 clist((A,B), [A|C]) :- !, clist(B,C).
 clist(A, [A]).
+
+% beginnings of parsing ability...
+% this orders the two goals depending on the instantiation state of Sem.
+bidi(Sem,Phrase,Unify) -->
+   {var(Sem)} -> Phrase, {Unify}; {Unify}, Phrase.
 
 lucene(Top) --> query(Top).
 
@@ -138,8 +151,8 @@ part(Field:Prim)   --> field(Field), ":", prim(Prim).
 part(comp(Clauses)) --> "(", seqmap_with_sep(" ",query,Clauses), ")".
 
 prim(word(W))   --> word(W).
-prim(glob(G))   --> bidi(G,glob_codes,string_codes).
-prim(re(RE))    --> "/", bidi(RE,re_codes,string_codes), "/".
+prim(glob(G))   --> bidi(G,glob_codes(C),string_codes(G,C)).
+prim(re(RE))    --> "/", bidi(RE,re_codes(C),string_codes(RE,C)), "/".
 prim(fuzzy(W,P)) --> word(W), "~", integer(P).
 prim(range_inc(Min,Max)) --> sqbr((word(Min), " TO ", word(Max))).
 prim(range_exc(Min,Max)) --> brace((word(Min), " TO ", word(Max))).
@@ -147,15 +160,8 @@ prim(phrase(Words,D)) -->
    "\"", seqmap_with_sep(" ",word,Words), "\"",
    ( {D=0}; "~", integer(D)).
 
-word(W) --> bidi(W,word_codes,string_codes).
-field(F) --> bidi(F,field_codes,string_codes).
-
-% beginnings of parsing ability...
-bidi(Sem,DoCodes,DoSem) -->
-   (  {var(Sem)} 
-   -> call(DoCodes,Codes), {call(DoSem,Sem,Codes)}
-   ;  {call(DoSem,Sem,Codes)}, call(DoCodes,Codes)
-   ).
+word(W) --> bidi(W,word_codes(C),string_codes(W,C)).
+field(F) --> bidi(F,field_codes(C),string_codes(F,C)).
 
 %% escaped_codes(+Esc:esc,+Special:list(code),+Codes:list(code))// is det.
 %% escaped_codes(+Esc:esc,+Special:list(code),-Codes:list(code))// is nondet.
