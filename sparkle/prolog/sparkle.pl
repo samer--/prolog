@@ -82,16 +82,29 @@ query_goal(EP,Goal,Opts) :-
    goal_to_phrase(Goal,Opts,Phrase,Result),
    query_phrase(EP,Phrase,Result).
 
-goal_to_phrase(Goal,Opts,Phrase,Vars) :-
+goal_to_phrase(Goal,Opts,Phrase,Result) :-
    term_variables(Goal,Vars),
    (  Vars=[] % if no variables, do an ASK query, otherwise, SELECT
-   -> Phrase=ask(Goal)
-   ;  Phrase=select(Vars,Goal,Opts)
+   -> Phrase=ask(Goal), Result=true
+   ;  Phrase=select(Vars,Goal,Opts), Result =.. [row|Vars]
    ).
 
-% ----------------------------------------------------
-% Phrase-based queries 
-% These get translated into SPARLQ queries and executed.
+%% query_phrase(+EP,+Q:sparqle_phrase(R),R) is nondet.
+%% query_phrase(-EP,+Q:sparqle_phrase(R),R) is nondet.
+%% query_phrase(+Q:sparqle_phrase(R),R) is nondet.
+%
+% Phrase-based queries using the DCG defined in sparql_dcg.pl.
+% The return type depends on the query:
+% ==
+% select(V:list(var), sparql_goal, options) :: sparql_phrase(row(N)) :- length(V,N).
+% describe(resource,sparql_goal)            :: sparql_phrase(rdf).
+% describe(resource)                        :: sparql_phrase(rdf).
+% ask(sparql_goal)                          :: sparql_phrase(bool).
+%
+% rdf  ---> rdf(resource,resource,object).
+% bool ---> true; false.
+% ==
+% =|row(N)|= is the type of terms of functor row/N.
 
 query_phrase(Phrase,Result) :- 
    phrase_to_query(Phrase,Query),
@@ -120,8 +133,7 @@ phrase_to_query(Phrase,Query) :-
 run_query(EP,Query,Result) :-
    sparql_endpoint(EP,Host,Port,Path,EPOpts),
    debug(sparkle,'Querying endpoint http://~w:~w~w',[Host,Port,Path]),
-   sparql_query(Query,Row,[host(Host),port(Port),path(Path)|EPOpts]),
-   Row =.. [row|Result].
+   sparql_query(Query,Result,[host(Host),port(Port),path(Path)|EPOpts]).
 
 
 % Forget about provenance for now...
