@@ -133,8 +133,8 @@ cond(X>Y)   --> p expr(X), " > ", expr(Y).
 cond(X<Y)   --> p expr(X), " < ", expr(Y).
 cond(between(L,U,X)) --> cond((L=<X,X=<U)).
 cond(in(X,Ys))     --> p expr(X), " in ", (p seqmap_with_sep(", ",expr,Ys)).
-cond(regex(V,P))   --> "regex(", object(V), ",", quote(at(P)), ")".
-cond(regex(V,P,F)) --> "regex(", object(V), ",", quote(at(P)),  ",", quote(at(F)), ")".
+cond(regex(P,V))   --> "regex(", object(V), ",", quote(at(P)), ")".
+cond(regex(P,V,F)) --> "regex(", object(V), ",", quote(at(P)),  ",", quote(at(F)), ")".
 cond(bound(V))     --> "bound(", object(V), ")".
 cond(uri(V))       --> "isURI(", object(V), ")".
 cond(blank(V))     --> "isBLANK(", object(V), ")".
