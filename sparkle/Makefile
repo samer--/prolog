@@ -26,7 +26,7 @@ foreign:
 install: pack
 	swipl -g "pack_install('$(PACKFILE)'), halt"
 
-install-git: install
+install-git: 
 	(git commit $(PACKFILE) || echo 'Local up to date') && (git push $(PACKFILE) || echo 'Remote up to date')
 	chmod -w $(PACKNAME)
 	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
