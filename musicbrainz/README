@@ -1,12 +1,44 @@
 
 This package provides access to the Musicbrainz XML web service.
 See musicbrainz.pl for details. It also provides a language for
-building Lucene queries, which Musicbrainz for doing complex
+building Lucene queries, which Musicbrainz uses for doing complex
 searches. See lucene.pl.
+
+---++++ Quick start
+
+Install this pack. Then load the modules:
+==
+?- use_module(library(musicbrainz)).
+?- use_module(library(lucene)).
+==
+Then, simple search returning a 'goodness of match' in Score, a Musicbrainz ID
+in ID, and an XML element in E, then extracting info from E with mb_facet/2:
+==
+?- mb_search(artist,'John Coltrane',Score,Id,E), forall(mb_facet(E,F),writeln(F)).
+==
+Lucene search for releases with 'trane' in the title but not by anyone
+with 'coltrane' in the name, using general purpose mb_query/5 to get progress info:
+==
+?- mb_query(release,search([trane, -artist:coltrane]),[],Prog,E).
+==
+Search for artist then browse releases:
+==
+?- mb_search(artist,'John Coltrane',_,Id,_),
+   mb_browse(release,artist,Id,E),
+	forall(mb_facet(E,F),(print(F),nl)).
+==
+Lucene search for male artist then direct lookup all releases:
+==
+?- mb_search(artist,[coltrane, gender:male],_,Id,_), 
+   mb_query(artist,lookup(Id),[inc(releases)],Item), 
+	forall(mb_facet(Item,F),(print(F),nl)).
+==
+
 
 ---++++ Prerequisites
 
-You need the SWI Prolog SGML and HTTP libraries.
+You need the SWI Prolog SGML and HTTP libraries. They are both installed
+by default when you install SWI Prolog.
 
 
 ---++++ Planned enhancements

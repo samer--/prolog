@@ -50,7 +50,7 @@
    (@)  :: atomic -> query          % wildcard pattern with unbound modifier and field
    (\)  :: atomic -> query          % regular expression with unbound modifier and field
    (/)  :: atomic, number -> query  % fuzzy match with unbound modifier and field 
-   (//) :: atomic, number -> query  % quoted phrase with unbound modifier and field
+   (//) :: list(atomic), number -> query  % quoted phrase with unbound modifier and field
    (+)  :: atomic, atomic -> query  % inclusive range with unbound modifier and field
    (-)  :: atomic, atomic -> query  % exclusive range with unbound modifier and field
    (+)  :: query -> query           % unifies query modifier with plus
@@ -62,19 +62,40 @@
    ==
    A few notes are in order. 
    1. Unlike Lucene's ~ postfix operator, the (/)/2 operator must have a number for
-      the permissible edit distance parameter. Lucene's default is 2.
+      the edit distance parameter. Lucene's default is 2.
    2. Unlike Lucene's bare quoted term, the (//)/2 must have a number to use as a 
       'slop' parameter. Supplying zero replicates Lucene's treatment of a bare quoted phrase.
    3. (+)/2 and (-)/2 cannot be composed: this is a contradiction that results in 
       error. (+)/2 and (-)/2 are both idempotent.
-   4. Two different field names cannot both be applied to the primitive. Considering that
+   4. Prolog's (-)/1 and (+)/2 operates bind tighter than (:)/2 operators, which is the
+      wrong way round
+      for Lucene queries: Prolog reads =|-F:E|= as =|(-F):E|=, but my expression language
+      needs to see =|-(F:E)|=. Hence, there is little kludge in the evaluator to catch
+      such terms and re-group the operators.
+   5. Two different field names cannot both be applied to the primitive. Considering that
       the (:)/2 operator is applied recursively into sub-queries, this means that each
       node in the syntax tree can have at most one field name on the path from it to the root.
       This is different from Lucene's parser, which allows one field name to override
       another.
-   5. I've taken the liberty of making multiple boosts on the same query combine multiplicatively,
+   6. I've taken the liberty of making multiple boosts on the same query combine multiplicatively,
       much like ordinary mathematical exponentiation. This is different from Lucene, where
       a later boost overrides an earlier boost. I think this way makes more sense.
+
+   Thus, the type of such expression can be defined as:
+   ==
+   qexpr ---> @atomic; \atomic 
+            ; atomic/number
+            ; list(atomic)//number
+            ; atomic + atomic
+            ; atomic - atomic
+            ; +qexpr ; -qexpr
+            ; atom:qexpr
+            ; qexpr^number
+            ; list(qexpr)
+            .
+   atomic :< qexpr.  % any atomic is a qexpr
+   query  :< qexpr.  % any query  is a qexpr
+   ==
 
    So that's the basics of it. There might still be some problems in the DCG
    when it comes to handling character escapes. Remarkably, weighing in at some 40
@@ -96,6 +117,13 @@
 
 :- set_prolog_flag(double_quotes, codes).
 
+%% lucene(+Q:qexpr, -S:string) is det.
+%% lucene(+Q:query, -S:string) is det.
+%% lucene(-Q:query, +S:string) is nondet.
+%
+%  Format or parse a Lucene query. This predicate can accept a term of type
+%  =|query|= or an expression of type =|qexpr|= and produces a query string.
+%  Alternatively, it can parse a query string to produce a =|query|= term.
 lucene(E,String) :-
    (  var(String) 
    -> eval(E,Q), 
@@ -128,14 +156,12 @@ insist(G) :- call(G) -> true; throw(failed(G)).
 apply_field(F,q(_,_,F:_)).
 apply_field(F,q(_,_,comp(Cs))) :- maplist(apply_field(F),Cs).
 
-clist((A,B), [A|C]) :- !, clist(B,C).
-clist(A, [A]).
-
-% beginnings of parsing ability...
-% this orders the two goals depending on the instantiation state of Sem.
-bidi(Sem,Phrase,Unify) -->
-   {var(Sem)} -> Phrase, {Unify}; {Unify}, Phrase.
-
+%% lucene(+Q:query)// is nondet.
+%% lucene(-Q:query)// is nondet.
+%
+%  Top level DCG goal for Lucene queries. Can be non-deterministic in
+%  either direction, but usually, it is best to accept only the first
+%  result.
 lucene(Top) --> query(Top).
 
 query(q(Mod,Boost,Part)) --> mod(Mod), part(Part), boost(Boost).
@@ -162,6 +188,11 @@ prim(phrase(Words,D)) -->
 
 word(W) --> bidi(W,word_codes(C),string_codes(W,C)).
 field(F) --> bidi(F,field_codes(C),string_codes(F,C)).
+
+% beginnings of parsing ability...
+% this orders the two goals depending on the instantiation state of Sem.
+bidi(Sem,Phrase,Unify) -->
+   {var(Sem)} -> Phrase, {Unify}; {Unify}, Phrase.
 
 %% escaped_codes(+Esc:esc,+Special:list(code),+Codes:list(code))// is det.
 %% escaped_codes(+Esc:esc,+Special:list(code),-Codes:list(code))// is nondet.

@@ -15,22 +15,35 @@
    composing and querying the Musicbrainz web service, and those for
    decoding the resulting XML documents. Then there are a few higher
    level predicates that combine the two for common query patterns,
-   insulating (mostly) the user from the idiosyncracies of XML..
+   insulating (mostly) the user from the idiosyncracies of XML. This module
+   can also use the Lucene module (lucene.pl) to compose Lucene searches.
 
    ---+++ Quick start
 
-   First, some examples: search for artists with 'Coltrane' in their name
-   and get their full name:
+   A simple search returning a 'goodness of match' in Score, a Musicbrainz ID
+   in ID, and an XML element in E, then extracting info from E with mb_facet/2:
    ==
-   ?- mb_search(artist,'Coltrane',Score,Id,E), mb_facet(E,name(Name)).
+   ?- mb_search(artist,'John Coltrane',Score,Id,E), forall(mb_facet(E,F),writeln(F)).
    ==
-   Lucene search for releases with 'blue' in the title and 'monk' in the artist,
-   then retrieve all facets (with debug on to show search string and report
-   unrecognised facets, also use mb_query/5 to get progress indicator):
+   Search for releases with 'trane' in the title, using general purpose mb_query/5 
+   to get progress info:
    ==
-   ?- debug(musicbrainz).
-   ?- mb_query(release,search([blue, -artist:trane]),[],Prog,E), 
+   ?- mb_query(release,search(trane),[],Prog,E).
+   ==
+   Search for artist then browse releases:
+   ==
+   ?- mb_search(artist,'John Coltrane',_,Id,_),
+      mb_browse(release,artist,Id,E),
       forall(mb_facet(E,F),(print(F),nl)).
+   ==
+   Lucene search for male artist then direct lookup all releases (with debug
+   on to report unrecognised fields):
+   ==
+   ?- use_module(library(lucene)).
+   ?- debug(musicbrainz).
+   ?- mb_search(artist,[coltrane, gender:male],_,Id,_), 
+      mb_query(artist,lookup(Id),[inc(releases)],Item), 
+      forall(mb_facet(Item,F),(print(F),nl)).
    ==
 
    ---+++ Queries
@@ -129,7 +142,7 @@
 
 :- setting(limit,integer,20,'Default limit for Musicbrainz search and browse queries').
 
-%% mb_search(+T:mb_class, +Term:text, -Score:number, -Id:atom, -Item:element(T)) is nondet.
+%% mb_search(+T:mb_class, +Term:text, -Score:between(0,100), -Id:atom, -Item:element(T)) is nondet.
 %
 %  Searches for entities of type T using arbitrary text. Multiple matches are yielded
 %  on backtracking, with Score giving a goodness of fit between 0 and 100, Id giving the
@@ -161,7 +174,9 @@ mb_lookup(Class,Id,Item) :- mb_query(Class,lookup(Id),[],Item).
 %  set is returned one by one, on backtracking, executing multiple queries if necessary.
 %  Otherwise, the results for a single query with the given offset (default 0) is produced.
 %
-%  Progress through the whole result set is given in P.
+%  Progress through the whole result set is given in P, which is a term I/N, where
+%  N is the total number of items in the result set and I is the index of the current
+%  item. If I is bound on input, that single item is fetched directly.
 %  The elements returned can be examined using mb_facet/2.
 
 mb_query(Class,Req,Opts,I/Total,Item) :- ground(I), !,
@@ -202,7 +217,9 @@ lazy_nth1(I, [],     M,T-More, X) :-
 %  Execute a query against the Musicbrainz server, requesting entities of class
 %  T. The request term Req is a ground term specifying a lookup, browse, or search query.
 %  Supplied options must be appropriate for the given query type.
-%  Each request is associated with a return type, which is the type of Result returned by query/4.
+%  Each request is associated with a return type, which is the type of Result.
+%  All queries eventually come through this predicate. The address of the Musicbrainz
+%  web service is hard coded here.
 %
 %  The request terms and their types are:
 %  ==
