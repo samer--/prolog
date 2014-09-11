@@ -1,0 +1,41 @@
+This package provides a more natural (from a Prolog point of view) interface
+to SPARQL endpoints. There are two layers. The first, lower layer, defines a
+DCG for generating SPARQL queries from a structured term. The second provides
+a translation from representation that looks more or less like a Prolog goal
+built from rdf/3 goals (with conjunction, disjunction etc) to a term in the
+term language understood by the SPARQL DCG.
+
+In addition, the library provides a mechanism to register known SPARQL endpoints
+so that they can be referred to by a short name, or to enable a query to be
+run against all registered endpoints.
+
+The library is based on the idea implemented in Yves Raimond's swic package,
+but the code has been completely re-implemented.
+
+---++++ Prerequisites
+
+You just need SWI Prolog with its Semantic Web libraries.
+
+---++++ Simple usage
+
+The (??)/2  and (??)/1 operators have a high precedence so that conjuction and disjunctive
+queries can be written to the right of it without parentheses.
+==
+?- rdf_register_prefix(foaf,'http://xmlns.com/foaf/0.1/')
+?- rdf_register_prefix(dbont,'http://dbpedia.org/ontology/')
+?- sparql_endpoint( dbp, 'http://dbpedia.org/sparql/').
+?- debug(sparkle).  % to show queries
+
+?-	dbp ?? rdf(Class,rdf:type,owl:'Class'), rdf(Instance,rdf:type,Class).
+?- dbp ?? rdf(Person,rdf:type,foaf:'Person'), 
+          rdf(Person,foaf:Name,Name),
+          filter(regex('Colt.*',Name)).
+?- dbp ?? rdf(A,rdf:type,dbont:'Photographer'); rdf(A, rdf:type, dbont:'MusicalArtist').
+==
+---++++ TO DO 
+
+*	Handle DESCRIBE and ASK queries properly.
+*	Query multiple endpoints in parallel.
+*	Write some documentation.
+
+
