@@ -9,7 +9,6 @@ searches. See lucene.pl.
 Install this pack. Then load the modules:
 ==
 ?- use_module(library(musicbrainz)).
-?- use_module(library(lucene)).
 ==
 Then, simple search returning a 'goodness of match' in Score, a Musicbrainz ID
 in ID, and an XML element in E, then extracting info from E with mb_facet/2:

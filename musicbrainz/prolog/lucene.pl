@@ -28,7 +28,7 @@
    The primitives cover all those obtainable using the Lucene syntax
    and are as follows:
    ==
-   :- type prim  ---> word(word)           % bare, unquoted literl word
+   :- type prim  ---> word(word)           % bare, unquoted literal word
                     ; glob(pattern)        % word with wildcards * and ?
                     ; re(pattern)          % regular expression /.../
                     ; fuzzy(word,integer)  % fuzzy word match <...>~N
@@ -46,7 +46,7 @@
    are unbound at the end of the process, they take on default values. 
    The functions and literals are as follows:
    ==
-   <any atomic literal> :: query  % primitive word with unbound modifier and field
+   <any atomic literal> :: query    % primitive word with unbound modifier and field
    (@)  :: atomic -> query          % wildcard pattern with unbound modifier and field
    (\)  :: atomic -> query          % regular expression with unbound modifier and field
    (/)  :: atomic, number -> query  % fuzzy match with unbound modifier and field 
@@ -117,27 +117,22 @@
 
 :- set_prolog_flag(double_quotes, codes).
 
-%% lucene(+Q:qexpr, -S:string) is det.
-%% lucene(+Q:query, -S:string) is det.
-%% lucene(-Q:query, +S:string) is nondet.
+%% lucene(+Q:qexpr, -C:list(code)) is det.
+%% lucene(+Q:query, -C:list(code)) is det.
+%% lucene(-Q:query, +C:list(code)) is det.
 %
 %  Format or parse a Lucene query. This predicate can accept a term of type
-%  =|query|= or an expression of type =|qexpr|= and produces a query string.
-%  Alternatively, it can parse a query string to produce a =|query|= term.
-lucene(E,String) :-
-   (  var(String) 
-   -> eval(E,Q), 
-      once(phrase(lucene(Q),Codes,[])),
-      string_codes(String,Codes)
-   ;  string_codes(String,Codes), 
-      phrase(lucene(E),Codes,[])
-   ).
+%  =|query|= or an expression of type =|qexpr|= and produces a query as a list
+%  of character codes. Alternatively, it can parse a query to produce a =|query|= term.
+%  See lucene//1 for more details.
+lucene(E,Codes) :-
+   (var(Codes) -> eval(E,Q); E=Q),
+   once(phrase(lucene(Q),Codes,[])).
 
-
-eval(W,  q(_,1,_:word(W))) :- atomic(W).
-eval(@G, q(_,1,_:glob(G))) :- insist(atomic(G)).
-eval(\RE,  q(_,1,_:re(RE))) :- insist(atomic(RE)).
-eval(W/S,  q(_,1,_:fuzzy(W,S))) :- atomic(W), insist(number(S)).
+eval(W,     q(_,1,_:word(W))) :- atomic(W).
+eval(@(G),  q(_,1,_:glob(G))) :- insist(atomic(G)).
+eval(\(RE), q(_,1,_:re(RE))) :- insist(atomic(RE)).
+eval(W/S,   q(_,1,_:fuzzy(W,S))) :- atomic(W), insist(number(S)).
 eval(Ws//D, q(_,1,_:phrase(Ws,D))) :- insist(maplist(atomic,Ws)), insist(number(D)).
 eval(Min-Max, q(_,1,_:range_exc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
 eval(Min+Max, q(_,1,_:range_inc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
@@ -160,8 +155,11 @@ apply_field(F,q(_,_,comp(Cs))) :- maplist(apply_field(F),Cs).
 %% lucene(-Q:query)// is nondet.
 %
 %  Top level DCG goal for Lucene queries. Can be non-deterministic in
-%  either direction, but usually, it is best to accept only the first
-%  result.
+%  either direction because of defaulty-ness, but usually, it is best to 
+%  accept only the first result.
+%  It can parse Lucene queries not involving AND, OR and NOT, but it cannot handle
+%  fields applied to sub-queries (eg "name:(foo bar)"). You must distribute the
+%  field over the contents of the sub-query (ie "(name:foo name:bar)").
 lucene(Top) --> query(Top).
 
 query(q(Mod,Boost,Part)) --> mod(Mod), part(Part), boost(Boost).
@@ -173,7 +171,7 @@ mod(minus) --> "-".
 boost(Boost) --> {Boost=1}; "^", number(Boost).
 
 part(default(_):Prim) --> prim(Prim).
-part(Field:Prim)   --> field(Field), ":", prim(Prim).
+part(Field:Prim)    --> field(Field), ":", prim(Prim).
 part(comp(Clauses)) --> "(", seqmap_with_sep(" ",query,Clauses), ")".
 
 prim(word(W))   --> word(W).

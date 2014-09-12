@@ -5,7 +5,9 @@
    ,  mb_browse/4
    ,  mb_lookup/3
    ,  mb_facet/2
-   ,  mbid/2
+   ,  mb_id/2
+   ,  mb_id_uri/3
+   ,  mb_uri/2
 	]).
 
 /** <module> Interface to Musicbrainz XML web service
@@ -39,7 +41,6 @@
    Lucene search for male artist then direct lookup all releases (with debug
    on to report unrecognised fields):
    ==
-   ?- use_module(library(lucene)).
    ?- debug(musicbrainz).
    ?- mb_search(artist,[coltrane, gender:male],_,Id,_), 
       mb_query(artist,lookup(Id),[inc(releases)],Item), 
@@ -83,25 +84,26 @@
    *  search(+SeachTerm:text)
       Full text search for the given text (an atom or string).
       Returns a list of elements and a number giving the total number of matches.
-      If the search term is not atomic and the module lucene is
-      loaded, then Term will be interpreted as a term describing a Lucene search
-      as implemented in the module lucene.pl.
+      If the search term is not atomic, loaded, then Term will be interpreted as a 
+      term describing a Lucene search as implemented in the module lucene.pl.
 
    ---+++ Options
 
-   The following options are recognised:
+   The following options are recognised by mb_query/4 and mb_query/5:
 
-   *  limit(+N:integer)
-      For browse and search requests only - limits the number of returned entities.
-   *  offset(+N:integer)
-      For browse and search requests only - determines the offset of the returned
-      list of entities relative to the full query results.
-   *  inc(+I:text)
-      For lookup and browse requests only - fills in the inc parameter of the
-      query URL. See http://musicbrainz.org/doc/Development/XML_Web_Service/Version_2 for
-      more information.
+      *  limit(+N:integer)
+         For browse and search requests only - limits the number of returned entities.
+      *  offset(+N:integer)
+         For browse and search requests only - determines the offset of the returned
+         list of entities relative to the full query results.
+      *  inc(+I:text)
+         For lookup and browse requests only - fills in the inc parameter of the
+         query URL. See http://musicbrainz.org/doc/Development/XML_Web_Service/Version_2 for
+         more information.
 
-   If any inappropriate options are supplied for a given query, an exception is thrown.
+   If any inappropriate options are supplied for a given query, an exception is thrown,
+   but note that this library does not yet check that any specified includes are
+   applicable to the entity type being retrieved.
 
 
    ---+++ XML Decoding
@@ -138,6 +140,7 @@
 :- use_module(library(http/http_client)).
 :- use_module(library(http/http_sgml_plugin)).
 :- use_module(library(xpath)).
+:- use_module(lucene).
 
 
 :- setting(limit,integer,20,'Default limit for Musicbrainz search and browse queries').
@@ -248,10 +251,9 @@ request_params(lookup(Id),       Opts, doc_item,  ['/',Id], Params)  :- process_
 request_params(browse(Class,Id), Opts, doc_items, [], [Class=Id|Params]) :- process_options([limit,offset,inc],Opts,Params).
 request_params(search(Query),    Opts, doc_items, [], [query=Q|Params]) :- 
    (  atom(Query) -> Q=Query 
-   ;  string(Query) -> string_codes(Query,Q)
-   ;  (  current_module(lucene) 
-      -> lucene:lucene(Query,QQ), atom_string(Q,QQ)
-      ;  throw(error(lucene_module_not_loaded)))),
+   ;  string(Query) -> atom_string(Q,Query)
+   ;  lucene(Query,Cs), atom_codes(Q,Cs)
+   ),
    process_options([limit,offset],Opts,Params).
 
 % Convert list of valid Name=Value pairs and produce params for HTTP query.
@@ -348,9 +350,29 @@ get_area(As,Es,Id,F2) :-
    select(id(Id),F1,F2).
 xp(Elems,Selector,Val) :- xpath(element(e,[],Elems),Selector,Val).
 
-%% mbid(+E:element(_), -Id:atom) is semidet.
+%% mb_id(+E:element(_), -Id:atom) is semidet.
 %  Short accessor for entity Id.
-mbid(E,Id) :- mb_facet(E,id(Id)).
+mb_id(E,Id) :- mb_facet(E,id(Id)).
+
+%% mb_id_uri(+T:mb_class,+ID:atom,-URI:atom) is det.
+%% mb_id_uri(-T:mb_class,-ID:atom,+URI:atom) is semidet.
+%
+%  Gets the Musicbrainz URI for the given entity type and ID.
+%  It can also work in reverse: given a URI, it can return the
+%  entity type and ID.
+mb_id_uri(Class,Id,URI) :- var(URI), !,
+   format(atom(URI),'http://musicbrainz.org/~w/~w#_',[Class,Id]).
+mb_id_uri(Class,Id,URI) :- 
+   atomic_list_concat(['http:','','musicbrainz.org',Class,IdHash],'/',URI),
+   atom_concat(Id,'#_',IdHash).
+
+%% mb_uri(+E:element(_),-URI:atom) is det.
+%  Get Musicbrainz URI for a given element. This can be used, for example,
+%  to query the linkedbrainz.org SPARQL endpoint.
+mb_uri(E,URI) :- 
+   E=element(T,_,_),
+   mb_facet(E,id(Id)), 
+   mb_id_uri(T,Id,URI).
 
 %% mb_class(-T:mb_class) is nondet.
 %  Registry of core entity types.
