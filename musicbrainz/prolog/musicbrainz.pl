@@ -105,7 +105,6 @@
    but note that this library does not yet check that any specified includes are
    applicable to the entity type being retrieved.
 
-
    ---+++ XML Decoding
 
    The system for decoding XML documents is based on the idea of 'facets': the
@@ -121,6 +120,14 @@
 
    The predicate mb_facet/2 relates an XML element with its facets.
 
+   This module defines a user:portray/2 clause for terms like =|element(Type,_,_)|=
+   where type is one of the core Musicbrainz entity types.
+   It extracts the facets =|id(_)|= and either =|name(_)|= or =|title(_)|= (whichever
+   is present, and displays the element in the form
+   ==
+   <mb:Type/Id|NameOrTitle>
+   ==
+
    ---+++ Multi-page Queries
 
    Browse and search queries produce a list of answers, a subset of which is returned
@@ -134,7 +141,8 @@
    are executed transparently, yielding the full result set in chunks determined by
    the limit option. This defaults to the value of the setting =|limit|=.
 
-  (C) Samer Abdallah, UCL (2014)
+  @author Samer Abdallah, UCL (2014)
+  @version 0.2.0
  */
 
 :- use_module(library(http/http_client)).
@@ -234,6 +242,10 @@ lazy_nth1(I, [],     M,T-More, X) :-
 %  pair(X,Y) ---> X-Y.
 %  ==
 %  =|element(A)|= is the type of XML element terms like =|element(A,_,_)|=.
+%
+%  @throws mb_error(E:element(error)) 
+%  If the Musicbrainz server returns an error term. E is an XML
+%  element containing supplementary information returned by the server.
 mb_query(Class,Req,Opts,Return) :-
    request_params(Req,Opts,Decode,PathParts,Params),
    concat_atom(['/ws/2/',Class|PathParts],Path),
@@ -247,6 +259,9 @@ mb_query(Class,Req,Opts,Return) :-
 %
 %  Takes a request and a list of Name=Value pairs and produces a URL path and list of parameters
 %  for that request. Only options valid for the given request are permitted.
+%
+%  @throws unrecognised_options(Opts:list(option))
+%  if the given request type does not recognise any of the supplied options.
 request_params(lookup(Id),       Opts, doc_item,  ['/',Id], Params)  :- process_options([inc],Opts,Params).
 request_params(browse(Class,Id), Opts, doc_items, [], [Class=Id|Params]) :- process_options([limit,offset,inc],Opts,Params).
 request_params(search(Query),    Opts, doc_items, [], [query=Q|Params]) :- 

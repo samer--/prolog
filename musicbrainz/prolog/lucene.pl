@@ -1,4 +1,4 @@
-:- module(lucene, [	lucene//1, lucene/2 ]).
+:- module(lucene, [	lucene//1, lucene/2, op(200,fy,@) ]).
 
 /** <module> A DCG for generating Lucene searches
 
@@ -61,25 +61,26 @@
                                     % with unbound modifier.
    ==
    A few notes are in order. 
-   1. Unlike Lucene's ~ postfix operator, the (/)/2 operator must have a number for
-      the edit distance parameter. Lucene's default is 2.
-   2. Unlike Lucene's bare quoted term, the (//)/2 must have a number to use as a 
-      'slop' parameter. Supplying zero replicates Lucene's treatment of a bare quoted phrase.
-   3. (+)/2 and (-)/2 cannot be composed: this is a contradiction that results in 
-      error. (+)/2 and (-)/2 are both idempotent.
-   4. Prolog's (-)/1 and (+)/2 operates bind tighter than (:)/2 operators, which is the
-      wrong way round
-      for Lucene queries: Prolog reads =|-F:E|= as =|(-F):E|=, but my expression language
-      needs to see =|-(F:E)|=. Hence, there is little kludge in the evaluator to catch
-      such terms and re-group the operators.
-   5. Two different field names cannot both be applied to the primitive. Considering that
-      the (:)/2 operator is applied recursively into sub-queries, this means that each
-      node in the syntax tree can have at most one field name on the path from it to the root.
-      This is different from Lucene's parser, which allows one field name to override
-      another.
-   6. I've taken the liberty of making multiple boosts on the same query combine multiplicatively,
-      much like ordinary mathematical exponentiation. This is different from Lucene, where
-      a later boost overrides an earlier boost. I think this way makes more sense.
+
+      1. Unlike Lucene's ~ postfix operator, the (/)/2 operator must have a number for
+         the edit distance parameter. Lucene's default is 2.
+      2. Unlike Lucene's bare quoted term, the (//)/2 must have a number to use as a 
+         'slop' parameter. Supplying zero replicates Lucene's treatment of a bare quoted phrase.
+      3. (+)/2 and (-)/2 cannot be composed: this is a contradiction that results in 
+         error. (+)/2 and (-)/2 are both idempotent.
+      4. Prolog's (-)/1 and (+)/2 operates bind tighter than (:)/2 operators, which is the
+         wrong way round
+         for Lucene queries: Prolog reads =|-F:E|= as =|(-F):E|=, but my expression language
+         needs to see =|-(F:E)|=. Hence, there is little kludge in the evaluator to catch
+         such terms and re-group the operators.
+      5. Two different field names cannot both be applied to the primitive. Considering that
+         the (:)/2 operator is applied recursively into sub-queries, this means that each
+         node in the syntax tree can have at most one field name on the path from it to the root.
+         This is different from Lucene's parser, which allows one field name to override
+         another.
+      6. I've taken the liberty of making multiple boosts on the same query combine multiplicatively,
+         much like ordinary mathematical exponentiation. This is different from Lucene, where
+         a later boost overrides an earlier boost. I think this way makes more sense.
 
    Thus, the type of such expression can be defined as:
    ==
@@ -98,9 +99,8 @@
    ==
 
    So that's the basics of it. There might still be some problems in the DCG
-   when it comes to handling character escapes. Remarkably, weighing in at some 40
-   lines of Prolog code and a tiny fraction of the amount of the code in the Java
-   implementation, it seems to parse much of the Lucene query syntax more or less correctly,
+   when it comes to handling character escapes. Somewhat suprisingly, the DCG
+   seems to parse much of the Lucene query syntax more or less correctly,
    except for the boolean operators, which Lucene does not handle in any sensible way
    and are best avoided. Also, it does not parse field names applied to componound queries
    or the postfix '~' operator.
@@ -125,6 +125,9 @@
 %  =|query|= or an expression of type =|qexpr|= and produces a query as a list
 %  of character codes. Alternatively, it can parse a query to produce a =|query|= term.
 %  See lucene//1 for more details.
+%
+%  @throws failed(G) If an expression contains a type errors, or any contradictory
+%  operators, G is the failing type check.
 lucene(E,Codes) :-
    (var(Codes) -> eval(E,Q); E=Q),
    once(phrase(lucene(Q),Codes,[])).
