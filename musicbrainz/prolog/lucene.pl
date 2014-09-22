@@ -1,4 +1,8 @@
-:- module(lucene, [	lucene//1, lucene/2, op(200,fy,@) ]).
+:- module(lucene, 
+   [	lucene//1
+   ,  lucene_codes/3
+   ,  op(200,fy,@)
+   ]).
 
 /** <module> A DCG for generating Lucene searches
 
@@ -117,19 +121,26 @@
 
 :- set_prolog_flag(double_quotes, codes).
 
-%% lucene(+Q:qexpr, -C:list(code)) is det.
-%% lucene(+Q:query, -C:list(code)) is det.
-%% lucene(-Q:query, +C:list(code)) is det.
+%% lucene_codes(+Q:qexpr, +Opts:options, -C:list(code)) is det.
+%% lucene_codes(+Q:qexpr, -C:list(code)) is det.
 %
-%  Format or parse a Lucene query. This predicate can accept a term of type
+%  Format a Lucene query. This predicate can accept a term of type
 %  =|query|= or an expression of type =|qexpr|= and produces a query as a list
-%  of character codes. Alternatively, it can parse a query to produce a =|query|= term.
+%  of character codes. It accepts the following options:
+%
+%  *  fields(+F:list(atom))
+%     F is list of valid field names that can be used in the query. If absent,
+%     then no field name checking is done; otherwise, an exception is thrown if 
+%     an illegal field name is found in the query.
+%
 %  See lucene//1 for more details.
 %
 %  @throws failed(G) If an expression contains a type errors, or any contradictory
 %  operators, G is the failing type check.
-lucene(E,Codes) :-
-   (var(Codes) -> eval(E,Q); E=Q),
+lucene_codes(E,Codes) :- lucene_codes(E,[],Codes).
+lucene_codes(E,Opts,Codes) :-
+   eval(E,Q),
+   (option(fields(F),Opts) -> check_fields(F,Q); true),
    once(phrase(lucene(Q),Codes,[])).
 
 eval(W,     q(_,1,_:word(W))) :- atomic(W).
@@ -149,10 +160,16 @@ eval(+E, q(plus,B,Q)) :- eval(E,q(M,B,Q)), insist(M=plus).
 eval(-E, q(minus,B,Q)) :- eval(E,q(M,B,Q)), insist(M=minus).
 eval(q(M,B,Q),q(M,B,Q)).
 
-insist(G) :- call(G) -> true; throw(failed(G)).
-
 apply_field(F,q(_,_,F:_)).
 apply_field(F,q(_,_,comp(Cs))) :- maplist(apply_field(F),Cs).
+
+
+check_fields(Fields,q(_,_,Part)) :- check_part(Part,Fields).
+check_part(comp(Queries),Fields) :- maplist(check_fields(Fields),Queries).
+check_part(Field:_, Fields) :- insist(member(Field,Fields),invalid_field(Field)).
+
+insist(G) :- insist(G,failed(G)).
+insist(G,Ex) :- call(G) -> true; throw(Ex).
 
 %% lucene(+Q:query)// is nondet.
 %% lucene(-Q:query)// is nondet.
@@ -215,8 +232,8 @@ escaped_codes(Esc,S,Cs) --> call(Esc,Cs,T), !, escaped_codes(Esc,S,T).
 escaped_codes(Esc,S,[C1|Cs]) --> [C1], { \+member(C1,S) }, escaped_codes(Esc,S,Cs). 
 escaped_codes(_,_,[]) --> [].
 
-%% back_slash(+H:list(code), @T:list(code))// is det.
-%% back_slash(-H:list(code), @T:list(code))// is semidet.
+%% back_slash(+H:list(code), -T:list(code))// is det.
+%% back_slash(-H:list(code), -T:list(code))// is semidet.
 %
 %  DCG goal representing escape sequences consisting of a back-slash
 %  followed by any character. 
@@ -234,3 +251,5 @@ glob_codes([C1|Cs])  --> escaped_codes(back_slash," /+-&|!(){}[]^\"~:\\",[C1|Cs]
 re_codes(Codes)      --> escaped_codes(back_slash,"/\\",Codes).
 field_codes([C1|Cs]) --> escaped_codes(fail," /+-&|!(){}[]^\"~?:\\",[C1|Cs]).
 
+prolog:message(invalid_field(F)) --> 
+   ['Fieldname ~w is not recognised in the current Lucene query context.'-[F]].

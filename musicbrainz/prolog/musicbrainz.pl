@@ -247,29 +247,34 @@ lazy_nth1(I, [],     M,T-More, X) :-
 %  If the Musicbrainz server returns an error term. E is an XML
 %  element containing supplementary information returned by the server.
 mb_query(Class,Req,Opts,Return) :-
-   request_params(Req,Opts,Decode,PathParts,Params),
-   concat_atom(['/ws/2/',Class|PathParts],Path),
+   insist(mb_class(Class),unrecognised_class(Class)),
+   request_params(Req,Class,Opts,Decode,PathParts,Params),
+   concat_atom(['/ws/2/'|PathParts],Path),
    get_xml([host('musicbrainz.org'), path(Path), search(Params)], [Root]),
    (  Root=element(error,_,_) -> throw(mb_error(Root))
    ;  call(Decode,Class,Root,Return)
    ).
 
 
-%% request_params(+R:request(A), +O:list(option), +Decode:pred(+atom,+dom,-A), -T:list(atom), -P:list(param)) is det.
+%% request_params(+R:request(A), +T:mb_class, +O:list(option), +Decode:pred(+atom,+dom,-A), -T:list(atom), -P:list(param)) is det.
 %
 %  Takes a request and a list of Name=Value pairs and produces a URL path and list of parameters
 %  for that request. Only options valid for the given request are permitted.
 %
 %  @throws unrecognised_options(Opts:list(option))
 %  if the given request type does not recognise any of the supplied options.
-request_params(lookup(Id),       Opts, doc_item,  ['/',Id], Params)  :- process_options([inc],Opts,Params).
-request_params(browse(Class,Id), Opts, doc_items, [], [Class=Id|Params]) :- process_options([limit,offset,inc],Opts,Params).
-request_params(search(Query),    Opts, doc_items, [], [query=Q|Params]) :- 
+request_params(lookup(Id),    C, O, doc_item,  [C,'/',Id], Params)  :- process_options([inc],O,Params).
+request_params(browse(LC,Id), C, O, doc_items, [C], [LC=Id|Params]) :- 
+   insist(link(C,LC),invalid_link(C,LC)),
+   process_options([limit,offset,inc],O,Params).
+request_params(search(Query), C, O, doc_items, [C], [query=Q|Params]) :- 
    (  atom(Query) -> Q=Query 
    ;  string(Query) -> atom_string(Q,Query)
-   ;  lucene(Query,Cs), atom_codes(Q,Cs)
+   ;  class_fields(C,Fields),
+      lucene_codes(Query,[fields(Fields)],Cs), 
+      atom_codes(Q,Cs)
    ),
-   process_options([limit,offset],Opts,Params).
+   process_options([inc,limit,offset],O,Params).
 
 % Convert list of valid Name=Value pairs and produce params for HTTP query.
 process_options(ValidOpts,Opts,Params) :- process_options(ValidOpts,Opts,Params,[]).
@@ -317,9 +322,9 @@ mb_facet(E,Facet) :- var(Facet), !,
    (Spec=attr(_,_); Spec=elem(_,_,_)),
    call(Spec,E), 
    (  facet(Facet,Spec,Goal) *-> call(Goal)
-   ;  debug(musicbrainz,'Unrecognised information: ~q',[Spec]),
-      fail
+   ;  print_message(warning,unrecognised_property(Spec)), fail
    ).
+
 
 mb_facet(E,Facet) :- 
    % if Facet is bound, then this goal ordering goes directly to the info.
@@ -410,3 +415,41 @@ user:portray(E) :-
    -> format('<mb:~w/~w|~w>',[T,Id,Title])
    ;  format('<mb:~w/~w>',[T,Id])
    ).
+
+% tables used for validating requests.
+link(url,resource).
+link(label,release).
+link(C1,C2) :- links(C1,Cs), member(C2,Cs).
+links(artist,[recording,release,'release-group',work]).
+links(recording,[artist,release]).
+links(release,[artist,label,recording,'release-group']).
+links('release-group',[artist,release]).
+
+class_fields( artist, 
+   [  area,beginarea,endarea,arid,artist,artistaccent,alias,begin,comment
+   ,  country,end,ended,gender,ipi,sortname,tag,type]).
+class_fields('release-group', 
+   [  arid,artist,artistname,comment,creditname,primarytype,rgid,releasegroup
+   ,  releasegroupaccent,releases,release,reid,secondarytype,status,tag,type ]).
+class_fields( release,
+   [  arid,artist,artistname,asin,barcode,catno,comment,country,creditname
+   ,  date,discids,discidsmedium,format,laid,label,lang,mediums,primarytype
+   ,  puid,quality,reid,release,releaseaccent,rgid,script,secondarytype,status
+   ,  tag,tracks,tracksmedium,type ]).
+class_fields( recording,
+   [  arid,artist,artistname,creditname,comment,country,date,dur,format,isrc
+   ,  number,position,primarytype,puid,qdur,recording,recordingaccent,reid
+   ,  release,rgid,rid,secondarytype,status,tid,tnum,tracks,tracksrelease
+   ,  tag,type,video ]).
+class_fields( label,
+   [  alias,area,begin,code,comment,country,end,ended,ipi,label,labelaccent
+   ,  laid,sortname,type,tag ]).
+class_fields( work,
+   [  alias,arid,artist,comment,iswc,lang,tag,type,wid,work,workaccent ]).
+class_fields( annotation, [text,type,name,entity]).
+class_fields('FreeDB', [artist,title,discid,cat,year,tracks]).
+
+insist(G,Ex) :- call(G) -> true; throw(Ex).
+prolog:message(unrecognised_class(C)) --> ["'~w' is not a recognised Musibrainz entity class."-[C]].
+prolog:message(unrecognised_property(Spec)) --> ["No facet for property ~q"-[Spec]].
+prolog:message(invalid_link(C1,C2)) --> ["Cannot browse class ~w via links to '~w'."-[C1,C2]].
