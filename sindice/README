@@ -2,5 +2,20 @@ This package provides an interface to the Sindice semantic web search engine.
 
 ---++++ Simple usage
 
+The simplest way to use this module is to call si_with_result/5. The last
+argument is an ordinary Prolog goal that will be called with the 4th argument
+bound to the URI of a search result stored in a temporary named graph.
+Progress is bound to a term Current/Total which says how far through the
+result set we are. Multi-page result sets are managed transparently.
+
+==
+?- use_module(library(sindice)).
+?- si_with_result(keyword(coltrane),[],Progress,Res,si_facet(Res,Facet)).
+?- si_with_result(keywords([coltrane,monk]),[fields([cache])],Progress,Res,si_facet(Res,cache(Cache))).
+==
+
 ---++++ Planned enhancements
+
+* A query language similar to that implemented in lucene.pl (part of the musicbrainz package).
+* A means to load and query the cache URL corresponding to a search result.
 

@@ -250,12 +250,6 @@ page_result(I/N,R,G,Goal) :-
 %              ; explicit_content_length(nonneg)
 %              .
 %  ==
-%  Note that the class and predicate facets have the unfortunate tendency
-%  to refer to RDF namespaces with there being any mechanism for establishing
-%  which namespaces are assumed by the Sindice server. For example, a predicate
-%  might be returned as the atom 'dcterms:date', but there is no way to 
-%  recognise conclusively when such a namespace is being used, or to find out
-%  what the Sindice server thinks these should expand to.
 
 si_facet(R, link(L))      :- rdf(R,sindice:link,L).
 si_facet(R, cache(C))     :- rdf(R,sindice:cache,literal(C)).
