@@ -36,7 +36,7 @@
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_codes)).
 
-:- set_prolog_flag(double_quote, codes).
+:- set_prolog_flag(double_quotes, codes).
 
 digraph(Name,G) -->
 	"digraph ", wr(Name), cr,

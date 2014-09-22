@@ -78,6 +78,8 @@
    ==
 */
 
+:- set_prolog_flag(double_quotes, codes).
+
 :- predicate_options(module_dot/2,2,[pass_to(module_graph/3,2)]).
 :- predicate_options(module_dotpdf/2,2,[method(any),pass_to(module_graph/3,2)]).
 :- predicate_options(modules_dot/3,2,[pass_to(modules_graph/4,2)]).
