@@ -47,9 +47,9 @@
       *  sindice:explicit_content_length
       *  sindice:explicit_content_size
       *  si_field:format
-      *  sindice:class
-      *  sindice:ontology
-      *  sindice:property
+      *  si_field:class
+      *  si_field:ontology
+      *  si_field:property
 
    As well as information about each item, the results also contain 
    data about the search itself, which is represented as a resource of
@@ -78,7 +78,7 @@
    ---+++ Running queries
 
    The core predicate for running a Sindice query is si_with_graph/4, which formulates
-   a query from a term of type =|sindice_req|= and a list of options, and then
+   a query from a term of type =|si_request|= and a list of options, and then
    loads into the RDF store, temporarily, a named graph containing the results.
    The last argument to si_with_graph/4 is a goal which is called with the results
    graph in context. The graph is only available to this goal, and is unloaded after
@@ -97,7 +97,7 @@
    ---+++ Building queries
 
    The three main parts of a Sindice query are represented by a term of
-   type =|sindice_request|=, which has several forms. Currently, these
+   type =|si_request|=, which has several forms. Currently, these
    are 
    ==
    si_request ---> keyword(atom) 
@@ -147,7 +147,7 @@
 %     *  from(Offset:nonneg,Count:nonneg)
 %        Starts from result number Offset+1, with Count results per page.
 %        Incompatible with count and page options.
-%  The resulting URL can be loaded with rdf_load/2 or rdf_load/3.
+%  The resulting URL can be loaded with rdf_load/2.
 
 sindice_url(Req,Opts,URL) :-
    phrase( request_params(Req) >> seqmap(option_params,Opts), Params,[]),
@@ -195,8 +195,8 @@ sindice_opt(filter,_,fq).
 %  For each result produced by the query, R is unified with the URI of the sindice:Result
 %  and Goal is called. Multi-page result sets are traversed automatically and on demand.
 %  The graph containing the query results is not available outside Goal and is unloaded
-%  when si_with_result/5 is finished. Progress is a term of the form I/Total, where Total
-%  is the total number of results and I is the rank of the result currently bound to R.
+%  when si_with_result/5 is finished. Progress is a term of the form Current/Total, where Total
+%  is the total number of results and Current is the index of the result currently bound to R.
 
 si_with_result(Req,Opts,I/N,R,Goal) :-
    % first, make sure that rank will be included with results
