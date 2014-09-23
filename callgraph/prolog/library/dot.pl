@@ -100,7 +100,7 @@ uopt(c(N)) --> " -c", wr(N).
 %  TODO: Could add more options for dot.
 dotrun(Meth1,Fmt,Graph,File) :-
    dot_method(Meth1,Meth),
-   member(Fmt,[ps,eps,pdf]),
+   must_be(oneof([svg,png,ps,eps,pdf]),Fmt),
    format(atom(Cmd),'~w -T~w > "~w.~w"',[Meth,Fmt,File,Fmt]), 
    format('Running: ~w ...\n',Cmd),
 	with_output_to_file(pipe(Cmd),writedcg(Graph)).

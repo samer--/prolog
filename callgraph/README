@@ -48,6 +48,17 @@ called test.pdf, use
 modules_dotpdf([callgraph,dot],[method(unflatten([fl(4),c(4)]))],test).
 ==
 
+Version 0.3.2 adds support for node links by supplying the linkbase parameter.
+For example, if you have an SWI Prolog documentation server running on port 8000,
+then
+==
+?- module_render(callgraph,[linkbase('http://localhost:8000/help/source/doc_for?object='),
+                            format(svg),method(unflatten([fl(4),c(4)]))]),
+   www_open_url('callgraph.svg').
+==
+should produce open an SVG in your browser with clickable nodes that link to
+the documentation for each predicate.
+
 ---++++ Output formats
 
 If you want the dot language source file, use module_dot/2 instead. The

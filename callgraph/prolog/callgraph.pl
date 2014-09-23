@@ -3,6 +3,8 @@
    ,  modules_dotpdf/3
    ,  module_dot/2
    ,  modules_dot/3
+   ,  module_render/2
+   ,  modules_render/3
 	]).
 
 /** <module> Visualisation of inter-predicate call graphs
@@ -81,9 +83,9 @@
 :- set_prolog_flag(double_quotes, codes).
 
 :- predicate_options(module_dot/2,2,[pass_to(module_graph/3,2)]).
-:- predicate_options(module_dotpdf/2,2,[method(any),pass_to(module_graph/3,2)]).
+:- predicate_options(module_render/2,2,[format(any),method(any),pass_to(module_graph/3,2)]).
 :- predicate_options(modules_dot/3,2,[pass_to(modules_graph/4,2)]).
-:- predicate_options(modules_dotpdf/3,2,[method(any),pass_to(modules_graph/4,2)]).
+:- predicate_options(modules_render/3,2,[format(any),method(any),pass_to(modules_graph/4,2)]).
 
 :- predicate_options(module_graph/3,2,
       [  prune(boolean)
@@ -91,6 +93,7 @@
       ,  recursive(boolean)
       ,  arrowhead(atom)
       ,  font(list(integer))
+      ,  linkbase(atom)
       ,  pass_to(predopt//2,1)
       ,  pass_to(edgeopt//2,1)
       ]).
@@ -102,6 +105,7 @@
       ,  recursive(boolean)
       ,  arrowhead(atom)
       ,  font(list(integer))
+      ,  linkbase(atom)
       ,  pass_to(predopt//2,1)
       ,  pass_to(edgeopt//2,1)
       ]).
@@ -328,6 +332,11 @@ do_until(P) :-
 %       I am able to use any font available in the "Font Book" application with
 %       the name written exactly (including spaces) as in the "Font" column.
 %       Default is "Times".
+%     * linkbase(Base:atom) 
+%       If present, each predicate node will have a URL attribute pointing to 
+%       a URL formed by appending Module:Name/Arity to Base. Thus, if the output
+%       format supports links, you will be able to click on the nodes to follow
+%       the links, eg to an SWI documentation server..
 %
 % Types for Dot attributes:
 % see http://graphviz.org/Documentation.php for more details on
@@ -351,7 +360,15 @@ module_dot(Mod,Opts) :-
 
 %% module_dotpdf(+Mod,Opts) is det.
 %  Writes a call graph for module Mod as a PDF file named "[Mod].pdf". 
+%  Equivalent to module_render/2 with format(pdf) option supplied.
+module_dotpdf(Mod,Opts) :- module_render(Mod,[format(pdf)|Opts]).
+
+%% module_render(+Mod,Opts) is det.
+%  Writes a call graph for module Mod as a file named "<Mod>.<Fmt>" where
+%  Fmt is one of the formats supported by Graphviz and is supplied as an option
 %  As well as the options accepted by module_dot/2, this predicate also accepts:
+%   * format(atom) / pdf
+%     Any of the formats supported by Graphviz, eg pdf, ps, svg, png etc.
 %   * method(Method:graphviz_method) / unflatten
 %     Determines which GraphViz programs are used to render the graph. The type 
 %     graphviz_method is defined as:
@@ -365,11 +382,12 @@ module_dot(Mod,Opts) :-
 %     ==
 %     The unflatten methods filter the graph through unflatten before passing
 %     on to dot.
-module_dotpdf(Mod,Opts) :-
-   check_options(module_dotpdf/2,2,Opts),
+module_render(Mod,Opts) :-
+   check_options(module_render/2,2,Opts),
    module_graph(Mod,Opts,Graph),
    option(method(Method),Opts,unflatten),
-   dotrun(Method,pdf,Graph,Mod).
+   option(format(Fmt),Opts,pdf),
+   dotrun(Method,Fmt,Graph,Mod).
 
 %% modules_dot(+Modules:list(module),+Opts,+Name) is det.
 %
@@ -388,18 +406,24 @@ modules_dot(Mods,Opts,Name) :-
 
 %% modules_dotpdf(+Modules:list(module),+Opts,+Name) is det.
 %
-%  Mostly like module_dotpdf/2, but takes a list of module names instead of
+%  Equivalent to modules_render/3 with format(pdf) option supplied.
+modules_dotpdf(Mods,Opts,Name) :- modules_render(Mods,[format(pdf)|Opts],Name).
+
+%% modules_render(+Modules:list(module),+Opts,+Name) is det.
+%
+%  Mostly like module_render/2, but takes a list of module names instead of
 %  a single module name. Output is written to a PDF file named Name.
 %  It understands the same options, but in addition:
 %     * cluster_recorded(Flag:oneof([false,true,by_key])) / false
 %       If true, then all recorded items are collected into a seperate cluster.
 %       If by_key, then all recorded items are collected multiple clusters, one
 %       for each distinct key..
-modules_dotpdf(Mods,Opts,Name) :-
-   check_options(modules_dotpdf/3,2,Opts),
+modules_render(Mods,Opts,Name) :-
+   check_options(modules_render/3,2,Opts),
    modules_graph(Mods,Opts,Name,Graph),
    option(method(Method),Opts,unflatten),
-   dotrun(Method,pdf,Graph,Name).
+   option(format(Fmt),Opts,pdf),
+   dotrun(Method,Fmt,Graph,Name).
 
 check_options(Pred,Arg,Opts) :- maplist(check_predicate_option(Pred,Arg),Opts).
 
@@ -490,11 +514,19 @@ node_decl(Opts,Mod,Pred,Attrs) :-
    debug(callgraph,'Declarable node: ~w.',[Mod:Pred]),
    pred_attr(Opts,Mod:Pred,Attrs).
 
+visible_predicate(Mod:Head) :- 
+   current_predicate(Mod:Name/Arity),
+   functor(Head,Name,Arity),
+   predicate_property(Mod:Head,visible).
+
 declarable_node(Opts,M,Pred) :-
    option(hide_list(HideList),Opts,[]),
-   (  predicate_property(M:Head, dynamic)
-   ;  predicate_property(M:Head, exported)
-   ;  predicate_property(M:Head, multifile)
+   (  option(linkbase(_),Opts)
+   -> visible_predicate(M:Head)
+   ;  (  predicate_property(M:Head, dynamic)
+      ;  predicate_property(M:Head, exported)
+      ;  predicate_property(M:Head, multifile)
+      )
    ),
    \+predicate_property(M:Head, built_in),
    \+predicate_property(M:Head, imported_from(_)),
@@ -556,10 +588,19 @@ pred_attr(O,Pred,Attrs1) :-
    head_node(Goal,Pred),
    phrase( (  if( predicate_property(Goal,dynamic), predopt(O,dynamic)),
               if( predicate_property(Goal,multifile), predopt(O,multifile)),
-              if( predicate_property(Goal,exported), predopt(O,exported))), 
+              if( predicate_property(Goal,exported), predopt(O,exported)),
+              if( option(linkbase(Base),O), nodelink(Base,Goal))
+           ), 
            Attrs, []),
            %   Attrs = [_|_],
    compile_attrs(Attrs,[],Attrs1).
+
+nodelink(Base,Goal) -->
+   { Goal=Mod:Head }, 
+   {  functor(Head,Name,Arity),
+      format(string(URL),'~w~q',[Base,Mod:Name/Arity])
+   },
+   [ 'URL' = qq(URL) ].
 
 compile_attrs([],A,A).
 compile_attrs([style=S|AX],AttrsSoFar,FinalAttrs) :- !,
