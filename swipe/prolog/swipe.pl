@@ -53,30 +53,32 @@
       2. If both processes have nonzero output types, then those types must unify, 
          and the compound inherits that output type.
 
-   If the type requirements, then the system throws a helpful type_mismatch exception.
+   If the type requirements are not met, then the system throws a helpful type_mismatch exception.
 
-   The primitive process is a term =|sh(T,Cmd)|=, where T is the given type
-   and Cmd is the textual form of the command, including arguments, as you
+   The primitive processes are expressed as shell commands.
+   A term =|sh(T,Cmd)|=, where T is an explicitly  given type,
+   corresponds to a shell command Cmd, written, including arguments, as you
    would type it into the Unix shell. Arguments can be handling using the
    form =|sh(T,Fmt,Args)|=, where Fmt is a format string as used by format/2,
    and Args is a list of arguments of type:
    ==
-   shell_args ---> spec:access % A file spec and access mode
-                 ; @ground     % any term, is written and escaped
-                 ; \_.         % Any other kind of argument, no processing
+   shell_args ---> spec:access % A file spec and access mode, format with ~s
+                 ; @ground     % any term, is written and escaped, format with ~s
+                 ; \_.         % Any other kind of argument, passed through
    access ---> read ; write ; append ; execute.
    ==
    File names should passed as Spec:Access, which first uses absolute_file_name/3
    with the access(Access) option to expand Spec, and then quotes and escapes the
-   resulting filename. absolute_file_name/3 must produce exactly one match, otherwise
+   resulting filename. The result is captured by '~s' in the format string.
+   absolute_file_name/3 must produce exactly one match, otherwise
    an execption is thrown. 
 
    New compound pipelines can be declared using the multifile predicate
    swipe:def/2. The commands cat/0, cat/1 and echo/1 are already defined.
    ==
    cat       :: $T >> $T. % any stream type to the same stream type
-   cat(F^T)  :: 0 >> T.   % output contents of file F
-   echo(S^T) :: 0 >> T.   % output literal text S as type T
+   cat(F^T)  :: 0 >> $T.   % output contents of file F
+   echo(S^T) :: 0 >> $T.   % output literal text S as type T
    ==
    
    A pipeline expression can be used in one of two ways:
