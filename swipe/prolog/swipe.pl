@@ -62,16 +62,31 @@
    form =|sh(T,Fmt,Args)|=, where Fmt is a format string as used by format/2,
    and Args is a list of arguments of type:
    ==
-   shell_args ---> spec:access % A file spec and access mode, format with ~s
+   shell_args ---> spec+access % A file spec and access mode, format with ~s
                  ; @ground     % any term, is written and escaped, format with ~s
                  ; \_.         % Any other kind of argument, passed through
    access ---> read ; write ; append ; execute.
    ==
-   File names should passed as Spec:Access, which first uses absolute_file_name/3
-   with the access(Access) option to expand Spec, and then quotes and escapes the
-   resulting filename. The result is captured by '~s' in the format string.
-   absolute_file_name/3 must produce exactly one match, otherwise
-   an execption is thrown. 
+
+   ---+++ File names
+
+   File names should passed to sh/3 as Spec+Access.
+   If Spec is atomic, it is treated as an explicit absolute or relative
+   path in the file system and formatted quoted and escaped so that
+   any special characters in the path are properly handled.
+
+   If Spec is a compound term, the system uses absolute_file_name/3
+   with the access(Access) option to expand Spec. This must succeed exactly
+   once, otherwise an exception is thrown. The resulting path is quoted and escaped.
+
+   In both cases, the result is captured by '~s' in the format string. There is
+   a subtlety in the handling of compound file specifier terms: the file must
+   exist with the correct access at pipeline *composition* time---if the file is
+   only created when the pipeline is run, then the path expansion will fail. In
+   these cases, you must use an atomic file specifier, or the (@)/1 operator.
+   This also applies to files used with the redirection operators (:>)/2 and (>:)/2.
+
+   ---+++ Declaring new processes
 
    New compound pipelines can be declared using the multifile predicate
    swipe:def/2. The commands cat/0, cat/1 and echo/1 are already defined.
@@ -81,6 +96,8 @@
    echo(S^T) :: 0 >> $T.   % output literal text S as type T
    ==
    
+   ---+++ Running 
+
    A pipeline expression can be used in one of two ways:
       1. With pipe/2, which produces a string which can be passed to shell/1
          or used with open(pipe(Cmd), ...).
@@ -101,7 +118,7 @@
 :- setting(quote_method,ground,weak(3),"Filename quoting method").
 
 def(cat,      sh($T >> $T,"cat")).
-def(cat(F^T), sh(0 >> $T,"cat ~s",[F:read])).
+def(cat(F^T), sh(0 >> $T,"cat ~s",[F+read])).
 def(echo(S^T),sh(0 >> $T,"echo ~s",[@S])).
 
 ppipe(P,T) --> "(",pipe(P,T),")".
@@ -116,10 +133,12 @@ pipe(sh(T,F,A),T) -->  !, {maplist(quote_arg,A,A1)}, fmt(F,A1).
 pipe(M,T) -->          {def(M,P)}, pipe(P,T).
 
 file(Spec,Access) --> 
-   {  findall(P, absolute_file_name(Spec,P,[access(Access)]), Ps),
-      (  Ps=[] -> throw(no_matching_file(Spec:Access))
-      ;  Ps=[_,_|_] -> throw(indeterminate_file(Spec:Access,Ps))
-      ;  Ps=[Path] -> atom_codes(Path,Codes)
+   {  (  atomic(Spec) -> atom_codes(Spec,Codes)
+      ;  findall(P, absolute_file_name(Spec,P,[access(Access)]), Ps),
+         (  Ps=[] -> throw(no_matching_file(Spec:Access))
+         ;  Ps=[_,_|_] -> throw(indeterminate_file(Spec:Access,Ps))
+         ;  Ps=[Path] -> atom_codes(Path,Codes)
+         )
       ),
       setting(quote_method,QM) 
    },
@@ -129,7 +148,7 @@ quote_arg(\A,A).
 quote_arg(@A,B) :- 
    format(codes(Codes),'~w',[A]),
    string_codes(B,Codes).
-quote_arg(Spec:Access,B) :- 
+quote_arg(Spec+Access,B) :- 
    file(Spec,Access,Codes,[]), 
    string_codes(B,Codes).
 
