@@ -10,6 +10,6 @@ correctly
 swipe:def(grep(Pattern), sh($T>>$T,"grep ~s",[@Pattern])).
 swipe:def(sort, sh($T>>$T,"sort")).
 
-:- run(library(swipe)^pl :> grep(module) >> sort).
+:- run(library('swipe.pl')^pl :> grep(module) >> sort).
 ==
 
