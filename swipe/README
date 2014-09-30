@@ -1,0 +1,15 @@
+This package provides a mechanism for construction Unix shell
+pipelines by the composition of terms representing primitive Unix
+processes. Each process is given a type and the compositon mechanism
+checks that the types of processes combined in to a pipeline match
+correctly
+
+---++++ Simple usage
+
+==
+swipe:def(grep(Pattern), sh($T>>$T,"grep ~s",[@Pattern])).
+swipe:def(sort, sh($T>>$T,"sort")).
+
+:- run(library(swipe)^pl :> grep(module) >> sort).
+==
+
