@@ -115,7 +115,7 @@
 :- use_module(library(dcg_codes)).
 
 :- set_prolog_flag(double_quotes,string).
-:- setting(quote_method,ground,weak(3),"Filename quoting method").
+:- setting(quote_method,ground,strong,"Filename quoting method").
 
 def(cat,      sh($T >> $T,"cat")).
 def(cat(F^T), sh(0 >> $T,"cat ~s",[F+read])).
@@ -219,22 +219,36 @@ delete(Dir,File) :-
    
 
 
-% haven't yet decided which quoting mechanism is best
-escape_codes_with(Special,E,C) --> [E,C], {member(C,Special)}.
-escape_codes_with(Special,_,C) --> [C], {\+member(C,Special)}.
+% [haven't yet decided which quoting mechanism is best]
+% Ok, I decided the escape_codes_pred is the best and most flexible.
 
-escape_code_pred(Esc,C) --> call(Esc,C) -> []; [C].
-
+% this cut *should* be a green cut now...
 escape_codes_pred(Esc,C1) --> call(Esc,C1,C2), !, escape_codes_pred(Esc,C2).
-escape_codes_pred(Esc,[C|Cs]) --> [C], escape_codes_pred(Esc,Cs).
 escape_codes_pred(_,[]) --> [].
 
 quote(strong,Codes) --> "'", escape_codes_pred(strong,Codes), "'".
-quote(weak(1),Codes) --> "\"", seqmap(escape_code_pred(weak),Codes), "\"".
-quote(weak(2),Codes) --> "\"", escape_codes_pred(weak,Codes), "\"".
-quote(weak(3),Codes) --> "\"", seqmap(escape_codes_with(`$"\``,0'\\),Codes), "\"".
+quote(weak,Codes) --> "\"", escape_codes_pred(weak,Codes), "\"".
 
-weak(C) --> [0'\\,C], {member(C,`$"\``)}.
-weak([C|T],T) --> [0'\\,C], {member(C,`$"\``)}.
-strong([0''|T],T) --> "'\\''".
+% weak(+Codes,-Tail)// is semidet.
+% weak(-Codes,-Tail)// is semidet.
+%
+% This predicate encapsulates Bash's weak (ie double quoted) escaping rules.
+% Basically, anything can appear except $, ", or `, which must be escaped
+% by a backslash. A backslash that is not interpreted as a valid escape
+% is retained, but \\ is also interpreted as a valid escape sequence for a 
+% backslash. At this point, the rules become somewhat arcane and differ between
+% shells. If your shell beeps when you want to write "\a\b\c", then I'm afraid
+% you're going to have to work it out for yourself.
+weak([C|T],T) --> [0'\\,C], {member(C,`\\$"\``)}.
+weak([C|T],T) --> [C], {\+member(C,`\\$"\``)}.
+
+%% strong(+Codes,-Tail)// is semidet.
+%% string(-Codes,-Tail)// is semidet.
+%
+% This predicate encapsulated Bash's strong (single quoted) escape rules.
+% Basically anything is allowed verbatim between single quotes, except for
+% a single quote. The only way to inject a single quote is to terminate the
+% string with ', then append an escaped ' as \' and then reopen a new string
+% with ' -- the shell concatenates these three pieces into one string.
+strong([C|T],T) --> [C], ({C=0''} -> "\\''"; []).
 
