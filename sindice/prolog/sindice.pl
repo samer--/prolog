@@ -108,9 +108,11 @@
    by rdf_global_id/2. Eventually, Sindice's full query syntax, including
    ntriple queries and Boolean operators, will be implemented.
    
-   @seealso http://sindice.com/
+   @seealso 
+      http://sindice.com/
+      http://sindice.com/developers/queryLanguage#QueryLanguage
 
-   Samer Abdallah, UCL, University of London
+   Samer Abdallah, UCL, University of London;
    Yves Raimond, C4DM, Queen Mary, University of London
  */
 
