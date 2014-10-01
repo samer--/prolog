@@ -85,7 +85,6 @@
       6. I've taken the liberty of making multiple boosts on the same query combine multiplicatively,
          much like ordinary mathematical exponentiation. This is different from Lucene, where
          a later boost overrides an earlier boost. I think this way makes more sense.
-
    Thus, the type of such expression can be defined as:
    ==
    qexpr ---> @atomic; \atomic 
@@ -101,6 +100,21 @@
    atomic :< qexpr.  % any atomic is a qexpr
    query  :< qexpr.  % any query  is a qexpr
    ==
+
+   ---+++ Quoting and escaping policy
+   
+   Ugh. Let us take the 4 different cases in turn:
+      1. Plain search terms. The Prolog interface takes any sequence of characters
+         and automatically escapes them for Lucene.
+      2. Wildcard terms (@W). These can contain any characters but * and ? are 
+         interpreted as wildcards. The can be escaped with \ to be interpreted
+         literally. \ must be escaped with \. A single \ is illegal.
+      3. Regexp terms (\RE). Any / characters are escaped automatically. Otherwise,
+         Many characters have special meaning in regular expressions and must
+         be escaped with \ to be inserted literally. Infact, ANY character can be
+         escaped with \ and inserted literally. A single \ is illegal.
+      4. Field names. These do not support escape sequences and cannot contain
+         any special characters (ie " /+-&|!(){}[]^\"~?:\").
 
    So that's the basics of it. There might still be some problems in the DCG
    when it comes to handling character escapes. Somewhat suprisingly, the DCG
@@ -195,8 +209,8 @@ part(Field:Prim)    --> field(Field), ":", prim(Prim).
 part(comp(Clauses)) --> "(", seqmap_with_sep(" ",query,Clauses), ")".
 
 prim(word(W))   --> word(W).
-prim(glob(G))   --> bidi(G,glob_codes(C),string_codes(G,C)).
-prim(re(RE))    --> "/", bidi(RE,re_codes(C),string_codes(RE,C)), "/".
+prim(glob(G))   --> bidi(G,esc(glob,C),string_codes(G,C)).
+prim(re(RE))    --> "/", bidi(RE,esc(regexp,C),string_codes(RE,C)), "/".
 prim(fuzzy(W,P)) --> word(W), "~", integer(P).
 prim(range_inc(Min,Max)) --> sqbr((word(Min), " TO ", word(Max))).
 prim(range_exc(Min,Max)) --> brace((word(Min), " TO ", word(Max))).
@@ -204,52 +218,31 @@ prim(phrase(Words,D)) -->
    "\"", seqmap_with_sep(" ",word,Words), "\"",
    ( {D=0}; "~", integer(D)).
 
-word(W) --> bidi(W,word_codes(C),string_codes(W,C)).
-field(F) --> bidi(F,field_codes(C),string_codes(F,C)).
+word(W) --> bidi(W,esc(word,C),string_codes(W,C)).
+field(F) --> bidi(F,esc(field,C),string_codes(F,C)).
 
 % beginnings of parsing ability...
 % this orders the two goals depending on the instantiation state of Sem.
 bidi(Sem,Phrase,Unify) -->
    {var(Sem)} -> Phrase, {Unify}; {Unify}, Phrase.
 
-%% escaped_codes(+Esc:esc,+Special:list(code),+Codes:list(code))// is det.
-%% escaped_codes(+Esc:esc,+Special:list(code),-Codes:list(code))// is nondet.
-%
-%  Parser for a sequence of characters. Characters in the Special list
-%  are not allowed unless they are escaped.
-%  Escape sequences are recognised by the predicate Esc, whose type is
-%  ==
-%  esc == pred(list(codes),list(codes))//.
-%  ==
-%  The DCG goal esc(H,T) matches an escape sequence and unifies H-T with
-%  a difference list representing the codes in the escape sequence. esc//2
-%  must not place any constraints on the difference list tail T..
-%
-%  Starts with the longest possible match and retrieves shorter
-%  matches on backtracking.
+% -- escape sequence parsers for different entities
 
-escaped_codes(Esc,S,Cs) --> call(Esc,Cs,T), !, escaped_codes(Esc,S,T). 
-escaped_codes(Esc,S,[C1|Cs]) --> [C1], { \+member(C1,S) }, escaped_codes(Esc,S,Cs). 
-escaped_codes(_,_,[]) --> [].
+word([C|T],T) --> [0'\\,C], {member(C," /+-&|!(){}[]^\"~:\\*?")}. % auto escape these
+word([C|T],T) --> [C], {\+member(C," /+-&|!(){}[]^\"~:\\*?")}. % pass the rest
 
-%% back_slash(+H:list(code), -T:list(code))// is det.
-%% back_slash(-H:list(code), -T:list(code))// is semidet.
-%
-%  DCG goal representing escape sequences consisting of a back-slash
-%  followed by any character. 
-back_slash([0'\\,C|T],T) --> [0'\\,C].
+glob([0'\\,C|T],T) --> [0'\\,C], {member(C,"*?\\")}. % manual escape these
+glob([C|T],T) --> [0'\\,C], {member(C," /+-&|!(){}[]^\"~:")}. % auto escape these 
+glob([C|T],T) --> [C], {\+member(C," /+-&|!(){}[]^\"~:\\")}. 
 
-%% fail(@H,@T) is semidet.
-%  goal representing no escape sequences: it always fails.
-fail(_,_) --> {fail}.
+% escape sequences preserved in string, \ must be escaped,
+% / auto escaped
+regexp([0'\\,C|T],T) --> [0'\\,C].
+regexp([0'/|T],T) --> "\\/".
+regexp([C|T],T) --> [C], {\+member(C,"/\\")}.
 
-% Tentative parsers for different kinds of character sequence
-% I'm not sure Lucene's parser actually recognises some of these escape sequences..
-% I've made it so that field names can't have any funny characters in them.
-word_codes([C1|Cs])  --> escaped_codes(back_slash," /+-&|!(){}[]^\"~:\\*?",[C1|Cs]).
-glob_codes([C1|Cs])  --> escaped_codes(back_slash," /+-&|!(){}[]^\"~:\\",[C1|Cs]).
-re_codes(Codes)      --> escaped_codes(back_slash,"/\\",Codes).
-field_codes([C1|Cs]) --> escaped_codes(fail," /+-&|!(){}[]^\"~?:\\",[C1|Cs]).
+% no escape sequences, no funny characters allowed.
+field([C|T],T) --> [C], {\+member(C," /+-&|!(){}[]^\"~?:\\")}.
 
 prolog:message(invalid_field(F)) --> 
    ['Fieldname ~w is not recognised in the current Lucene query context.'-[F]].

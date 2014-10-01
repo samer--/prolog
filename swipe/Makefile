@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=swipe
-VER=0.0.4
+VER=0.0.5
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 

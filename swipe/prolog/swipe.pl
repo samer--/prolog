@@ -216,18 +216,9 @@ delete(Dir,File) :-
    debug(swipe,"Deleting file '~w'...",[Dir/File]),
    atomics_to_string([Dir,"/",File],Path),
    delete_file(Path).
-   
 
-
-% [haven't yet decided which quoting mechanism is best]
-% Ok, I decided the escape_codes_pred is the best and most flexible.
-
-% this cut *should* be a green cut now...
-escape_codes_pred(Esc,C1) --> call(Esc,C1,C2), !, escape_codes_pred(Esc,C2).
-escape_codes_pred(_,[]) --> [].
-
-quote(strong,Codes) --> "'", escape_codes_pred(strong,Codes), "'".
-quote(weak,Codes) --> "\"", escape_codes_pred(weak,Codes), "\"".
+quote(strong,Codes) --> "'", esc(strong,Codes), "'".
+quote(weak,Codes) --> "\"", esc(weak,Codes), "\"".
 
 % weak(+Codes,-Tail)// is semidet.
 % weak(-Codes,-Tail)// is semidet.

@@ -46,6 +46,7 @@ be used to generate sequences, not parse them.
 	,	sqbr(//,?,?)
 	,	qq(//,?,?)
 	,	q(//,?,?)
+   ,  esc(4,?,?,?)
 	.
 
 :- set_prolog_flag(double_quotes, codes).
