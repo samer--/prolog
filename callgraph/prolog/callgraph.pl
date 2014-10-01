@@ -600,7 +600,7 @@ nodelink(Base,Goal) -->
    {  functor(Head,Name,Arity),
       format(string(URL),'~w~q',[Base,Mod:Name/Arity])
    },
-   [ 'URL' = qq(URL) ].
+   [ 'URL' = qq(URL), target=at('_blank') ].
 
 compile_attrs([],A,A).
 compile_attrs([style=S|AX],AttrsSoFar,FinalAttrs) :- !,
