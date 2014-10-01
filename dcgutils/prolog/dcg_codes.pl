@@ -26,8 +26,9 @@
    % Quoting and escaping
 	,	q//1
    ,	qq//1
-	,	escape//2, escape_with//3
-
+	,	escape//2 % escape Char by doubling up 
+   ,  escape_with//3 % escape Char1 with Char2
+   ,  esc//2  % predicate based, most flexible
 ]).
 
 /** <module> DCG utilities for list of character codes representation.
@@ -165,6 +166,25 @@ escape_codes(_,_,A,A,A).
 escape_codes(E,Q,[Q|X],[E,Q|Y],T) :-escape_codes(E,Q,X,Y,T).
 escape_codes(E,Q,[A|X],[A|Y],T)   :- Q\=A, escape_codes(E,Q,X,Y,T).
 
+%% esc(+Esc:esc,+Codes:list(code))// is det.
+%% esc(+Esc:esc,-Codes:list(code))// is nondet.
+%
+%  Parser for a sequence of characters involving escape sequences. 
+%  These are recognised by the predicate Esc, whose type is
+%  ==
+%  esc == pred(list(codes),list(codes))//.
+%  ==
+%  The DCG goal esc(H,T) matches an escaped sequence in the string
+%  and unifies H-T with a difference list representing it's internal
+%  or semantic form. Esc  must not place any constraints on the 
+%  difference list tail T.
+%
+%  Starts with the longest possible match and retrieves shorter
+%  matches on backtracking.
+
+esc(Esc,C1) --> call(Esc,C1,C2), !, esc(Esc,C2). 
+esc(_,[]) --> [].
+
 % Not used, apparently.
 % difflength(A-B,N) :- unify_with_occurs_check(A,B) -> N=0; A=[_|T], difflength(T-B,M), succ(M,N).
 
@@ -173,3 +193,6 @@ escape_codes(E,Q,[A|X],[A|Y],T)   :- Q\=A, escape_codes(E,Q,X,Y,T).
 % difflength_x(A-B,M,M)     :- unify_with_occurs_check(A,B).
 % difflength_x([_|T]-A,M,N) :- succ(M,L), difflength_x(T-A,L,N).
 
+% These are some more escape/quoting mechanisms, disabled for now.
+% escape_codes_with(Special,E,C) --> [E,C], {member(C,Special)}.
+% escape_codes_with(Special,_,C) --> [C], {\+member(C,Special)}.
