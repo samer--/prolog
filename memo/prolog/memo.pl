@@ -310,10 +310,10 @@ reflect(fail) :- !, fail.
 reflect(ex(Ex)) :- throw(Ex).
 
 
-:- nb_setval(mode,memo).
+:- nb_setval(memo_mode,memo).
 
 modally(Module:Head) :-
-   b_getval(mode,Mode),
+   b_getval(memo_mode,Mode),
    call(Mode,Module:Head).
 
 
@@ -324,10 +324,10 @@ modally(Module:Head) :-
 %  browse/1 or compute/1 respectively.
 call_with_mode(Mode,Goal) :-
    must_be(oneof([memo,compute,browse]),Mode),
-   b_getval(mode,Mode0),
-   b_setval(mode,Mode),
-   call(Goal),
-   b_setval(mode,Mode0).
+   b_getval(memo_mode,Mode0),
+   b_setval(memo_mode,Mode),
+   catch(Goal,E,(b_setval(memo_mode,Mode0),throw(E))),
+   b_setval(memo_mode,Mode0).
 
 compile_memo(_,Var, _) --> { var(Var), !, instantiation_error(Var) }.
 
