@@ -6,6 +6,7 @@
     , recompute_all/3
     , (volatile_memo)/1
     , (persistent_memo)/1
+    , call_with_mode/2
     % , hostname/1
     , op(1150,fx,volatile_memo)
     , op(1150,fx,persistent_memo)
@@ -118,6 +119,8 @@
    - check for missing predicate definitions
 */
 :- meta_predicate 
+      modally(0),
+      call_with_mode(+,0),
       memo(0), memo(0,-), 
       browse(0), browse(0,-), 
       clear_all(0),  clear_all(0,-),
@@ -282,11 +285,11 @@ copy_if_input(-_,_,_).
 %  Goal must be sufficiently instantiated to satisfy the underlying memoised predicate. 
 %  memo/1 and memo/2 behave differently if the underlying predicate fails or throws an
 %  exception. memo/1 _reflects_ this behaviour, failing or throwing the same exception, even
-%  the computation was not actually repeated but was retrieve from the memo table.
+%  if the computation was not actually repeated but was retrieve from the memo table.
 %  memo/2 _reifies_ this behaviour, returing information in Meta.
 %
 %  Note that the type and mode are checked strictly. An Input argument X declared with +T
-%  must satisfy must_ba(T,X). An output argument declared with a -T must an unbound
+%  must satisfy must_be(T,X). An output argument declared with a -T must an unbound
 %  variable. 
 memo(Module:Head) :- memo(Module:Head,_-Res), reflect(Res).
 memo(Module:Head,Meta) :-
@@ -305,6 +308,26 @@ memo(Module:Head,Meta) :-
 reflect(ok) :- !.
 reflect(fail) :- !, fail.
 reflect(ex(Ex)) :- throw(Ex).
+
+
+:- nb_setval(mode,memo).
+
+modally(Module:Head) :-
+   b_getval(mode,Mode),
+   call(Mode,Module:Head).
+
+
+%% call_with_mode(+Mode:oneof([memo,browse,compute]), +Goal:callable) is nondet.
+%
+%  Executes an arbitrary Prolog goal with the current memo-evaluation-mode set
+%  to Mode. Thus, any calls to memoised predicates result in calls to memo/1,
+%  browse/1 or compute/1 respectively.
+call_with_mode(Mode,Goal) :-
+   must_be(oneof([memo,compute,browse]),Mode),
+   b_getval(mode,Mode0),
+   b_setval(mode,Mode),
+   call(Goal),
+   b_setval(mode,Mode0).
 
 compile_memo(_,Var, _) --> { var(Var), !, instantiation_error(Var) }.
 
@@ -338,7 +361,7 @@ compile_memo(volatile, Spec, Module) -->
      memo:computer(Module, Head, Type, ComputeHead),
      memo:asserter(Module, Head, MetaA, assertz(Module:AssertHead)),
      memo:retracter(Module, Head, Meta, retractall(Module:RetractHead)),
-     (Head :- memo(Head))
+     (Head :- memo:modally(Module:Head))
    ].
 
 compile_memo(persistent, Spec, Module) -->
@@ -370,7 +393,7 @@ compile_memo(persistent, Spec, Module) -->
      memo:computer(Module, Head, Type, ComputeHead),
      memo:asserter(Module, Head, MetaA, Module:AssertHead),
      memo:retracter(Module, Head, Meta, Module:RetractHead),
-     (Head :- memo(Head))
+     (Head :- memo:modally(Module:Head))
    ].
 
 build_term(NameParts,Args,Term) :- atomic_list_concat(NameParts,Name), Term =.. [Name|Args].

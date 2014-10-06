@@ -41,6 +41,20 @@ The debug messages should indicate that repeated computations are being
 avoided, even for failing goals, like =|sqrt1(-4.0,X)|=, and computations
 that throw exceptions, like =|sqrt2(-4.0,X)|=.
 
+---++++ Changes in v0.3
+
+	The library now has a notion of 'current evaluation mode', which applies when
+	memoised predicates are called directly by their original names. In the previous
+	version, this resulted in a call to memo/1, i.e., strict mode checking is done,
+	previously stored computations are checked, and a new computation done if
+	necessary and the result stored. In v0.3, the current mode can be 'memo',
+	'browse' or 'compute', which result in calls to memo/1, browse/1 or compute/1
+	respectively. The initial mode is 'memo', retaining backwards compatibility with
+	v0.2. The only way to affect the mode is to use call_with_mode(Mode,Goal), which
+	calls an arbitrary goal in an environment with the evaluation mode set to Mode.
+	There is no way to globally set the evaluation-mode -- this is an intentional
+	design decision to ensure that any goal given at the top level ?- prompt always
+	behaves the same way.
 
 ---++++ Changes in v0.2
 
