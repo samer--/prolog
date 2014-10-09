@@ -4,7 +4,7 @@ processes. Each process is given a type and the compositon mechanism
 checks that the types of processes combined in to a pipeline match
 correctly
 
----++++ Simple usage
+---+++ Simple usage
 
 ==
 swipe:def(grep(Pattern), sh($T>>$T,"grep ~s",[@Pattern])).
@@ -12,4 +12,13 @@ swipe:def(sort, sh($T>>$T,"sort")).
 
 :- run(library('swipe.pl')^pl :> grep(module) >> sort).
 ==
+
+---+++ Change history
+
+---++++ Version 0.1.0
+
+	* Changed pipe/2 to command/2.
+	* Added command/3 to return the inferred type of a pipeline.
+	* Added with_pipe_output/3 and with_pipe_input/3.
+	* Now depends on fileutils pack.
 

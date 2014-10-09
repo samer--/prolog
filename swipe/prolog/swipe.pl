@@ -1,6 +1,9 @@
 :- module(swipe, 
    [  run/1
-   ,  pipe/2
+   ,  command/2
+   ,  command/3
+   ,  with_pipe_output/3
+   ,  with_pipe_input/3
    ,  with_temp_dir/2
    ,  op(300,xfy,:>)
    ,  op(300,yfx,>:)
@@ -98,10 +101,13 @@
    
    ---+++ Running 
 
-   A pipeline expression can be used in one of two ways:
-      1. With pipe/2, which produces a string which can be passed to shell/1
+   A pipeline expression can be used in one of three ways:
+      1. With command/{2,3}, which produce a string which can be passed to shell/1
          or used with open(pipe(Cmd), ...).
       2. With run/1, which calls the formatted command directly using shell/1.
+      3. Using with_pipe_output/3 or with_pipe_output/3, which runs the pipeline
+         concurrently with the current thread, making either its standard input 
+         or standard output available on a Prolog stream.
 
    @tbd
    * Use of parenthesis for grouping might not work in some cases
@@ -110,12 +116,14 @@
 */
 
 :- meta_predicate with_temp_dir(-,0).
+:- meta_predicate with_pipe_output(-,+,0), with_pipe_input(-,+,0).
 :- multifile def/2.
 
 :- use_module(library(dcg_codes)).
+:- use_module(library(fileutils)).
 
 :- set_prolog_flag(double_quotes,string).
-:- setting(quote_method,ground,strong,"Filename quoting method").
+:- setting(quote_method,oneof([strong,weak]),strong,"Filename quoting method").
 
 def(cat,      sh($T >> $T,"cat")).
 def(cat(F^T), sh(0 >> $T,"cat ~s",[F+read])).
@@ -174,11 +182,14 @@ either(_,0,T,T) :- !.
 either(_,T,0,T) :- !.
 either(P,T1,T2,_) :- throw(type_mismatch(P,T1,T2)).
 
-%% pipe(Pipe:(X>>Y), Cmd:string) is det.
+%% command(Pipe:(X>>Y), -Type:pipe_type, Cmd:string) is det.
+%% command(Pipe:(X>>Y), Cmd:string) is det.
 %
-%  Formats the shell command for a pipeline expression.
-pipe(Pipeline,Cmd) :-
-   pipe(Pipeline,_,Codes,[]),
+%  Formats the shell command for a pipeline expression. Three argument
+%  version unifies Type with the inferred type of the pipeline.
+command(Pipeline,Cmd) :- command(Pipeline,_,Cmd).
+command(Pipeline,Type,Cmd) :-
+   pipe(Pipeline,Type,Codes,[]),
    string_codes(Cmd,Codes).
 
 %% run(Pipe:(X>>Y)) is det
@@ -191,6 +202,26 @@ run(Pipeline) :-
       shell(Cmd)
    ;  throw(bad_pipeline(Pipeline))
    ).
+
+
+%% with_pipe_output(S:stream, Pipe:(0>>$Y), G:callable) is det.
+%  
+%  Starts the given pipeline and calls goal G, with the standard output from
+%  the pipeline available on stream S. The type of Pipe reflects the requirement
+%  for it to expect nothing on standard input and must produce something on 
+%  standard output.
+with_pipe_output(S,Pipe,Goal) :-
+   command(Pipe, 0 >> $_, Cmd),
+   with_stream(S, open(pipe(Cmd),read,S), Goal).
+
+%% with_pipe_input(S:stream, Pipe:(0>>$Y), G:callable) is det.
+%  
+%  Starts the given pipeline and calls goal G, with the standard input from
+%  the pipeline available on stream S. The type of Pipe reflects the requirement
+%  for it to expect input on stdin input and produce nothing on the output.
+with_pipe_input(S,Pipe,Goal) :-
+   command(Pipe, $_ >> 0, Cmd),
+   with_stream(S, open(pipe(Cmd),write,S), Goal).
 
 %% with_temp_dir(Dir:text, Goal:callable) is nondet.
 %
