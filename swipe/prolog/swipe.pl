@@ -154,8 +154,10 @@ file(Spec,Access) -->
 
 quote_arg(\A,A).
 quote_arg(@A,B) :- 
+   setting(quote_method,QM), 
    format(codes(Codes),'~w',[A]),
-   string_codes(B,Codes).
+   quote(QM,Codes,Quoted,[]),
+   string_codes(B,Quoted).
 quote_arg(Spec+Access,B) :- 
    file(Spec,Access,Codes,[]), 
    string_codes(B,Codes).
