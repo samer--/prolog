@@ -1,4 +1,4 @@
-:- module(sparqlweb,[
+:- module(sparkle,[
       sparql_endpoint/2
    ,  sparql_endpoint/3
    ,  current_sparql_endpoint/5
@@ -56,7 +56,7 @@ user:term_expansion(:-(sparql_endpoint(EP,Url)), Expanded) :-
 user:term_expansion(:-(sparql_endpoint(EP,Url,Options)), Expanded) :- 
    endpoint_declaration(EP,Url,Options,Expanded).
 
-endpoint_declaration(EP,Url,Options, sparqlweb:sparql_endpoint(EP,Host,Port,Path,Options)) :-
+endpoint_declaration(EP,Url,Options, sparkle:sparql_endpoint(EP,Host,Port,Path,Options)) :-
 	debug(sparkle,'Declaring SPARQL end point ~w: ~w ~w ~w ~w.',[EP,Host,Port,Path,Options]),
    url_endpoint(Url,Host,Port,Path).
 
