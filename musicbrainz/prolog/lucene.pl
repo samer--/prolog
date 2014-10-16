@@ -180,7 +180,7 @@ apply_field(F,q(_,_,comp(Cs))) :- maplist(apply_field(F),Cs).
 
 check_fields(Fields,q(_,_,Part)) :- check_part(Part,Fields).
 check_part(comp(Queries),Fields) :- maplist(check_fields(Fields),Queries).
-check_part(Field:_, Fields) :- insist(member(Field,Fields),invalid_field(Field)).
+check_part(Field:_, Fields) :- insist((var(Field);member(Field,Fields)),invalid_field(Field)).
 
 insist(G) :- insist(G,failed(G)).
 insist(G,Ex) :- call(G) -> true; throw(Ex).

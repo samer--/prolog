@@ -354,15 +354,41 @@ facet( died(Y),    elem('life-span', _, X), xp(X,end(text),Y)).
 % facet( dead,       elem('life-span', _, X), xp(X,ended(text),true)).
 facet( title(Y),   elem(title,    _, X), get_text(X,Y)).
 facet( date(Y),    elem(date,     _, X), get_text(X,Y)).
+facet( barcode(Y), elem('barcode',_,X),  get_text(X,Y)).
+facet( asin(Y),    elem('asin',_,X),     get_text(X,Y)).
 facet( length(Y),  elem(length,   _, [X]), atom_number(X,Y)).
+facet( credit(E),  elem('artist-credit',_, X),  xp(X,'name-credit'/artist,E)).
+facet( text_repn(L,S), elem('text-representation',_,X), (xp(X,language,L),xp(X,script,S))).
 facet( alias(Y),          elem('alias-list',_, X),    xp(X,alias(text),Y)).
 facet( sort_name(Y),      elem('sort-name', _, X),    get_text(X,Y)).
 facet( disambiguation(Y), elem(disambiguation, _, X), get_text(X,Y)).
 facet( area(Id,Facets),   elem(area,As,Es),           get_area(As,Es,Id,Facets)).
-facet( credit(artist,E),  elem('artist-credit',_, X),  xp(X,'name-credit'/artist,E)).
-facet( release(E),        elem('release-list',_, X),  xp(X,release,E)).
 facet( status(Y),    elem(status,  _, X),    get_text(X,Y)).
 facet( packaging(Y), elem(packaging,  _, X), get_text(X,Y)).
+facet( group(Y),     elem('release-group',As,Es), Y=element('release-group',As,Es)).
+facet( language(L),  elem(language, _, [L]), true). 
+facet( release(E),       elem('release-list',_, X),  xp(X,release,E)).
+facet( release_event(Y), elem('release-event-list',_,X), xp(X,'release-event',Y)).
+facet( medium(Y),        elem('medium-list',_,X), xp(X,'release-event',Y)).
+facet( label_info(Y),    elem('label-info-list',_,X), xp(X,'label-info',Y)).
+facet( label_code(Y),    elem('label-code',_,X), get_text(X,Y)).
+facet( relation(E,R), elem('relation-list',As,Es), decode_relations(As,Es,E,R)).
+facet( tags(Tags),    elem('tag-list',_,Es), maplist(get_tag,Es,Tags)).
+
+get_tag(E,N-CC) :- 
+   xpath(E,name(text),N),
+   xpath(E,/self(@count),C), 
+   atom_number(C,CC). 
+
+decode_relations(As,Rs,E,Rel) :-
+   member('target-type'=Type,As),
+   member(R,Rs),
+   xpath(R,/self(@type),Name),
+   xpath(R,direction(content),[Dir]),
+   xpath(R,Type,Val),
+   (  Dir=backward -> Rel=..[Name,Val,E]
+   ;  Dir=forward  -> Rel=..[Name,E,Val]
+   ).
 
 get_text(Elems,Text) :- xp(Elems,/self(text),Text).
 get_area(As,Es,Id,F2) :-
@@ -409,12 +435,18 @@ mb_class(url).
 user:portray(E) :-
    E=element(T,_,_), mb_class(T),
    mb_facet(E,id(Id)),
-   (  mb_facet(E,name(Name))
-   -> format('<mb:~w/~w|~w>',[T,Id,Name])
-   ;  mb_facet(E,title(Title))
-   -> format('<mb:~w/~w|~w>',[T,Id,Title])
+   (  mb_facet(E,name(Name)), truncate(40,Name,SName)
+   -> format('<mb:~w/~w|~w>',[T,Id,SName])
+   ;  mb_facet(E,title(Title)), truncate(40,Title,STitle)
+   -> format('<mb:~w/~w|~w>',[T,Id,STitle])
    ;  format('<mb:~w/~w>',[T,Id])
    ).
+
+truncate(Max,S,S) :- string_length(S,L), L<Max, !.
+truncate(Max,S1,S3) :-
+   L is Max-3,
+   sub_string(S1,0,L,_,S2),
+   string_concat(S2,"...",S3).
 
 % tables used for validating requests.
 link(url,resource).
