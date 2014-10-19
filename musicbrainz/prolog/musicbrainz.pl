@@ -1,13 +1,15 @@
 :- module(musicbrainz,[
       mb_query/4
    ,  mb_query/5
-   ,  mb_search/5 
-   ,  mb_browse/4
+   ,  mb_search/4 
+   ,  mb_browse/3
    ,  mb_lookup/3
+   ,  mb_lookup/2
    ,  mb_facet/2
    ,  mb_id/2
    ,  mb_id_uri/3
    ,  mb_uri/2
+   ,  mb_class/2
 	]).
 
 /** <module> Interface to Musicbrainz XML web service
@@ -25,7 +27,7 @@
    A simple search returning a 'goodness of match' in Score, a Musicbrainz ID
    in ID, and an XML element in E, then extracting info from E with mb_facet/2:
    ==
-   ?- mb_search(artist,'John Coltrane',Score,Id,E), forall(mb_facet(E,F),writeln(F)).
+   ?- mb_search(artist,'John Coltrane',Score,E), forall(mb_facet(E,F),writeln(F)).
    ==
    Search for releases with 'trane' in the title, using general purpose mb_query/5 
    to get progress info:
@@ -34,16 +36,16 @@
    ==
    Search for artist then browse releases:
    ==
-   ?- mb_search(artist,'John Coltrane',_,Id,_),
-      mb_browse(release,artist,Id,E),
+   ?- mb_search(artist,'John Coltrane',_,A),
+      mb_browse(release,A,E),
       forall(mb_facet(E,F),(print(F),nl)).
    ==
    Lucene search for male artist then direct lookup all releases (with debug
    on to report unrecognised fields):
    ==
    ?- debug(musicbrainz).
-   ?- mb_search(artist,[coltrane, gender:male],_,Id,_), 
-      mb_query(artist,lookup(Id),[inc(releases)],Item), 
+   ?- mb_search(artist,[coltrane, gender:male],_,A), 
+      mb_lookup(A,[inc([releases])],Item), 
       forall(mb_facet(Item,F),(print(F),nl)).
    ==
 
@@ -68,6 +70,13 @@
    The core entity 
    types are: =|artist, release, 'release-group', label, recording, work, area, url|=.
 
+   An entity can be referred to either as a pair Class-Id, or an element as returned
+   by a previous query:
+   ==
+   eref :< pair(mb_class,atom).
+   eref :< element(T) :- mb_class(T).
+   ==
+
    ---++++ Query types
 
    The three query types are represented using three Prolog functors:
@@ -75,9 +84,9 @@
    *  lookup(+ID:atom)
       Looks up the Musicbrainz entity with the given ID.   
       Returns an element.
-   *  browse(+LinkT:mb_class,+LinkID:atom)
-      Returns a list of entities which are linked directly to the entity of
-      class LinkT with ID LinkT. For example, the query =|browse(artist,ArtistID)|=
+   *  browse(+Link:eref)
+      Returns a list of entities which are linked directly to the referenced entity.
+      For example, the query =|browse(artist-ArtistID)|=
       applied to a core entity type =|release|= retrieves all the releases associated
       with the given artist. Returns a list of elements and a number giving the total number 
       of matches.
@@ -96,14 +105,17 @@
       *  offset(+N:integer)
          For browse and search requests only - determines the offset of the returned
          list of entities relative to the full query results.
-      *  inc(+I:text)
-         For lookup and browse requests only - fills in the inc parameter of the
-         query URL. See http://musicbrainz.org/doc/Development/XML_Web_Service/Version_2 for
+      *  inc(+I:list(atom))
+         Contributes to the inc parameter of the query URL. 
+         See http://musicbrainz.org/doc/Development/XML_Web_Service/Version_2 for
          more information.
+      *  rels(+I:list(mb_class))
+         Contributes 'xxx-rels' components to the inc parameter of the query URL. 
+      *  lrels(+I:list(mb_class))
+         Contributes 'xxx-level-rels' components to the inc parameter of the query URL. 
 
-   If any inappropriate options are supplied for a given query, an exception is thrown,
-   but note that this library does not yet check that any specified includes are
-   applicable to the entity type being retrieved.
+
+   If any inappropriate options are supplied for a given query, an exception is thrown.
 
    ---+++ XML Decoding
 
@@ -142,40 +154,47 @@
    the limit option. This defaults to the value of the setting =|limit|=.
 
   @author Samer Abdallah, UCL (2014)
-  @version 0.2.0
  */
 
 :- use_module(library(http/http_client)).
+:- use_module(library(http/http_open)).
 :- use_module(library(http/http_sgml_plugin)).
+:- use_module(library(http/json)).
 :- use_module(library(xpath)).
+:- use_module(library(dcg_core)).
 :- use_module(lucene).
 
 
 :- setting(limit,integer,20,'Default limit for Musicbrainz search and browse queries').
 
-%% mb_search(+T:mb_class, +Term:text, -Score:between(0,100), -Id:atom, -Item:element(T)) is nondet.
+%% mb_search(+T:mb_class, +Term:text, -Score:between(0,100), -Item:element(T)) is nondet.
 %
 %  Searches for entities of type T using arbitrary text. Multiple matches are yielded
-%  on backtracking, with Score giving a goodness of fit between 0 and 100, Id giving the
-%  Musicbrainz ID of the proposed item, and Item containing all the information returned
+%  on backtracking, with Score giving a goodness of fit between 0 and 100 and 
+%  Item containing all the information returned
 %  about the item, which can be examined using mb_facet/2.
 %  Executes multiple queries to page through an arbitrary number of results.
-mb_search(T,Term,Score,Id,Item) :-
+mb_search(T,Term,Score,Item) :-
    mb_query(T,search(Term),[],_,Item),
-   maplist(mb_facet(Item),[id(Id),score(Score)]).
+   mb_facet(Item,score(Score)).
 
 
-%% mb_browse(+T:mb_class, +LinkT:mb_class, +LinkId:atom, -Item:element(T)) is nondet.
+%% mb_browse(+T:mb_class, +Link:eref, -Item:element(T)) is nondet.
 %
-%  Finds entities of type T which are directly linked with the entity of type
-%  LinkT with ID LinkId. Multiple items are returned on backtracking. 
+%  Finds entities of type T which are directly linked with the entity Link.
+%  Multiple items are returned one by one on backtracking. 
 %  Executes multiple queries to page through an arbitrary number of results.
-mb_browse(T,LinkT,LinkId,Item) :- mb_query(T,browse(LinkT,LinkId),[],_,Item).
+mb_browse(T,Link,Item) :- mb_query(T,browse(Link),[],_,Item).
 
-%% mb_lookup(+T:mb_class, +ID:atom, -Item:element(T)) is semidet.
+%% mb_lookup(+E:pair(mb_class,atom), +Opts:options, -Item:element(T)) is semidet.
+%% mb_lookup(+E:element(T), +Opts:options, -Item:element(T)) is semidet.
+%% mb_lookup(+E:element(T), -Item:element(T)) is semidet.
 %
-%  Lookup Musicbrainz entity of the given type with the given ID.
-mb_lookup(Class,Id,Item) :- mb_query(Class,lookup(Id),[],Item).
+%  Lookup a Musicbrainz entity. The entity E can be specified either as a pair Type-Id
+%  or a previously returned XML element.
+mb_lookup(Class-Id,Opts,Item) :- mb_query(Class,lookup(Id),Opts,Item).
+mb_lookup(E,Opts,Item) :- mb_class(E,T), mb_id(E,Id), mb_query(T,lookup(Id),Opts,Item).
+mb_lookup(E1,E2) :- mb_lookup(E1,[],E2).
 
 %% mb_query(+T:mb_class,+Req:request(T,items(T)),+Opts:options,-P:progress,-E:element(T)) is nondet.
 %
@@ -234,9 +253,9 @@ lazy_nth1(I, [],     M,T-More, X) :-
 %
 %  The request terms and their types are:
 %  ==
-%  lookup(atom)          :: request(A,element(A)).
-%  browse(mb_class,atom) :: request(A,items(A)).
-%  search(text)          :: request(A,items(A)).
+%  lookup(atom) :: request(A,element(A)).
+%  browse(eref) :: request(A,items(A)).
+%  search(text) :: request(A,items(A)).
 %
 %  items(A) == pair(natural,list(element(A))).
 %  pair(X,Y) ---> X-Y.
@@ -247,60 +266,94 @@ lazy_nth1(I, [],     M,T-More, X) :-
 %  If the Musicbrainz server returns an error term. E is an XML
 %  element containing supplementary information returned by the server.
 mb_query(Class,Req,Opts,Return) :-
+   select_option(fmt(Fmt),Opts,Opts1,xml),
    insist(mb_class(Class),unrecognised_class(Class)),
-   request_params(Req,Class,Opts,Decode,PathParts,Params),
+   request_params(Req,Class,Opts1,Decode,PathParts,Params),
    concat_atom(['/ws/2/'|PathParts],Path),
-   get_xml([host('musicbrainz.org'), path(Path), search(Params)], [Root]),
-   (  Root=element(error,_,_) -> throw(mb_error(Root))
-   ;  call(Decode,Class,Root,Return)
+   get_doc(Fmt, [host('musicbrainz.org'), path(Path), search([fmt=Fmt|Params])], Doc),
+   (  decode_error(Fmt,Doc,Msg)
+   -> throw(mb_error(q(Class,Req,Opts),Msg))
+   ;  call(Decode,Fmt,Class,Doc,Return)
    ).
 
+decode_error(xml,[element(error,_,E)],Msg) :- get_text(E,Msg).
+decode_error(json,Dict,Msg) :- get_dict(error,Dict,Msg).
 
-%% request_params(+R:request(A), +T:mb_class, +O:list(option), +Decode:pred(+atom,+dom,-A), -T:list(atom), -P:list(param)) is det.
+%% request_params(+R:request(A), +T:mb_class, +O:list(option), +Decode:pred(+atom,+atom,+dom,-A), -T:list(atom), -P:list(param)) is det.
 %
 %  Takes a request and a list of Name=Value pairs and produces a URL path and list of parameters
 %  for that request. Only options valid for the given request are permitted.
 %
 %  @throws unrecognised_options(Opts:list(option))
 %  if the given request type does not recognise any of the supplied options.
-request_params(lookup(Id),    C, O, doc_item,  [C,'/',Id], Params)  :- process_options([inc],O,Params).
-request_params(browse(LC,Id), C, O, doc_items, [C], [LC=Id|Params]) :- 
-   insist(link(C,LC),invalid_link(C,LC)),
-   process_options([limit,offset,inc],O,Params).
+request_params(lookup(Id),   C, O, doc_item,  [C,'/',Id], Params)  :- process_options([inc(C)],O,Params).
+request_params(browse(Link), C, O, doc_items, [C], [LC=Id|Params]) :- 
+   (Link=LC-Id; mb_id(Link,Id), mb_class(Link,LC)),
+   process_options([inc(C),limit,offset],O,Params),
+   insist(link(C,LC),invalid_link(C,LC)).
 request_params(search(Query), C, O, doc_items, [C], [query=Q|Params]) :- 
+   process_options([inc(C),limit,offset],O,Params),
    (  atom(Query) -> Q=Query 
    ;  string(Query) -> atom_string(Q,Query)
    ;  class_fields(C,Fields),
       lucene_codes(Query,[fields(Fields)],Cs), 
       atom_codes(Q,Cs)
-   ),
-   process_options([inc,limit,offset],O,Params).
+   ).
 
 % Convert list of valid Name=Value pairs and produce params for HTTP query.
 process_options(ValidOpts,Opts,Params) :- process_options(ValidOpts,Opts,Params,[]).
-process_options([],Opts) --> ({Opts=[]} -> []; {throw(unrecognised_options(Opts))}).
-process_options([Nm|NS],O1) -->
-   ({O=..[Nm,Val], select_option(O,O1,O2)} -> [Nm=Val];{O2=O1}),
-   process_options(NS,O2).
 
-doc_item(Class,Root,Item) :- xpath(Root,Class,Item).
-doc_items(Class,Root,Total-Items) :-
+process_options([],Opts) --> 
+   ({Opts=[]} -> []; {throw(unrecognised_options(Opts))}).
+process_options([Spec|SS],O1) -->
+   ({opt(Spec,Param,O1,O2)} -> [Param];{O2=O1}),
+   process_options(SS,O2).
+
+opt(limit,limit=L) --> select_option(limit(L)), {must_be(natural,L)}.
+opt(offset,offset=O) --> select_option(offset(O)), {must_be(natural,O)}.
+opt(inc(C),inc=I) --> 
+   % first get include, relation, and level-relation lists,
+   % then translate these into MBZ include keywords and accumulate,
+   % finally stick them all together with + (if not empty list).
+   seqmap(select_list_option, [inc(Is),rels(Rs),lrels(LRs)]), 
+   {phrase( seqmap(checked_seqmap,[inc(C),rel,lrel(C)],[Is,Rs,LRs]), Incs)},
+   {Incs\=[], atomics_to_string(Incs,"+",I)}.
+
+inc(C,I)  --> [I], { class_incs(C,Incs), insist(member(I,Incs),invalid_inc(C,I)) }.
+rel(R)    --> [I], { insist(mb_class(R), invalid_rel(R)), string_concat(R,"-rels",I) }.
+lrel(C,R) --> [I], { insist(C=release, invalid_level_rels),
+                     insist(member(R,[recording,work]), invalid_level_rel(R)),
+                     string_concat(R,"-level-rels",I) }.
+
+select_list_option(Opt,O1,O2) :- select_option(Opt,O1,O2,[]).
+checked_seqmap(P,L) --> {must_be(list,L)}, seqmap(P,L).
+
+doc_item(xml,Class,[Root],Item) :- xpath(Root,Class,Item).
+doc_item(json,Class,Dict,Dict) :- is_dict(Dict,Class).
+
+doc_items(xml,Class,[Root],Total-Items) :-
    atom_concat(Class,'-list',ListElem),
    xpath(Root,ListElem,List),
    mb_facet(List,count(Total)),
    List=element(_,_,Items).
 
+doc_items(json,Class,Dict,Total-Items) :-
+   atom_concat(Class,'s',ItemsField),
+   get_dict(count,Dict,Total),
+   get_dict(ItemsField,Dict,Items),
+   maplist(tag_dict(Class),Items).
+
+tag_dict(Tag,Dict) :- is_dict(Dict,Tag).
+
 % would like to use http_open, but it doesn't handle MBZ error documents properly.
-get_xml(URLSpec,Doc) :- 
-   debug(musicbrainz,'Query URL: ~q',[URLSpec]),
+get_doc(xml,URLSpec,Doc) :- 
    http_get([port(80)|URLSpec],Doc,[content_type('text/xml'),dialect(xml)]).
 
-% get_xml(URLSpec,Doc) :-
-%    debug(musicbrainz,'Query URL: ~w',[URLSpec]),
-%    setup_call_cleanup( 
-%       http_open(URLSpec,Stream,[]),
-%       load_xml(Stream,Doc,[]),
-%       close(Stream)).
+get_doc(json,URLSpec,Doc) :-
+   setup_call_cleanup( 
+      http_open(URLSpec,Stream,[request_header('Accept'='application/json')]),
+      json_read_dict(Stream,Doc),
+      close(Stream)).
 
 %% mb_facet( +E:element, ?Facet:facet) is nondet.
 %
@@ -374,6 +427,7 @@ facet( label_info(Y),    elem('label-info-list',_,X), xp(X,'label-info',Y)).
 facet( label_code(Y),    elem('label-code',_,X), get_text(X,Y)).
 facet( relation(E,R), elem('relation-list',As,Es), decode_relations(As,Es,E,R)).
 facet( tags(Tags),    elem('tag-list',_,Es), maplist(get_tag,Es,Tags)).
+facet( iswc(Y),    elem('iswc-list',_,X), xp(X,iswc(text),Y)).
 
 get_tag(E,N-CC) :- 
    xpath(E,name(text),N),
@@ -399,6 +453,10 @@ xp(Elems,Selector,Val) :- xpath(element(e,[],Elems),Selector,Val).
 %% mb_id(+E:element(_), -Id:atom) is semidet.
 %  Short accessor for entity Id.
 mb_id(E,Id) :- mb_facet(E,id(Id)).
+
+%% mb_class(+E:element(_), -T:mb_class) is semidet.
+%  Short accessor for entity class.
+mb_class(element(T,_,_),T).
 
 %% mb_id_uri(+T:mb_class,+ID:atom,-URI:atom) is det.
 %% mb_id_uri(-T:mb_class,-ID:atom,+URI:atom) is semidet.
@@ -431,13 +489,31 @@ mb_class('release-group').
 mb_class(area).
 mb_class(url).
 
+mb_non_core(rating).
+mb_non_core(tag).
+mb_non_core(collection).
+mb_non_core(discid).
+mb_non_core(isrc).
+mb_non_core(iswc).
+
 % For more convenient display of elements.
 user:portray(E) :-
-   E=element(T,_,_), mb_class(T),
-   mb_facet(E,id(Id)),
+   E=element(T,_,_), mb_class(T), 
+   mb_facet(E,id(Id)), !,
    (  mb_facet(E,name(Name)), truncate(40,Name,SName)
    -> format('<mb:~w/~w|~w>',[T,Id,SName])
    ;  mb_facet(E,title(Title)), truncate(40,Title,STitle)
+   -> format('<mb:~w/~w|~w>',[T,Id,STitle])
+   ;  format('<mb:~w/~w>',[T,Id])
+   ).
+
+% for dicts
+user:portray(Dict) :-
+   is_dict(Dict,T), mb_class(T), 
+   get_dict(id,Dict,Id), !,
+   (  get_dict(name,Dict,Name), truncate(40,Name,SName)
+   -> format('<mb:~w/~w|~w>',[T,Id,SName])
+   ;  get_dict(title,Dict,Title), truncate(40,Title,STitle)
    -> format('<mb:~w/~w|~w>',[T,Id,STitle])
    ;  format('<mb:~w/~w>',[T,Id])
    ).
@@ -481,7 +557,19 @@ class_fields( work,
 class_fields( annotation, [text,type,name,entity]).
 class_fields('FreeDB', [artist,title,discid,cat,year,tracks]).
 
+class_incs(artist, [recordings,releases,'release-groups',works]).
+class_incs(label,  [releases]).
+class_incs(recording, [artists,releases]).
+class_incs(release, [artists,labels,recordings,'release-groups']).
+class_incs('release-group',[artists,releases]).
+class_incs(_,[discids,media,isrcs,'artist-credits','various-artists']).
+class_incs(_,[aliases,annotation,tags,ratings,'user-tags','user-ratings']).
+
 insist(G,Ex) :- call(G) -> true; throw(Ex).
 prolog:message(unrecognised_class(C)) --> ["'~w' is not a recognised Musibrainz entity class."-[C]].
 prolog:message(unrecognised_property(Spec)) --> ["No facet for property ~q"-[Spec]].
 prolog:message(invalid_link(C1,C2)) --> ["Cannot browse class ~w via links to '~w'."-[C1,C2]].
+prolog:message(invalid_inc(C,I)) --> ["~w in not a valid inc parameter for ~w resources."-[I,C]].
+prolog:message(invalid_level_rels) --> ["Work- or recording-level relationships can only be requested for releases"].
+prolog:message(invalid_level_rel(I)) --> ["~w relationships cannot be requested."-[I]].
+prolog:message(mb_error(_,E)) --> {xpath(E,text(text),Text)}, ["MBZ error: ~w"-[Text]].

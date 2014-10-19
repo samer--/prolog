@@ -10,10 +10,10 @@ Install this pack. Then load the modules:
 ==
 ?- use_module(library(musicbrainz)).
 ==
-Then, simple search returning a 'goodness of match' in Score, a Musicbrainz ID
-in ID, and an XML element in E, then extracting info from E with mb_facet/2:
+Then, simple search returning a 'goodness of match' in Score
+and an XML element in E, then extracting info from E with mb_facet/2:
 ==
-?- mb_search(artist,'John Coltrane',Score,Id,E), forall(mb_facet(E,F),writeln(F)).
+?- mb_search(artist,'John Coltrane',Score,E), forall(mb_facet(E,F),(print(F),nl)).
 ==
 Lucene search for releases with 'trane' in the title but not by anyone
 with 'coltrane' in the name, using general purpose mb_query/5 to get progress info:
@@ -22,14 +22,14 @@ with 'coltrane' in the name, using general purpose mb_query/5 to get progress in
 ==
 Search for artist then browse releases:
 ==
-?- mb_search(artist,'John Coltrane',_,Id,_),
-   mb_browse(release,artist,Id,E),
+?- mb_search(artist,'John Coltrane',_,Artist),
+   mb_browse(release,Artist,E),
 	forall(mb_facet(E,F),(print(F),nl)).
 ==
 Lucene search for male artist then direct lookup all releases:
 ==
-?- mb_search(artist,[coltrane, gender:male],_,Id,_), 
-   mb_query(artist,lookup(Id),[inc(releases)],Item), 
+?- mb_search(artist,[coltrane, gender:male],_,Artist), 
+   mb_lookup(Artist,[inc([releases])],Item), 
 	forall(mb_facet(Item,F),(print(F),nl)).
 ==
 
@@ -42,8 +42,53 @@ by default when you install SWI Prolog.
 
 ---++++ Planned enhancements
 
-	*	Add more facets for extracting data from XML elements.
-	*	Do some checking to enforce valid queries, eg checking that the fields
-		in a Lucene query match the entity type being searched for, checking
-		that includes match the entity type being retrieved.
+	*	Switch to JSON return format for an easier life.
 
+---++++ Changes in v0.6
+
+   *  CHANGED mb_browse/3 and mb_query(_,browse(...),...)
+      In line with the changes to mb_lookup/3 in v0.5, browse queries now accept the
+      linked-to entity either as a pair Class-Id or an element returned by a previous
+      query.
+
+	*  CHANGED mb_search/5 to mb_search/4.
+		Thanks to changes in mb_browse and mb_lookup, there is not so much need to deal
+		with Musicbrainz IDs directly, so this has been removed from mb_search.
+
+	*  ADDED beginnings of JSON and dict support for planned switch away from XML.
+
+---++++ Changes in v0.5
+
+Quite a few changes in this version.
+
+   *  ADDED mb_class/2
+      This extracts the MB class name of an XML entity.
+
+   *  CHANGED mb_lookup/3 
+      now accepts options as the second parameter, and instead of accepting the
+      class and ID of an entity as the first two parameters, these are now expected as
+      a pair (Class-ID). Alternatively an XML element returned by a previous query can be
+      used, in which case the class and ID will be extracted.
+
+   *  CHANGED inc parameter handling.
+      Instead of accepting a single inc option string as expected by the MBZ server,
+      inclusions are now specified in a more structured way, with validation.
+
+      Ordinary includes are specified using the =|inc(Includes:list(atom))|= option, where
+      Includes is a list of atoms chosen from =|[recordings,releases,artists, ...]|=, ie
+      the standard MBZ API names. These are validated with respect to the kind of entity
+      being retrieved.
+
+      Relations to include are specified using the =|rels(Rels:list(mb_class))|= option,
+      which accepts a list of MBZ class names. The are checked and translated 
+      by having "-rels" appended.
+
+      The "work-level-rels" and "recording-level-rels" includes are specified using the
+      =|lrels(LRs:list(oneof([recording,work])))|= option, and can only be used when
+      querying releases.
+
+   *  ADDED lots of facets
+      More facets are understood, but the code is starting to get messy. I plan to switch
+      to receiving JSON enceded results from the server, and also change to a more
+      compositional facet definition scheme so that derived facets can be defined in terms
+      of lower-level facets.
