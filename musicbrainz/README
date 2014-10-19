@@ -51,11 +51,11 @@ by default when you install SWI Prolog.
       linked-to entity either as a pair Class-Id or an element returned by a previous
       query.
 
-	*  CHANGED mb_search/5 to mb_search/4.
-		Thanks to changes in mb_browse and mb_lookup, there is not so much need to deal
-		with Musicbrainz IDs directly, so this has been removed from mb_search.
+   *  CHANGED mb_search/5 to mb_search/4.
+      Thanks to changes in mb_browse and mb_lookup, there is not so much need to deal
+      with Musicbrainz IDs directly, so this has been removed from mb_search.
 
-	*  ADDED beginnings of JSON and dict support for planned switch away from XML.
+   *  ADDED beginnings of JSON and dict support for planned switch away from XML.
 
 ---++++ Changes in v0.5
 

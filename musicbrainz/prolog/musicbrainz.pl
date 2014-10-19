@@ -186,9 +186,8 @@ mb_search(T,Term,Score,Item) :-
 %  Executes multiple queries to page through an arbitrary number of results.
 mb_browse(T,Link,Item) :- mb_query(T,browse(Link),[],_,Item).
 
-%% mb_lookup(+E:pair(mb_class,atom), +Opts:options, -Item:element(T)) is semidet.
-%% mb_lookup(+E:element(T), +Opts:options, -Item:element(T)) is semidet.
-%% mb_lookup(+E:element(T), -Item:element(T)) is semidet.
+%% mb_lookup(+E:eref, +Opts:options, -Item:element(T)) is semidet.
+%% mb_lookup(+E:eref, -Item:element(T)) is semidet.
 %
 %  Lookup a Musicbrainz entity. The entity E can be specified either as a pair Type-Id
 %  or a previously returned XML element.

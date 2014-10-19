@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=musicbrainz
-VER=0.6.0
+VER=0.6.1
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
@@ -23,7 +23,7 @@ pack: packdir
 	git add $(PACKFILE)
 
 push:
-	git push && chmod -w $(PACKNAME)
+	git push && chmod -w $(PACKFILE)
 
 install: pack
 	swipl -g "pack_install('$(PACKFILE)'), halt"
