@@ -166,6 +166,10 @@
 
 
 :- setting(limit,integer,20,'Default limit for Musicbrainz search and browse queries').
+:- setting(min_wait,number,0.5,'Minimum time between Musicbrainz requests').
+
+% for rate limiting.
+:- initialization nb_setval(next_request_time,0). 
 
 %% mb_search(+T:mb_class, +Term:text, -Score:between(0,100), -Item:element(T)) is nondet.
 %
@@ -269,6 +273,7 @@ mb_query(Class,Req,Opts,Return) :-
    insist(mb_class(Class),unrecognised_class(Class)),
    request_params(Req,Class,Opts1,Decode,PathParts,Params),
    concat_atom(['/ws/2/'|PathParts],Path),
+   wait_respectfully,
    get_doc(Fmt, [host('musicbrainz.org'), path(Path), search([fmt=Fmt|Params])], Doc),
    (  decode_error(Fmt,Doc,Msg)
    -> throw(mb_error(q(Class,Req,Opts),Msg))
@@ -277,6 +282,20 @@ mb_query(Class,Req,Opts,Return) :-
 
 decode_error(xml,[element(error,_,E)],Msg) :- get_text(E,Msg).
 decode_error(json,Dict,Msg) :- get_dict(error,Dict,Msg).
+
+% this allows us to respect the rate limit on Musicbrainz requests
+% using a minimum time interval between requests and the next allowable
+% time to make the next request.
+wait_respectfully :-
+   get_time(Now),
+   setting(min_wait,TMin),
+   nb_getval(next_request_time,T0), T1 is max(Now,T0) + TMin,
+   nb_setval(next_request_time,T1),
+   (  Now>=T0 -> true
+   ;  DT is T0-Now, 
+      debug(musicbrainz,"Sleeping for ~f seconds to respect rate limit",[DT]),
+      sleep(DT)
+   ).
 
 %% request_params(+R:request(A), +T:mb_class, +O:list(option), +Decode:pred(+atom,+atom,+dom,-A), -T:list(atom), -P:list(param)) is det.
 %
