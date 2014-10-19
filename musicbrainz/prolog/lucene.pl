@@ -69,7 +69,7 @@
          the edit distance parameter. Lucene's default is 2.
       2. Unlike Lucene's bare quoted term, the (//)/2 must have a number to use as a 
          'slop' parameter. Supplying zero replicates Lucene's treatment of a bare quoted phrase.
-      3. (+)/2 and (-)/2 cannot be composed: this is a contradiction that results in 
+      3. (+)/1 and (-)/1 cannot be composed: this is a contradiction that results in 
          error. (+)/2 and (-)/2 are both idempotent.
       4. Prolog's (-)/1 and (+)/2 operates bind tighter than (:)/2 operators, which is the
          wrong way round

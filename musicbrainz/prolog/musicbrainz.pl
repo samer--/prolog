@@ -427,6 +427,9 @@ facet( label_code(Y),    elem('label-code',_,X), get_text(X,Y)).
 facet( relation(E,R), elem('relation-list',As,Es), decode_relations(As,Es,E,R)).
 facet( tags(Tags),    elem('tag-list',_,Es), maplist(get_tag,Es,Tags)).
 facet( iswc(Y),    elem('iswc-list',_,X), xp(X,iswc(text),Y)).
+facet( iswc(Y),    elem('iswc',_,X), get_text(X,Y)).
+facet( isrc(Y),    elem('isrc-list',_,X), xp(X,isrc(text),Y)).
+facet( isrc(Y),    elem('isrc',_,X), get_text(X,Y)).
 
 get_tag(E,N-CC) :- 
    xpath(E,name(text),N),
