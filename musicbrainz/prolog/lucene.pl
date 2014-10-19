@@ -6,11 +6,10 @@
 
 /** <module> A DCG for generating Lucene searches
 
-   Right. First of, forget everything you know about Lucene's search syntax.
-   It's a load of bollocks. Especially the boolean operators. After spending
-   the best part of a day trawling throught the Lucene source code, which is
-   a shocking mess, I have determined, to the best of my abilities, a data type
-   which represents the internal structure of a Lucene query. Basically, a query
+   Right. First off, forget everything you know about Lucene's search syntax.
+   Especially the boolean operators, which do not work in any logical way.
+   This library is based on a data type which, as far as I can determine,
+   represents the internal structure of a Lucene query. Basically, a query
    is a triple of a modifier (Lucene +, -, or <none>), a numerical boost (Lucene ^
    operator), and a, for want of a better name, a 'part'. I could have called it
    a query 'component', but 'part' is a shorter word that means the same thing.
@@ -123,7 +122,7 @@
    and are best avoided. Also, it does not parse field names applied to componound queries
    or the postfix '~' operator.
 
-   See (if you must) 
+   See (though I warn you it will not be especially enlightening) 
       https://lucene.apache.org/core/4_3_0/queryparser/org/apache/lucene/queryparser/classic/package-summary.html#package_description
 */
 
