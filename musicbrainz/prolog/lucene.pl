@@ -164,8 +164,8 @@ eval(Ws//D, q(_,1,_:phrase(Ws,D))) :- insist(maplist(atomic,Ws)), insist(number(
 eval(Min-Max, q(_,1,_:range_exc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
 eval(Min+Max, q(_,1,_:range_inc(Min,Max))) :- insist(atomic(Min)), insist(atomic(Max)).
 
-eval(+F:E, C) :- eval(+(F:E),C). % kludge to fix operator precedence
-eval(-F:E, C) :- eval(-(F:E),C). % kludge to fix operator precedence
+eval(+F:E, C) :- !, eval(+(F:E),C). % kludge to fix operator precedence
+eval(-F:E, C) :- !, eval(-(F:E),C). % kludge to fix operator precedence
 eval(F:E, C) :- eval(E,C), apply_field(F,C).
 eval(Es, q(_,1,comp(Cs2))) :- is_list(Es), maplist(eval,Es,Cs2).
 eval(E1^B, q(M,B2,Q)) :- eval(E1,q(M,B1,Q)), B2 is B1*B.
