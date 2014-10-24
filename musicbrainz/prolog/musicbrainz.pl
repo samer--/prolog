@@ -161,6 +161,7 @@
 :- use_module(library(http/http_sgml_plugin)).
 :- use_module(library(http/json)).
 :- use_module(library(xpath)).
+:- use_module(library(error)).
 :- use_module(library(dcg_core)).
 :- use_module(lucene).
 
@@ -530,7 +531,7 @@ user:portray(E) :-
 
 % for dicts
 user:portray(Dict) :-
-   is_dict(Dict,T), mb_class(T), 
+   is_dict(Dict,T), nonvar(T), mb_class(T), 
    get_dict(id,Dict,Id), !,
    (  get_dict(name,Dict,Name), truncate(40,Name,SName)
    -> format('<mb:~w/~w|~w>',[T,Id,SName])
@@ -594,3 +595,5 @@ prolog:message(invalid_inc(C,I)) --> ["~w in not a valid inc parameter for ~w re
 prolog:message(invalid_level_rels) --> ["Work- or recording-level relationships can only be requested for releases"].
 prolog:message(invalid_level_rel(I)) --> ["~w relationships cannot be requested."-[I]].
 prolog:message(mb_error(_,E)) --> {xpath(E,text(text),Text)}, ["MBZ error: ~w"-[Text]].
+
+error:has_type(natural,X) :- number(X), between(0,inf,X).
