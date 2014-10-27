@@ -328,8 +328,8 @@ process_options([Spec|SS],O1) -->
    ({opt(Spec,Param,O1,O2)} -> [Param];{O2=O1}),
    process_options(SS,O2).
 
-opt(limit,limit=L) --> select_option(limit(L)), {must_be(natural,L)}.
-opt(offset,offset=O) --> select_option(offset(O)), {must_be(natural,O)}.
+opt(limit,limit=L) --> select_option(limit(L)), {must_be(between(1,inf),L)}.
+opt(offset,offset=O) --> select_option(offset(O)), {must_be(between(0,inf),O)}.
 opt(inc(C),inc=I) --> 
    % first get include, relation, and level-relation lists,
    % then translate these into MBZ include keywords and accumulate,
@@ -595,5 +595,3 @@ prolog:message(invalid_inc(C,I)) --> ["~w in not a valid inc parameter for ~w re
 prolog:message(invalid_level_rels) --> ["Work- or recording-level relationships can only be requested for releases"].
 prolog:message(invalid_level_rel(I)) --> ["~w relationships cannot be requested."-[I]].
 prolog:message(mb_error(_,E)) --> {xpath(E,text(text),Text)}, ["MBZ error: ~w"-[Text]].
-
-error:has_type(natural,X) :- number(X), between(0,inf,X).
