@@ -170,7 +170,11 @@
 :- setting(min_wait,number,0.5,'Minimum time between Musicbrainz requests').
 
 % for rate limiting.
-:- initialization nb_setval(next_request_time,0). 
+:- initialization set_state(next_request_time,0). 
+
+:- dynamic state/2.
+set_state(Name,Value) :- retractall(state(Name,_)), assert(state(Name,Value)).
+get_state(Name,Value) :- state(Name,Value).
 
 %% mb_search(+T:mb_class, +Term:text, -Score:between(0,100), -Item:element(T)) is nondet.
 %
@@ -290,8 +294,8 @@ decode_error(json,Dict,Msg) :- get_dict(error,Dict,Msg).
 wait_respectfully :-
    get_time(Now),
    setting(min_wait,TMin),
-   nb_getval(next_request_time,T0), T1 is max(Now,T0) + TMin,
-   nb_setval(next_request_time,T1),
+   get_state(next_request_time,T0), T1 is max(Now,T0) + TMin,
+   set_state(next_request_time,T1),
    (  Now>=T0 -> true
    ;  DT is T0-Now, 
       debug(musicbrainz,"Sleeping for ~f seconds to respect rate limit",[DT]),
