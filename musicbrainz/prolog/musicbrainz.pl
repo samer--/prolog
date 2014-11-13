@@ -10,6 +10,7 @@
    ,  mb_id_uri/3
    ,  mb_uri/2
    ,  mb_class/2
+   ,  mb_lazy_query/4
 	]).
 
 /** <module> Interface to Musicbrainz XML web service
@@ -237,6 +238,24 @@ mb_query(Class,Req,Opts,I/Total,Item) :-
       lazy_nth1(I,Items,0,Total-items(Class,Req,Opts3),Item)
    ).
 
+% Query results as a lazy list rather than nondet predicate
+mb_lazy_query(Class,Req,Opts1,Items) :-
+   setting(limit,DL),
+   select_option(limit(L),Opts1,Opts2,DL),
+   select_option(offset(O),[limit(L)|Opts2],Opts3,0),
+   freeze(Items,grow_tail(items(Class,Req,Opts3),1,O,Items)).
+
+grow_tail(More,Total,Seen,Items) :-
+   (  Total=<Seen -> Items=[]
+   ;  call(More,Seen,Total1-Chunk), % it's ok if Total1 \= Total 
+      append(Chunk,Tail,Items), 
+      length(Chunk,N), 
+      Seen1 is Seen + N,  
+      freeze(Tail,grow_tail(More,Total1,Seen1,Tail))
+   ).
+
+
+   
 
 items(Class,Req,Opts,Offset,Items) :-
    mb_query(Class,Req,[offset(Offset)|Opts],Items).
