@@ -123,6 +123,8 @@
 :- use_module(library(fileutils)).
 
 :- set_prolog_flag(double_quotes,string).
+:- set_prolog_flag(back_quotes,codes).
+
 :- setting(quote_method,oneof([strong,weak]),strong,"Filename quoting method").
 
 def(cat,      sh($T >> $T,"cat")).
