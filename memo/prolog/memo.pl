@@ -7,7 +7,6 @@
     , (volatile_memo)/1
     , (persistent_memo)/1
     , call_with_mode/2
-    % , hostname/1
     , op(1150,fx,volatile_memo)
     , op(1150,fx,persistent_memo)
     ]).
@@ -105,14 +104,12 @@
 
    The meta-data includes the host name of the computer used to do the 
    computations. On a Unix system, this should get picked up from the environment
-   automatically, using =|getenv('HOSTNAME',Hostname)|= (see getenv/2).
-   If this doesn't work, then you should set the host name explicitly using
-   the hostname/1 directive. It MUST be a directive, not a call, as it gets
-   compiled into the system for each memoised predicate, so you cannot change
-   it afterwards. This must be before any memoised predicate declarations, like this:
-   ==
-   :- hostname(deepthought).
-   ==
+   automatically, using =|getenv('HOSTNAME',Hostname)|= (see getenv/2) OR,
+   if this fails, by calling the shell command 'hostname'.
+   If this doesn't work, then you should set the host name explicitly by declaring
+   user:hostname(Hostname) somewhere in your Prolog initialisation (eg in
+   .plrc).
+
    TODO:
 
    - check for duplicate declarations
@@ -147,16 +144,18 @@
 :- setting(confirmation_style, list(ground), [bold,fg(red)], 'Confirmation message style options.').
 :- setting(confirmation_threshold, integer, 1, 'Maximum entries for silent clear_all deletion.').
 
-:- dynamic hostname/1.
 
-
-init_hostname :-
-   (  predicate_property(user:hostname(_),_) -> hostname(H)
+user:term_expansion(init_hostname,hostname(H)) :-
+   (  predicate_property(user:hostname(_),_) -> user:hostname(H)
    ;  getenv('HOSTNAME',H) -> true
-   ;  H=unknown
+   ;  setup_call_cleanup(open(pipe(hostname),read,S),
+                         read_line_to_codes(S,Codes),
+                         close(S)), atom_codes(H,Codes)
    ),
-   assert(hostname(H)).
+   format("% memo: setting hostname to '~w'.\n",[H]).
 
+:- dynamic hostname/1.
+init_hostname.
 
 %% volatile_memo(+Spec) is det.
 %
@@ -420,9 +419,6 @@ user:term_expansion((:- persistent_memo(Spec)), Clauses) :-
    prolog_load_context(module, Module),
    phrase(compile_memo(persistent, Spec, Module), Clauses).
 
-user:term_expansion((:- hostname(H)), []) :- 
-   retractall(hostname(_)), assert(hostname(H)).
-
 user:term_expansion((Head :- Body),(ComputeHead :- Body)) :-
    prolog_load_context(module, Module),
    computer(Module,Head,_,ComputeHead).
@@ -437,4 +433,3 @@ timed(Goal,comp(_,T1,DT)) :-
 
 reify(Goal,R) :- catch((Goal -> R=ok ; R=fail), Ex, R=ex(Ex)).
 
-:- initialization init_hostname.

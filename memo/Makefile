@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=memo
-VER=0.3.0
+VER=0.3.1
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
@@ -30,4 +30,5 @@ install: pack
 install-git: 
 	(git commit $(PACKFILE) || echo 'Local up to date') && (git push || echo 'Remote up to date')
 	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
+	chmod -w $(PACKFILE)
 
