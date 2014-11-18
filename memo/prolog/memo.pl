@@ -130,6 +130,9 @@
 
 :- multifile memoised/4, asserter/4, retracter/4, computer/4.
 
+:- set_prolog_flag(double_quotes,string).
+:- set_prolog_flag(back_quotes,codes).
+
 :- type pair(A,B) ---> A-B.
 :- type time     == float.
 :- type duration == float.
@@ -141,8 +144,8 @@
                       ; none.
 
 
-:- setting(confirmation_style, list(ground), [bold,fg(red)], 'Confirmation message style options.').
-:- setting(confirmation_threshold, integer, 1, 'Maximum entries for silent clear_all deletion.').
+:- setting(confirmation_style, list(ground), [bold,fg(red)], "Confirmation message style options.").
+:- setting(confirmation_threshold, integer, 1, "Maximum entries for silent clear_all deletion.").
 
 
 user:term_expansion(init_hostname,hostname(H)) :-
@@ -211,14 +214,14 @@ clear_all(Module:Head,Meta) :-
    retracter(Module,Head,Meta,RetractHead), 
    aggregate_all(count,Module:MemoHead,Count),
    setting(confirmation_threshold,Thresh),
-   (Count>Thresh -> confirm(format('Will delete ~d entries.',[Count])); true),
+   (Count>Thresh -> confirm(format("Will delete ~d entries.",[Count])); true),
    call(Module:RetractHead).
 
 confirm(Printer) :-
    setting(confirmation_style,Style),
-   ansi_format(Style,'~@ Type "yes" [return] to proceed: ',[Printer]), 
-   read_line_to_codes(user_input,Response),
-   (Response\="yes" -> throw(operation_cancelled); true).
+   ansi_format(Style,"~@ Type 'yes' [return] to proceed: ",[Printer]), 
+   read_line_to_string(user_input,Response),
+   (Response \= "yes" -> throw(operation_cancelled); true).
 
 %% compute(+Goal:callable) is semidet.
 %
@@ -255,13 +258,13 @@ recompute_all(Module:Head,Meta,Res) :-
    forall( Module:MemoHead, (
       unbind_outputs(Spec,Head,Head1),
       computer(Module,Head1,_,ComputeHead),
-      debug(memo,'recomputing ~q...',[Module:Head1]),
+      debug(memo,"recomputing ~q...",[Module:Head1]),
       (  timed(reify(Module:ComputeHead,Res),Comp) 
-      -> debug(memo,'storing (~w) ~q...',[Res,Module:Head1]),
+      -> debug(memo,"storing (~w) ~q...",[Res,Module:Head1]),
          asserter(Module,Head1,Comp-Res,AssertHead), 
          call(Module:RetractHead), % ideally these would be atomic
          call(Module:AssertHead)
-      ;  debug(memo,'rejecting (~w) ~q...',[Res,Module:Head1])
+      ;  debug(memo,"rejecting (~w) ~q...",[Res,Module:Head1])
       )
    )).
 
@@ -296,11 +299,11 @@ memo(Module:Head,Meta) :-
    computer(Module,Head,Spec,ComputeHead),
    type_and_mode_check(Spec,Head),
    (  call(Module:MemoHead) 
-   *->debug(memo,'found ~q.',[Module:Head])
-   ;  debug(memo,'computing ~q...',[Module:Head]),
+   *->debug(memo,"found ~q.",[Module:Head])
+   ;  debug(memo,"computing ~q...",[Module:Head]),
       timed(reify(Module:ComputeHead,Res),Comp),
       asserter(Module,Head,Meta,AssertHead),
-      debug(memo,'storing (~w) ~q...',[Res,Module:Head]),
+      debug(memo,"storing (~w) ~q...",[Res,Module:Head]),
       Meta=Comp-Res, call(Module:AssertHead)
    ).
 
@@ -312,7 +315,8 @@ reflect(ex(Ex)) :- throw(Ex).
 :- nb_setval(memo_mode,memo).
 
 modally(Module:Head) :-
-   b_getval(memo_mode,Mode),
+   (nb_current(memo_mode,Mode) -> true; nb_setval(memo_mode,memo), Mode=memo),
+   %b_getval(memo_mode,Mode),
    call(Mode,Module:Head).
 
 
@@ -336,7 +340,7 @@ compile_memo(Type, (A,B), Module) --> !,
 
 compile_memo(volatile, Spec, Module) -->
    {  % strip any arg names from spec
-      debug(memo,'registering volatile memo predicate ~q...',[Spec]),
+      debug(memo,"registering volatile memo predicate ~q...",[Spec]),
       Spec =.. [Name|ArgSpecs],
       maplist(strip_name,ArgSpecs,ArgTypes),
       Type =.. [Name|ArgTypes],
@@ -350,8 +354,8 @@ compile_memo(volatile, Spec, Module) -->
       build_term([MemoName], [MetaA|Args], AssertHead),
       build_term([MemoName], [Meta|Args], RetractHead),
       build_term(['compute_',Name],Args, ComputeHead),
-      debug(memo,'-  backed  by ~q...',[MemoName/MemoArity]),
-      debug(memo,'-  computed by ~q...',[ComputeHead]),
+      debug(memo,"-  backed  by ~q...",[MemoName/MemoArity]),
+      debug(memo,"-  computed by ~q...",[ComputeHead]),
       hostname(Host), MetaA=comp(Host,_,_)-_
    },
    [ :- dynamic(MemoName/MemoArity),
@@ -365,7 +369,7 @@ compile_memo(volatile, Spec, Module) -->
 
 compile_memo(persistent, Spec, Module) -->
    {  % strip any arg names from spec
-      debug(memo,'registering persistent memo predicate ~q...',[Spec]),
+      debug(memo,"registering persistent memo predicate ~q...",[Spec]),
       Spec =.. [Name|ArgSpecs],
       maplist(strip_name,ArgSpecs,ArgTypes),
       Type =.. [Name|ArgTypes],
@@ -382,8 +386,8 @@ compile_memo(persistent, Spec, Module) -->
 
       maplist(mtype_to_ptype, ArgSpecs, PTypes),
       PersistencySpec =.. [MemoName,meta:metadata | PTypes],
-      debug(memo,'-  backed  by ~q...',[PersistencySpec]),
-      debug(memo,'- computed by ~q...',[ComputeHead]),
+      debug(memo,"-  backed  by ~q...",[PersistencySpec]),
+      debug(memo,"- computed by ~q...",[ComputeHead]),
       expand_term( (:- persistent(PersistencySpec)), PersistClauses),
       hostname(Host), MetaA=comp(Host,_,_)-_
    },
@@ -395,7 +399,9 @@ compile_memo(persistent, Spec, Module) -->
      (Head :- memo:modally(Module:Head))
    ].
 
-build_term(NameParts,Args,Term) :- atomic_list_concat(NameParts,Name), Term =.. [Name|Args].
+build_term(NameParts,Args,Term) :- 
+   atomic_list_concat(NameParts,Name), 
+   Term =.. [Name|Args].
 
 mtype_to_ptype( +N:T, N:T) :- !.
 mtype_to_ptype( -N:T, N:partial(T)) :- !.
