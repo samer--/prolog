@@ -2,3 +2,4 @@
 *.aux
 *.log
 .DS_Store
+*.o
