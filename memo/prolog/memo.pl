@@ -7,6 +7,7 @@
     , (volatile_memo)/1
     , (persistent_memo)/1
     , call_with_mode/2
+    , current_mode/1
     , op(1150,fx,volatile_memo)
     , op(1150,fx,persistent_memo)
     ]).
@@ -106,9 +107,6 @@
    computations. On a Unix system, this should get picked up from the environment
    automatically, using =|getenv('HOSTNAME',Hostname)|= (see getenv/2) OR,
    if this fails, by calling the shell command 'hostname'.
-   If this doesn't work, then you should set the host name explicitly by declaring
-   user:hostname(Hostname) somewhere in your Prolog initialisation (eg in
-   .plrc).
 
    TODO:
 
@@ -149,8 +147,7 @@
 
 
 user:term_expansion(init_hostname,hostname(H)) :-
-   (  predicate_property(user:hostname(_),_) -> user:hostname(H)
-   ;  getenv('HOSTNAME',H) -> true
+   (  getenv('HOSTNAME',H) -> true
    ;  setup_call_cleanup(open(pipe(hostname),read,S),
                          read_line_to_codes(S,Codes),
                          close(S)), atom_codes(H,Codes)
@@ -319,6 +316,9 @@ modally(Module:Head) :-
    %b_getval(memo_mode,Mode),
    call(Mode,Module:Head).
 
+%% current_mode(-Mode:oneof([memo,browse,compute])) is det.
+%  Gets the current memoisation mode.
+current_mode(Mode) :- nb_getval(memo_mode,Mode).
 
 %% call_with_mode(+Mode:oneof([memo,browse,compute]), +Goal:callable) is nondet.
 %
