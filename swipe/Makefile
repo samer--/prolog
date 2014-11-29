@@ -9,6 +9,8 @@ VER=$(shell cat VERSION)
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
+all: pack
+
 packdir:
 	mkdir -p $(PACKNAME) $(PACKNAME)/prolog 
 	sed -e "s/<VER>/$(VER)/g" < pack.pl | sed -e "s/<PACKNAME>/$(PACKNAME)/g" > $(PACKNAME)/pack.pl
@@ -20,16 +22,12 @@ pack: packdir
 	rm -rf $(PACKNAME)
 	git add $(PACKFILE)
 
-foreign: 
-	make -C c
-
 install: pack
-	swipl -g "pack_install('$(PACKFILE)'), halt"
+	swipl -f none -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 
 	(git commit $(PACKFILE) || echo 'Local up to date') && (git push || echo 'Remote up to date')
-	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
+	swipl -f none -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
 	chmod -w $(PACKFILE)
 
 dist-clean:
-	echo 'Nothing to do'

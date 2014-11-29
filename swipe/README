@@ -22,3 +22,6 @@ swipe:def(sort, sh($T>>$T,"sort")).
 	* Added with_pipe_output/3 and with_pipe_input/3.
 	* Now depends on fileutils pack.
 
+---++++ Version 0.2.0
+
+	* Moved with_temp_dir/2 to fileutils pack.

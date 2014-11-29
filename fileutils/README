@@ -3,3 +3,8 @@ SWIs built-in facilities from library(readutil) and with_output_to/2 etc.
 
 See library(fileutils) module header for more information.
 
+### New in version 0.2.0
+
+- Moved with_temp_dir/2 from swipe package.
+- Added in_temp_dir/1.
+

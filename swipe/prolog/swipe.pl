@@ -4,7 +4,6 @@
    ,  command/3
    ,  with_pipe_output/3
    ,  with_pipe_input/3
-   ,  with_temp_dir/2
    ,  op(300,xfy,:>)
    ,  op(300,yfx,>:)
    ,  op(200,fy,@)
@@ -115,7 +114,6 @@
    * Decide on best quoting/escaping mechanism
 */
 
-:- meta_predicate with_temp_dir(-,0).
 :- meta_predicate with_pipe_output(-,+,0), with_pipe_input(-,+,0).
 :- multifile def/2.
 
@@ -227,30 +225,6 @@ with_pipe_input(S,Pipe,Goal) :-
    command(Pipe, $_ >> 0, Cmd),
    with_stream(S, open(pipe(Cmd),write,S), Goal).
 
-%% with_temp_dir(Dir:text, Goal:callable) is nondet.
-%
-%  Runs any Prolog goal with Dir unified with the name of
-%  a temporary directory which is created on entry and deleted
-%  when Goal is finished.
-with_temp_dir(Dir,Goal) :-
-   tmp_file(score,Dir),
-   debug(swipe,"Will make dir ~w...",Dir),
-   setup_call_cleanup(
-      make_directory(Dir), Goal,
-      delete_directory_recursive(Dir)).
-
-delete_directory_recursive(Dir) :-
-   directory_files(Dir,Files),
-   maplist(delete(Dir),Files),
-   debug(swipe,"Deleting directory '~w'...",[Dir]),
-   delete_directory(Dir).
-
-delete(_,'.') :- !.
-delete(_,'..') :- !.
-delete(Dir,File) :-
-   debug(swipe,"Deleting file '~w'...",[Dir/File]),
-   atomics_to_string([Dir,"/",File],Path),
-   delete_file(Path).
 
 quote(strong,Codes) --> "'", esc(strong,Codes), "'".
 quote(weak,Codes) --> "\"", esc(weak,Codes), "\"".

@@ -12,8 +12,12 @@
       file_under/4,           % +Root, +Pattern, -File, -RelPath
 
       file_extension/2,
-      extension_in/2
+      extension_in/2,
+
+      with_temp_dir/2,        % @Dir, +Goal
+      in_temp_dir/1           % +Goal          
 	]).
+
 /** <module> File reading, writing, and finding utilities
 
    This module provides a number of meta-predicates for directing the
@@ -70,7 +74,9 @@
 		with_input_from_file(+,0),
 		with_input_from_file(+,0,+),
 		with_input_from(+,0), 
-		with_stream(-,0,0). 
+		with_stream(-,0,0), 
+      with_temp_dir(-,0),
+      in_temp_dir(0).
 
 
 %% with_stream( @Stream, :Opener, :Goal) is semidet.
@@ -316,4 +322,45 @@ file_extension(Path,Ext) :-
 extension_in(Path,Exts) :- 
    file_extension(Path,Ext), 
    memberchk(Ext,Exts).
+
+
+%% in_temp_dir(+Goal:callable) is semidet.
+%
+%  Calls Goal with the current
+%  directory set to a newly created directory (using
+%  with_temp_dir/2) which is deleted after the call is
+%  finished. Goal is called as =|once(Goal)|= to ensure 
+%  that the working directory is restored to its original
+%  value for any subsequent goals.
+in_temp_dir(Goal) :-
+   with_temp_dir(Dir,
+      setup_call_cleanup( 
+         working_directory(Old,Dir), once(Goal),
+         working_directory(_,Old))).
+      
+
+%% with_temp_dir(@Dir:path, +Goal:callable) is nondet.
+%
+%  Calls Goal with Dir bound to a new temporary directory.
+%  Once Goal is finished, the directory and its contents are deleted.
+with_temp_dir(Dir,Goal) :-
+   tmp_file(score,Dir),
+   debug(fileutils(temp),"Will make dir ~w...",Dir),
+   setup_call_cleanup(
+      make_directory(Dir), Goal,
+      delete_directory_recursive(Dir)).
+
+delete_directory_recursive(Dir) :-
+   directory_files(Dir,Files),
+   maplist(delete(Dir),Files),
+   debug(fileutils(temp),"Deleting directory '~w'...",[Dir]),
+   delete_directory(Dir).
+
+delete(_,'.') :- !.
+delete(_,'..') :- !.
+delete(Dir,File) :-
+   debug(fileutils(temp),"Deleting file '~w'...",[Dir/File]),
+   atomics_to_string([Dir,"/",File],Path),
+   delete_file(Path).
+
 
