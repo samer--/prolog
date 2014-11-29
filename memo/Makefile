@@ -25,10 +25,10 @@ pack: packdir
 dist-clean:
 
 install: pack
-	swipl -g "pack_install('$(PACKFILE)'),halt"
+	swipl -f none -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 
 	(git commit $(PACKFILE) || echo 'Local up to date') && (git push || echo 'Remote up to date')
-	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
+	swipl -f none -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
 	chmod -w $(PACKFILE)
 
