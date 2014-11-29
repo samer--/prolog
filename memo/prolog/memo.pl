@@ -132,6 +132,7 @@
 :- set_prolog_flag(back_quotes,codes).
 
 :- type pair(A,B) ---> A-B.
+:- type module   == atom.
 :- type time     == float.
 :- type duration == float.
 :- type hostname == ground.
@@ -183,15 +184,18 @@ volatile_memo(Spec) :- throw(error(context_error(nodirective, volatile_memo(Spec
 %  Name, if given is only used for the declaration of the persistent memo table.
 persistent_memo(Spec) :- throw(error(context_error(nodirective, persistent_memo(Spec)), _)).
 
-%% browse(?Goal:callable, ?Meta:metadata) is nondet.
-%% browse(?Goal:callable) is nondet.
+%% browse(+Goal:callable, ?Meta:metadata) is nondet.
+%% browse(+Goal:callable) is nondet.
 %
 %  Looks up previous computations of memoised predicate Goal. browse/1 unifies Goal
 %  with all successful computations. browse/2 unifies Goal and Meta with all computations,
 %  including failed or exception-throwing computations. browse(Goal) is equivalent
 %  to browse(Goal, _-ok).
 browse(Module:Head) :- browse(Module:Head,_-ok).
-browse(Module:Head,Meta) :- memoised(Module,Head,Meta,MemoHead), call(Module:MemoHead).
+browse(Module:Head,Meta) :- 
+   must_be(module,Module),
+   memoised(Module,Head,Meta,MemoHead), 
+   call(Module:MemoHead).
 
 %% clear_all(@Goal:callable, @Meta:metadata) is det.
 %% clear_all(@Goal:callable) is det.
@@ -311,14 +315,14 @@ reflect(ex(Ex)) :- throw(Ex).
 
 :- nb_setval(memo_mode,memo).
 
-modally(Module:Head) :-
-   (nb_current(memo_mode,Mode) -> true; nb_setval(memo_mode,memo), Mode=memo),
-   %b_getval(memo_mode,Mode),
-   call(Mode,Module:Head).
-
 %% current_mode(-Mode:oneof([memo,browse,compute])) is det.
 %  Gets the current memoisation mode.
-current_mode(Mode) :- nb_getval(memo_mode,Mode).
+current_mode(Mode) :- nb_current(memo_mode,Mode), !.
+current_mode(memo).
+
+modally(Module:Head) :-
+   current_mode(Mode),
+   call(Mode,Module:Head).
 
 %% call_with_mode(+Mode:oneof([memo,browse,compute]), +Goal:callable) is nondet.
 %
@@ -327,7 +331,7 @@ current_mode(Mode) :- nb_getval(memo_mode,Mode).
 %  browse/1 or compute/1 respectively.
 call_with_mode(Mode,Goal) :-
    must_be(oneof([memo,compute,browse]),Mode),
-   b_getval(memo_mode,Mode0),
+   current_mode(Mode0),
    b_setval(memo_mode,Mode),
    catch(Goal,E,(b_setval(memo_mode,Mode0),throw(E))),
    b_setval(memo_mode,Mode0).
