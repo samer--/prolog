@@ -78,6 +78,7 @@
       with_temp_dir(-,0),
       in_temp_dir(0).
 
+:- use_module(library(filesex)).
 
 %% with_stream( @Stream, :Opener, :Goal) is semidet.
 %
@@ -344,23 +345,23 @@ in_temp_dir(Goal) :-
 %  Calls Goal with Dir bound to a new temporary directory.
 %  Once Goal is finished, the directory and its contents are deleted.
 with_temp_dir(Dir,Goal) :-
-   tmp_file(score,Dir),
+   tmp_file(swi,Dir),
    debug(fileutils(temp),"Will make dir ~w...",Dir),
    setup_call_cleanup(
       make_directory(Dir), Goal,
-      delete_directory_recursive(Dir)).
+      delete_directory_and_contents(Dir)).
 
-delete_directory_recursive(Dir) :-
-   directory_files(Dir,Files),
-   maplist(delete(Dir),Files),
-   debug(fileutils(temp),"Deleting directory '~w'...",[Dir]),
-   delete_directory(Dir).
+% delete_directory_recursive(Dir) :-
+%    directory_files(Dir,Files),
+%    maplist(delete(Dir),Files),
+%    debug(fileutils(temp),"Deleting directory '~w'...",[Dir]),
+%    delete_directory(Dir).
 
-delete(_,'.') :- !.
-delete(_,'..') :- !.
-delete(Dir,File) :-
-   debug(fileutils(temp),"Deleting file '~w'...",[Dir/File]),
-   atomics_to_string([Dir,"/",File],Path),
-   delete_file(Path).
+% delete(_,'.') :- !.
+% delete(_,'..') :- !.
+% delete(Dir,File) :-
+%    debug(fileutils(temp),"Deleting file '~w'...",[Dir/File]),
+%    atomics_to_string([Dir,"/",File],Path),
+%    delete_file(Path).
 
 
