@@ -101,8 +101,9 @@ uopt(c(N)) --> " -c", wr(N).
 dotrun(Meth1,Fmt,Graph,File) :-
    dot_method(Meth1,Meth),
    must_be(oneof([svg,png,ps,eps,pdf]),Fmt),
-   format(atom(Cmd),'~w -T~w > "~w.~w"',[Meth,Fmt,File,Fmt]), 
-   format('Running: ~w ...\n',Cmd),
+   (Fmt=svg -> Opts=' -Gfontnames=svg'; Opts=''),
+   format(string(Cmd),'~w~w -T~w > "~w.~w"',[Meth,Opts,Fmt,File,Fmt]), 
+   debug(dot,'Running: ~s ...',Cmd),
 	with_output_to_file(pipe(Cmd),writedcg(Graph)).
 
 %% graph_dot( +G:digraph, +File:atom) is det.
