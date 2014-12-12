@@ -24,7 +24,7 @@ pack: packdir
 
 dist-clean:
 
-install: pack
+install:
 	swipl -f none -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 

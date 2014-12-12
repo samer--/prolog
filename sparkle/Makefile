@@ -23,7 +23,7 @@ pack: packdir
 foreign: 
 	make -C c
 
-install: pack
+install:
 	swipl -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 

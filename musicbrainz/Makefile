@@ -25,7 +25,7 @@ pack: packdir
 push:
 	git push && chmod -w $(PACKFILE)
 
-install: pack
+install:
 	swipl -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 

@@ -22,7 +22,7 @@ pack: packdir
 	rm -rf $(PACKNAME)
 	git add $(PACKFILE)
 
-install: pack
+install: 
 	swipl -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 
