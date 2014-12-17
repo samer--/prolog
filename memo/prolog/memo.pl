@@ -10,6 +10,7 @@
     , current_mode/1
     , op(1150,fx,volatile_memo)
     , op(1150,fx,persistent_memo)
+    , modally/1
     ]).
 
 /** <module> Memoisation of deterministic predicates
@@ -125,6 +126,7 @@
 :- use_module(library(persistency)).
 :- use_module(library(typedef)).
 :- use_module(library(settings)).
+:- use_module(library(sandbox)).
 
 :- multifile memoised/4, asserter/4, retracter/4, computer/4.
 
@@ -319,6 +321,14 @@ reflect(ex(Ex)) :- throw(Ex).
 %  Gets the current memoisation mode.
 current_mode(Mode) :- nb_current(memo_mode,Mode), !.
 current_mode(memo).
+
+
+sandbox:safe_meta(memo:browse(_),[]).
+sandbox:safe_meta(memo:call_with_mode(browse,_),[]) :- !.
+sandbox:safe_meta(memo:call_with_mode(_,G),[G]).
+sandbox:safe_meta(memo:modally(Module:Head),[Module:ComputeHead]) :-
+   computer(Module,Head,_,ComputeHead).
+
 
 modally(Module:Head) :-
    current_mode(Mode),
