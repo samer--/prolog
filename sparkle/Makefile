@@ -5,7 +5,7 @@
 # PLLD=/usr/local/bin/plld -p /usr/local/bin/swipl
 
 PACKNAME=sparkle
-VER=0.0.4
+VER=$(shell cat VERSION)
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 # ---------------- end of configuration ---------------
 
@@ -24,12 +24,12 @@ foreign:
 	make -C c
 
 install:
-	swipl -g "pack_install('$(PACKFILE)'), halt"
+	swipl -f none -g "pack_install('$(PACKFILE)'), halt"
 
 install-git: 
 	(git commit $(PACKFILE) || echo 'Local up to date') && (git push || echo 'Remote up to date')
-	chmod -w $(PACKFILE)
 	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
+	chmod -w $(PACKFILE)
 
 dist-clean:
-	echo 'Nothing to do'
+

@@ -23,16 +23,29 @@
   *   Documentation!
 */
 
+:- use_module(library(sandbox)).
 :- use_module(library(semweb/sparql_client)).
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_codes)).
 :- use_module(sparql_dcg).
+
 
 :- dynamic sparql_endpoint/5.
 :- multifile sparql_endpoint/5.
 :- set_prolog_flag(double_quotes, codes).
 
 :- setting(limit,integer,100,'Default SPARQL SELECT limit').
+
+:- meta_predicate
+      query_phrase(//,-),
+      query_phrase(+,//,-).
+
+sandbox:safe_meta(sparql_dcg:phrase_to_query(Phr,_),[Phr]).
+sandbox:safe_primitive(sparql_dcg:select(_,_,_,_,_)).
+sandbox:safe_primitive(sparql_dcg:describe(_,_,_,_)).
+sandbox:safe_primitive(sparql_dcg:describe(_,_,_)).
+sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
+
 
 ??(Goal) :- setting(limit,L), query_goal(Goal,[limit(L)]).
 ??(EP,Goal) :- setting(limit,L), query_goal(EP,Goal,[limit(L)]).
