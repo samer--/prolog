@@ -126,11 +126,11 @@
       https://lucene.apache.org/core/4_3_0/queryparser/org/apache/lucene/queryparser/classic/package-summary.html#package_description
 */
 
-:- meta_predicate bidi(?,//,0,?,?).
 
 :- use_module(library(dcg/basics)).
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_codes)).
+:- use_module(library(sandbox)).
 
 :- set_prolog_flag(double_quotes, codes).
 
@@ -242,6 +242,9 @@ regexp([C|T],T) --> [C], {\+member(C,"/\\")}.
 
 % no escape sequences, no funny characters allowed.
 field([C|T],T) --> [C], {\+member(C," /+-&|!(){}[]^\"~?:\\")}.
+
+sandbox:safe_primitive(lucene:lucene(_,_,_)).
+sandbox:safe_primitive(lucene:lucene_codes(_,_,_)).
 
 prolog:message(invalid_field(F)) --> 
    ['Fieldname ~w is not recognised in the current Lucene query context.'-[F]].

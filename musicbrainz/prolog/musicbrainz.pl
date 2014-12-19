@@ -74,8 +74,10 @@
    An entity can be referred to either as a pair Class-Id, or an element as returned
    by a previous query:
    ==
-   eref :< pair(mb_class,atom).
-   eref :< element(T) :- mb_class(T).
+   pair(mb_class,atom)       :< eref.
+   element(T) :- mb_class(T) :< eref.
+   uri                       :< eref. 
+   uri :< atom.
    ==
 
    ---++++ Query types
@@ -164,6 +166,7 @@
 :- use_module(library(xpath)).
 :- use_module(library(error)).
 :- use_module(library(dcg_core)).
+:- use_module(library(sandbox)).
 :- use_module(lucene).
 
 
@@ -202,6 +205,7 @@ mb_browse(T,Link,Item) :- mb_query(T,browse(Link),[],_,Item).
 %  Lookup a Musicbrainz entity. The entity E can be specified either as a pair Type-Id
 %  or a previously returned XML element.
 mb_lookup(Class-Id,Opts,Item) :- mb_query(Class,lookup(Id),Opts,Item).
+mb_lookup(URI,Opts,Item) :- atom(URI), mb_id_uri(Class,Id,URI), mb_query(Class,lookup(Id),Opts,Item).
 mb_lookup(E,Opts,Item) :- mb_class(E,T), mb_id(E,Id), mb_query(T,lookup(Id),Opts,Item).
 mb_lookup(E1,E2) :- mb_lookup(E1,[],E2).
 
@@ -293,12 +297,14 @@ lazy_nth1(I, [],     M,T-More, X) :-
 %  If the Musicbrainz server returns an error term. E is an XML
 %  element containing supplementary information returned by the server.
 mb_query(Class,Req,Opts,Return) :-
+   debug(musicbrainz,'Doing mb_query(~q,~q,~q,_)...',[Class,Req,Opts]),
    select_option(fmt(Fmt),Opts,Opts1,xml),
    insist(mb_class(Class),unrecognised_class(Class)),
    request_params(Req,Class,Opts1,Decode,PathParts,Params),
    concat_atom(['/ws/2/'|PathParts],Path),
    wait_respectfully,
    get_doc(Fmt, [host('musicbrainz.org'), path(Path), search([fmt=Fmt|Params])], Doc),
+   debug(musicbrainz,'... Got reply.',[]),
    (  decode_error(Fmt,Doc,Msg)
    -> throw(mb_error(q(Class,Req,Opts),Msg))
    ;  call(Decode,Fmt,Class,Doc,Return)
@@ -330,7 +336,7 @@ wait_respectfully :-
 %  if the given request type does not recognise any of the supplied options.
 request_params(lookup(Id),   C, O, doc_item,  [C,'/',Id], Params)  :- process_options([inc(C)],O,Params).
 request_params(browse(Link), C, O, doc_items, [C], [LC=Id|Params]) :- 
-   (Link=LC-Id; mb_id(Link,Id), mb_class(Link,LC)),
+   (Link=LC-Id; mb_id(Link,Id), mb_class(Link,LC); mb_id_uri(LC,Id,Link)),
    process_options([inc(C),limit,offset],O,Params),
    insist(link(C,LC),invalid_link(C,LC)).
 request_params(search(Query), C, O, doc_items, [C], [query=Q|Params]) :- 
@@ -361,7 +367,7 @@ opt(inc(C),inc=I) -->
    {phrase( seqmap(checked_seqmap,[inc(C),rel,lrel(C)],[Is,Rs,LRs]), Incs)},
    {Incs\=[], atomics_to_string(Incs,"+",I)}.
 
-inc(C,I)  --> [I], { class_incs(C,Incs), insist(member(I,Incs),invalid_inc(C,I)) }.
+inc(C,I)  --> [I], { insist(class_inc(C,I),invalid_inc(C,I)) }.
 rel(R)    --> [I], { insist(mb_class(R), invalid_rel(R)), string_concat(R,"-rels",I) }.
 lrel(C,R) --> [I], { insist(C=release, invalid_level_rels),
                      insist(member(R,[recording,work]), invalid_level_rel(R)),
@@ -370,7 +376,7 @@ lrel(C,R) --> [I], { insist(C=release, invalid_level_rels),
 select_list_option(Opt,O1,O2) :- select_option(Opt,O1,O2,[]).
 checked_seqmap(P,L) --> {must_be(list,L)}, seqmap(P,L).
 
-doc_item(xml,Class,[Root],Item) :- xpath(Root,Class,Item).
+doc_item(xml,Class,[Root],Item) :- once(xpath(Root,Class,Item)).
 doc_item(json,Class,Dict,Dict) :- is_dict(Dict,Class).
 
 doc_items(xml,Class,[Root],Total-Items) :-
@@ -389,6 +395,10 @@ tag_dict(Tag,Dict) :- is_dict(Dict,Tag).
 
 % would like to use http_open, but it doesn't handle MBZ error documents properly.
 get_doc(xml,URLSpec,Doc) :- 
+   (  debugging(musicbrainz) 
+   -> parse_url(URL,URLSpec), debug(musicbrainz,'HTTP get from ~w',[URL])
+   ;  true
+   ),
    http_get([port(80)|URLSpec],Doc,[content_type('text/xml'),dialect(xml)]).
 
 get_doc(json,URLSpec,Doc) :-
@@ -420,13 +430,14 @@ mb_facet(E,Facet) :- var(Facet), !,
    ;  print_message(warning,unrecognised_property(Spec)), fail
    ).
 
-
 mb_facet(E,Facet) :- 
    % if Facet is bound, then this goal ordering goes directly to the info.
    facet(Facet,Spec,Goal), 
    call(Spec,E),
    call(Goal).
 
+
+sandbox:safe_primitive(musicbrainz:mb_facet(_,_)).
 
 % goals for extracting attributes and subelements from an element
 attr(Name,Value,element(_,Attrs,_)) :- member(Name=Value,Attrs). 
@@ -482,12 +493,27 @@ get_tag(E,N-CC) :-
 decode_relations(As,Rs,E,Rel) :-
    member('target-type'=Type,As),
    member(R,Rs),
-   xpath(R,/self(@type),Name),
-   xpath(R,direction(content),[Dir]),
-   xpath(R,Type,Val),
-   (  Dir=backward -> Rel=..[Name,Val,E]
-   ;  Dir=forward  -> Rel=..[Name,E,Val]
+   (  decode_relation(Type,R,E,Rel) *-> true
+   ;  var(Rel) 
+   -> print_message(warning,unrecognised_relation(Type,R)), 
+      fail
    ).
+
+decode_relation(Type,R,E,Rel) :-
+   % could check to see if all attributes and elements are interpreted...
+   xpath(R,/self(@type),Name),
+   xpath(R,Type,Val),
+   relation_opts(R,Opts,[]),
+   (  xpath(R,direction(content),[backward]) 
+   -> Rel=..[Name,Val,E,Opts]
+   ;  Rel=..[Name,E,Val,Opts]
+   ).
+
+relation_opts(R) -->
+   if(xpath(R,begin(content),[Begin]), [begin(Begin)]),
+   if(xpath(R,end(content),[End]), [end(End)]),
+   if(setof(attribute(A),xpath(R,'attribute-list'/attribute(content),[A]),As),
+      list(As)).
 
 get_text(Elems,Text) :- xp(Elems,/self(text),Text).
 get_area(As,Es,Id,F2) :-
@@ -503,8 +529,8 @@ mb_id(E,Id) :- mb_facet(E,id(Id)).
 %  Short accessor for entity class.
 mb_class(element(T,_,_),T).
 
-%% mb_id_uri(+T:mb_class,+ID:atom,-URI:atom) is det.
-%% mb_id_uri(-T:mb_class,-ID:atom,+URI:atom) is semidet.
+%% mb_id_uri(+T:mb_class,+ID:atom,-URI:uri) is det.
+%% mb_id_uri(-T:mb_class,-ID:atom,+URI:uri) is semidet.
 %
 %  Gets the Musicbrainz URI for the given entity type and ID.
 %  It can also work in reverse: given a URI, it can return the
@@ -515,7 +541,7 @@ mb_id_uri(Class,Id,URI) :-
    atomic_list_concat(['http:','','musicbrainz.org',Class,IdHash],'/',URI),
    atom_concat(Id,'#_',IdHash).
 
-%% mb_uri(+E:element(_),-URI:atom) is det.
+%% mb_uri(+E:element(_),-URI:uri) is det.
 %  Get Musicbrainz URI for a given element. This can be used, for example,
 %  to query the linkedbrainz.org SPARQL endpoint.
 mb_uri(E,URI) :- 
@@ -602,6 +628,7 @@ class_fields( work,
 class_fields( annotation, [text,type,name,entity]).
 class_fields('FreeDB', [artist,title,discid,cat,year,tracks]).
 
+class_inc(C,I) :- class_incs(C,Is), member(I,Is).
 class_incs(artist, [recordings,releases,'release-groups',works]).
 class_incs(label,  [releases]).
 class_incs(recording, [artists,releases]).
@@ -613,8 +640,10 @@ class_incs(_,[aliases,annotation,tags,ratings,'user-tags','user-ratings']).
 insist(G,Ex) :- call(G) -> true; throw(Ex).
 prolog:message(unrecognised_class(C)) --> ["'~w' is not a recognised Musibrainz entity class."-[C]].
 prolog:message(unrecognised_property(Spec)) --> ["No facet for property ~q"-[Spec]].
+prolog:message(unrecognised_relation(T,_)) --> ["No facet for relation of type ~q"-[T]].
 prolog:message(invalid_link(C1,C2)) --> ["Cannot browse class ~w via links to '~w'."-[C1,C2]].
 prolog:message(invalid_inc(C,I)) --> ["~w in not a valid inc parameter for ~w resources."-[I,C]].
 prolog:message(invalid_level_rels) --> ["Work- or recording-level relationships can only be requested for releases"].
 prolog:message(invalid_level_rel(I)) --> ["~w relationships cannot be requested."-[I]].
 prolog:message(mb_error(_,E)) --> {xpath(E,text(text),Text)}, ["MBZ error: ~w"-[Text]].
+

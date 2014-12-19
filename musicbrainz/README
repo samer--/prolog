@@ -44,6 +44,25 @@ by default when you install SWI Prolog.
 
 	*	Switch to JSON return format for an easier life.
 
+---++++ Changes in v0.7.0
+
+	*	ADDED sandbox awareness: lucence predicates are safe, mb_facet/2 is safe,
+		Library users must declare mb_query/4 predicate safe if they wish to allow
+		network access. Higher level predicates should become safe automatically.
+
+	*	FIXED inc option parameter checking.
+
+	*	CHANGED mb_facet/2 handles more relations and returns them as a term
+		relation/3, where the 3rd argument includes begin/1, end/1, and attribute/1 terms.
+
+	*	FIXED mb_facet/2 handling of forward/backward relations.
+
+	*	ADDED mb_facet/2 now reports unrecognised relations
+
+	*	lookup and browse now accept URIs as well as XML elements or Class-ID pairs.
+
+	*	FIXED removed unwanted non-determinism in doc_item/4
+
 ---++++ Changes in v0.6
 
    *  CHANGED mb_browse/3 and mb_query(_,browse(...),...)
