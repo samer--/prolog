@@ -124,6 +124,11 @@ expand_call_with_prefix(Sep0, Callable0, InArgs, (SepGoal,CallGoal)) :-
 	;	CallGoal1=CallGoal
 	).
 
+:- public 
+      seqmap_with_sep_first_call//3,
+      seqmap_with_sep_first_call//5.
+      seqmap_with_sep_first_call//7.
+
 seqmap_with_sep_first_call(P,[A1|AX],AX) --> call(P,A1).
 seqmap_with_sep_first_call(P,[A1|AX],[B1|BX],AX,BX) --> call(P,A1,B1).
 seqmap_with_sep_first_call(P,[A1|AX],[B1|BX],[C1|CX],AX,BX,CX) --> call(P,A1,B1,C1).
