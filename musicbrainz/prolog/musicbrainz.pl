@@ -6,6 +6,7 @@
    ,  mb_lookup/3
    ,  mb_lookup/2
    ,  mb_facet/2
+   ,  mb_relation/5
    ,  mb_id/2
    ,  mb_id_uri/3
    ,  mb_uri/2
@@ -457,7 +458,9 @@ facet( gender(Y),  elem(gender,   _, X), get_text(X,Y)).
 facet( country(Y), elem(country,  _, X), get_text(X,Y)).
 facet( born(Y),    elem('life-span', _, X), xp(X,begin(text),Y)).
 facet( died(Y),    elem('life-span', _, X), xp(X,end(text),Y)).
-% facet( dead,       elem('life-span', _, X), xp(X,ended(text),true)).
+facet( birth_place(Y),    elem('begin-area', As, Es), Y=element(area,As,Es)).
+facet( death_place(Y),    elem('end-area', As, Es), Y=element(area,As,Es)).
+facet( dead,       elem('life-span', _, X), xp(X,ended(text),true)).
 facet( title(Y),   elem(title,    _, X), get_text(X,Y)).
 facet( date(Y),    elem(date,     _, X), get_text(X,Y)).
 facet( barcode(Y), elem('barcode',_,X),  get_text(X,Y)).
@@ -478,36 +481,51 @@ facet( release_event(Y), elem('release-event-list',_,X), xp(X,'release-event',Y)
 facet( medium(Y),        elem('medium-list',_,X), xp(X,'release-event',Y)).
 facet( label_info(Y),    elem('label-info-list',_,X), xp(X,'label-info',Y)).
 facet( label_code(Y),    elem('label-code',_,X), get_text(X,Y)).
-facet( relation(E,R), elem('relation-list',As,Es), decode_relations(As,Es,E,R)).
 facet( tags(Tags),    elem('tag-list',_,Es), maplist(get_tag,Es,Tags)).
 facet( iswc(Y),    elem('iswc-list',_,X), xp(X,iswc(text),Y)).
 facet( iswc(Y),    elem('iswc',_,X), get_text(X,Y)).
 facet( isrc(Y),    elem('isrc-list',_,X), xp(X,isrc(text),Y)).
 facet( isrc(Y),    elem('isrc',_,X), get_text(X,Y)).
+facet( relation(E,R), elem('relation-list',As,Es), decode_relations(As,Es,E,R)).
 
 get_tag(E,N-CC) :- 
    xpath(E,name(text),N),
    xpath(E,/self(@count),C), 
    atom_number(C,CC). 
 
-decode_relations(As,Rs,E,Rel) :-
+mb_relation(E1,E2,Name,Dir,Opts) :-
+   elem('relation-list',As,Rs,E1),
    member('target-type'=Type,As),
-   member(R,Rs),
-   (  decode_relation(Type,R,E,Rel) *-> true
-   ;  var(Rel) 
-   -> print_message(warning,unrecognised_relation(Type,R)), 
-      fail
-   ).
+   decode_relations(Rs,Type,Dir,Name,E2,Opts).
 
-decode_relation(Type,R,E,Rel) :-
+% provides information about relations as normalised terms, with
+% the relation type as the functor name and three arguments.
+decode_relations(As,Rs,E1,Rel) :-
+   member('target-type'=Type,As),
+   decode_relations(Rs,Type,Dir,Name,E2,Opts),
+   normalise_direction(Dir,E1,E2,RE1,RE2),
+   Rel =.. [Name,RE1,RE2,Opts].
+
+normalise_direction(fwd,E1,E2,E1,E2).
+normalise_direction(bwd,E1,E2,E2,E1).
+
+% provides information about each relation in Rs in fully decomposed
+% form given the list of relation elements and the type of the target element:
+%  Dir: direction :oneof([fwd,bwd])
+% Name: MBZ relation name
+%  Val: target MBZ entity
+% Opts: begin(Date), end(Date), attribute(Atom)
+decode_relations(Rs,Type,Dir,Name,Val,Opts) :-
    % could check to see if all attributes and elements are interpreted...
+   member(R,Rs),
    xpath(R,/self(@type),Name),
    xpath(R,Type,Val),
    relation_opts(R,Opts,[]),
    (  xpath(R,direction(content),[backward]) 
-   -> Rel=..[Name,Val,E,Opts]
-   ;  Rel=..[Name,E,Val,Opts]
+   -> Dir=bwd
+   ;  Dir=fwd
    ).
+
 
 relation_opts(R) -->
    if(xpath(R,begin(content),[Begin]), [begin(Begin)]),

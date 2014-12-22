@@ -63,6 +63,10 @@ by default when you install SWI Prolog.
 
 	*	FIXED removed unwanted non-determinism in doc_item/4
 
+   *  ADDED new mb_relation/5 as an alternative to mb_facet for getting relations
+
+	*  ADDED new facets for birth place, death place, and whether or not an  artist is dead.
+
 ---++++ Changes in v0.6
 
    *  CHANGED mb_browse/3 and mb_query(_,browse(...),...)
