@@ -99,7 +99,7 @@ url_endpoint(Url,Host,Port,Path) :-
 	(member(port(Port),Parsed);Port=80).
 
 
-%% current_sparql_endpoint(-EP:ground,-Host:atom,-Port:natural,-Options:list) is nondet.
+%% current_sparql_endpoint(-EP:ground,-Host:atom,-Port:natural,-Path:atom,-Options:list) is nondet.
 %
 %  Succeeds once for each known endpoint.
 current_sparql_endpoint(EP,Host,Port,Path,Options) :-
