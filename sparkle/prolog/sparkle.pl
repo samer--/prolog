@@ -4,7 +4,7 @@
    ,  current_sparql_endpoint/5
    ,  query_goal/3     % Endpoint, Context, Opts
    ,  query_phrase/3   % Endpoint, QueryPhrase, Result
-   ,  endpoint_query/3 % Endpoint,QueryText,Result
+   ,  query_sparql/3 % Endpoint,QueryText,Result
    ,  (??)/1
    ,  (??)/2
    ,  op(1150,fx,??)
@@ -16,10 +16,17 @@
   Samer Abdallah, Dept. of Computer Science, UCL (2014)
   Based on Yves Raimond's swic package, but completely re-written.
 
-  To do: 
-  *   query multiple endpoints in parallel
-  *   process results incrementally.
-  *   Documentation!
+   This module provides a little language for expressing SPARQL queries
+   and a database of known SPARQL endpoints. Queries can be executed
+   across multiple endpoints in parallel. When using auto-paging,
+   multiple queries are made automatically to fetch new bindings as
+   they are needed. For example, 
+   ==
+   EP ?? rdf(A,B,C).
+   ==
+   will retrieve all triples from all endpoints in parallel, fetching
+   100 bindings at a time from each endpoint (assuming the setting
+   sparkle:limit takes it's default value of 100).
 */
 
 :- use_module(library(sandbox)).
@@ -45,14 +52,27 @@ sandbox:safe_primitive(sparql_dcg:describe(_,_,_,_)).
 sandbox:safe_primitive(sparql_dcg:describe(_,_,_)).
 sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 
-
+%% '??'(+Goal:sparql_goal) is nondet.
+%  Equivalent to query_goal(_,Goal,[]). Will query all endpoints
+%  in parallel. Identical bindings may be returned multiple times.
+%  See query_goal/3 for details.
 ??(Goal) :- query_goal(_,Goal,[]).
+
+%% '??'(EP,+Goal:sparql_goal) is nondet.
+%  Equivalent to query_goal(EP,Goal,[]). See query_goal/3 for details.
+%  IF EP is unbound on entry, it is bound to the endpoint from which
+%  the current bindings were obtained.
 ??(EP,Goal) :- query_goal(EP,Goal,[]).
 
 /*
  * Assert/declare a new sparql end point
  */
 
+%% sparql_endpoint(+EP:ground, +URL:atom, +Options) is det.
+%% sparql_endpoint(+EP:ground, +URL:atom) is det.
+%
+%  Declares EP as a short name for a SPARQL endpoint with the given URL.
+%  No options are defined at the moment.
 sparql_endpoint(EP,Url) :- sparql_endpoint(EP,Url,[]).
 sparql_endpoint(EP,Url,Options) :-
    url_endpoint(Url,Host,Port,Path), 
@@ -78,6 +98,10 @@ url_endpoint(Url,Host,Port,Path) :-
 	member(path(Path),Parsed),
 	(member(port(Port),Parsed);Port=80).
 
+
+%% current_sparql_endpoint(-EP:ground,-Host:atom,-Port:natural,-Options:list) is nondet.
+%
+%  Succeeds once for each known endpoint.
 current_sparql_endpoint(EP,Host,Port,Path,Options) :-
    sparql_endpoint(EP,Host,Port,Path,Options).
 
@@ -104,7 +128,7 @@ current_sparql_endpoint(EP,Host,Port,Path,Options) :-
 %        At-most this many bindings will be returned per SPARQL call.
 %     *  offset(O:natural)
 %        Begin returning bindings from the Oth result on.
-%     *  autopage(bool)
+%     *  autopage(Auto:bool)
 %        If false, a single SPARQL call is made using any limit and offset
 %        options if supplied. If true, the the offset option is ignored
 %        and multiple SPARQL queries are made as necessary to supply
@@ -119,26 +143,28 @@ query_goal(EP,Goal,Opts) :-
    -> phrase_to_sparql(ask(Goal),SPARQL),
       parallel_query(simple_query(SPARQL),EPs,EP-true)
    ;  Result =.. [row|Vars],
-      call_dcg((  option_default_select(autopage(Auto),true),
+      setting(limit,DefaultLimit),
+      call_dcg((  option_default_select(limit(Limit),DefaultLimit),
+                  option_default_select(autopage(Auto),true),
                   (  {Auto=true}
-                  -> {setting(limit,DefaultLimit)},
-                     option_default_select(limit(Limit),DefaultLimit),
+                  -> {Query = autopage_query(Limit,SPARQL)}
                      option_default_select(offset(_),_),
-                     {Query = autopage_query(Limit,SPARQL)}
-                  ;  {Query = simple_query(SPARQL)}
+                  ;  {Query = simple_query(SPARQL)},
+                     cons(limit(Limit))
                   ) 
                ), Opts, Opts1),
       phrase_to_sparql(select(Vars,Goal,Opts1),SPARQL),
       parallel_query(Query,EPs,EP-Result)
    ).
 
+cons(X,T,[X|T]).
 option_default_select(Opt,Def,O1,O2) :- select_option(Opt,O1,O2,Def).
-simple_query(SPARQL,EP,EP-Result) :- endpoint_query(EP,SPARQL,Result).
+simple_query(SPARQL,EP,EP-Result) :- query_sparql(EP,SPARQL,Result).
 autopage_query(Limit,SPARQL,EP,EP-Result) :- autopage(EP,SPARQL,Limit,0,Result).
 
 autopage(EP,SPARQL,Limit,Offset,Result) :-
    format(string(Q),'~s LIMIT ~d OFFSET ~d',[SPARQL,Limit,Offset]),
-   findall(R,endpoint_query(EP,Q,R),Results),
+   findall(R,query_sparql(EP,Q,R),Results),
    (  member(Result,Results)
    ;  length(Results,Limit),     % no next page if length(Results) < Limit
       Offset1 is Offset + Limit, % next batch of results
@@ -153,27 +179,6 @@ parallel_query(P,Xs,Y) :-
 
 par_goal(P,Y,X,call(P,X,Y)).
 
-
-
-% query_autopaged1(EP,SPARQL,Limit,I,Result):-
-%    lazy_nth1_(I,[],0,more1(EP,SPARQL,Limit,0),Result).
-
-% more(EP,SPARQL,Limit,Offset,More,Results) :-
-%    format(string(Q),'~s LIMIT ~d OFFSET ~d',[SPARQL,Limit,Offset]),
-%    findall(R,endpoint_query(EP,Q,R),Results),
-%    length(Results,N),
-%    (  N<Limit -> More=fail2
-%    ;  Offset1 is Offset+Limit,
-%       More=more(EP,SPARQL,Limit,Offset1)
-%    ).
-
-% fail2(_,_) :- fail.
-
-% lazy_nth1_(I, [X|_],  M,_,    X) :- succ(M,I).
-% lazy_nth1_(I, [_|Xs], M,More, X) :- succ(M,M1), lazy_nth1_(I,Xs,M1,More,X).
-% lazy_nth1_(I, [],     M,More, X) :-
-%    call(More,More1,Xs),
-%    lazy_nth1_(I,Xs,M,More1,X).
 
 
 %% query_phrase(+EP,+Q:sparqle_phrase(R),R) is nondet.
@@ -194,7 +199,7 @@ par_goal(P,Y,X,call(P,X,Y)).
 
 query_phrase(EP,Phrase,Result) :- 
    phrase_to_sparql(Phrase,SPARQL),
-   endpoint_query(EP,SPARQL,Result).
+   query_sparql(EP,SPARQL,Result).
 
 
 phrase_to_sparql(Phrase,SPARQL) :-
@@ -209,18 +214,16 @@ phrase_to_sparql(Phrase,SPARQL) :-
 
 % ----------------------------------------------------
 % In the end, everything comes through this.
-endpoint_query(EP,SPARQL,Result) :-
+
+%% query_sparql(?EP,SPARQL,-Result) is nondet.
+%
+%  Runs textual SPARQL query against an endpoint, exactly as
+%  with sparql_query/3. If EP is unbound on entry, all known
+%  endpoints will be tried sequentially. 
+query_sparql(EP,SPARQL,Result) :-
    sparql_endpoint(EP,Host,Port,Path,EPOpts),
    debug(sparkle,'Querying endpoint http://~w:~w~w',[Host,Port,Path]),
    sparql_query(SPARQL,Result,[host(Host),port(Port),path(Path)|EPOpts]).
-
-
-% Forget about provenance for now...
-% provenance(Context,Provenance). % fill in the Provenance argument to rdf/4
-% provenance([],_).
-% provenance([rdf(_,_,_)|T],Provenance) :- provenance(T,Provenance).
-% provenance([rdf(_,_,_,Provenance)|T],Provenance) :-
-% 	provenance(T,Provenance).
 
 
 concurrent_or(X, M:List, Options) :-

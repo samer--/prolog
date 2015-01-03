@@ -35,7 +35,11 @@ queries can be written to the right of it without parentheses.
 
 ---++++ Change log
 
-*	New in version 0.0.6: both (??)/2 and query_goal/3 can accept a variable
+	0.0.7: More documentation. Renamed endpoint_query/3 to query_sparql/3.
+	Non-autopaged queries now use sparkle:limit setting for default limit to
+	avoid getting huge amounts of data when no limit is supplied.
+
+	New in version 0.0.6: both (??)/2 and query_goal/3 can accept a variable
 	as an endpoint. If this is the case, then multiple queries are made in parallel.
 	Each successful result binds the endpoint variable to the source of that data, eg
 	==
@@ -47,7 +51,7 @@ queries can be written to the right of it without parentheses.
 	query reduces to an ASK SPARQL query. It's up to you to use once/1 etc as necessary
 	if this is not the behaviour you want.
 
-*	Also new in 0.0.6, autopaged queries, that is, you can forget about OFFSET and LIMIT;
+	Also new in 0.0.6, autopaged queries, that is, you can forget about OFFSET and LIMIT;
 	multiple queries will be made as necessary to fetch data on demand. The default
 	batch size is determined by the sparkle:limit setting.
 
