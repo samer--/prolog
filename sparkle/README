@@ -32,10 +32,20 @@ queries can be written to the right of it without parentheses.
           filter(regex('Colt.*',Name)).
 ?- dbp ?? rdf(A,rdf:type,dbont:'Photographer'); rdf(A, rdf:type, dbont:'MusicalArtist').
 ==
----++++ TO DO 
 
-*	Handle DESCRIBE and ASK queries properly.
-*	Query multiple endpoints in parallel.
-*	Write some documentation.
+---++++ Change log
+
+*	New in version 0.0.6: both (??)/2 and query_goal/3 can accept a variable
+	as an endpoint. If this is the case, then multiple queries are made in parallel.
+	Each successful result binds the endpoint variable to the source of that data, eg
+	==
+	EP ?? rdf(Class,rdf:type,owl:'Class').
+	==
+	will bind Class to all known classes and EP to the endpoint which reported that class.
+	If the same bindings can be returned from several endpoints, then (??)/2 will produce
+	those binding multiple times, with EP bound to different values each time, even if the
+	query reduces to an ASK SPARQL query. It's up to you to use once/1 etc as necessary
+	if this is not the behaviour you want.
+
 
 

@@ -2,10 +2,9 @@
       sparql_endpoint/2
    ,  sparql_endpoint/3
    ,  current_sparql_endpoint/5
-   ,  query_goal/2  % Context, Opts
-   ,  query_goal/3  % Endpoint, Context, Opts
-   ,  query_phrase/2
-   ,  query_phrase/3
+   ,  query_goal/3     % Endpoint, Context, Opts
+   ,  query_phrase/3   % Endpoint, QueryPhrase, Result
+   ,  endpoint_query/3 % Endpoint,QueryText,Result
    ,  (??)/1
    ,  (??)/2
    ,  op(1150,fx,??)
@@ -24,6 +23,7 @@
 */
 
 :- use_module(library(sandbox)).
+:- use_module(library(settings)).
 :- use_module(library(semweb/sparql_client)).
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_codes)).
@@ -36,19 +36,18 @@
 
 :- setting(limit,integer,100,'Default SPARQL SELECT limit').
 
-:- meta_predicate
-      query_phrase(//,-),
-      query_phrase(+,//,-).
+:- meta_predicate concurrent_or(-,:,+).
+:- meta_predicate query_phrase(+,//,-).
 
-sandbox:safe_meta(sparql_dcg:phrase_to_query(Phr,_),[Phr]).
+sandbox:safe_meta(sparql_dcg:phrase_to_sparql(Phr,_),[Phr]).
 sandbox:safe_primitive(sparql_dcg:select(_,_,_,_,_)).
 sandbox:safe_primitive(sparql_dcg:describe(_,_,_,_)).
 sandbox:safe_primitive(sparql_dcg:describe(_,_,_)).
 sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 
 
-??(Goal) :- setting(limit,L), query_goal(Goal,[limit(L)]).
-??(EP,Goal) :- setting(limit,L), query_goal(EP,Goal,[limit(L)]).
+??(Goal) :- query_goal(_,Goal,[]).
+??(EP,Goal) :- query_goal(EP,Goal,[]).
 
 /*
  * Assert/declare a new sparql end point
@@ -87,24 +86,98 @@ current_sparql_endpoint(EP,Host,Port,Path,Options) :-
 % Goal-based queries 
 % These get translated into phrase-based queries.
 
-query_goal(Goal,Opts) :- 
-   goal_to_phrase(Goal,Opts,Phrase,Result),
-   query_phrase(Phrase,Result).
+%% query_goal(+EP,+Goal:sparql_goal,+Opts) is nondet.
+%% query_goal(-EP,+Goal:sparql_goal,+Opts) is nondet.
+%
+%  Runs a SPARQL query against one or more SPARLQ endpoints.
+%  Goal is converted into a textual SPARQL query using the DCG
+%  defined in sparql_dcg.pl. 
+%
+%  If EP is ground on entry, the query is run against the specified endpoint.
+%  If EP is unbound on entry, the query is run agains all endpoints
+%  in parallel, possibly returning multiple results from each.
+%
+%  (The following applies only to queries that return bindings, not
+%  to simple boolean questions, which return only true or false.)
+%  Options are as follows:
+%     *  limit(L:natural)
+%        At-most this many bindings will be returned per SPARQL call.
+%     *  offset(O:natural)
+%        Begin returning bindings from the Oth result on.
+%     *  autopage(bool)
+%        If false, a single SPARQL call is made using any limit and offset
+%        options if supplied. If true, the the offset option is ignored
+%        and multiple SPARQL queries are made as necessary to supply
+%        results, using the limit option to determine the number of results
+%        retrieved from the endpoint at a time.
+%  Other options are passed to phrase_to_sparql/2.
 
 query_goal(EP,Goal,Opts) :- 
-   goal_to_phrase(Goal,Opts,Phrase,Result),
-   query_phrase(EP,Phrase,Result).
-
-goal_to_phrase(Goal,Opts,Phrase,Result) :-
+   findall(EP,sparql_endpoint(EP,_,_,_,_),EPs),
    term_variables(Goal,Vars),
-   (  Vars=[] % if no variables, do an ASK query, otherwise, SELECT
-   -> Phrase=ask(Goal), Result=true
-   ;  Phrase=select(Vars,Goal,Opts), Result =.. [row|Vars]
+   (  Vars = [] % if no variables, do an ASK query, otherwise, SELECT
+   -> phrase_to_sparql(ask(Goal),SPARQL),
+      parallel_query(simple_query(SPARQL),EPs,EP-true)
+   ;  Result =.. [row|Vars],
+      call_dcg((  option_default_select(autopage(Auto),true),
+                  (  {Auto=true}
+                  -> {setting(limit,DefaultLimit)},
+                     option_default_select(limit(Limit),DefaultLimit),
+                     option_default_select(offset(_),_),
+                     {Query = autopage_query(Limit,SPARQL)}
+                  ;  {Query = simple_query(SPARQL)}
+                  ) 
+               ), Opts, Opts1),
+      phrase_to_sparql(select(Vars,Goal,Opts1),SPARQL),
+      parallel_query(Query,EPs,EP-Result)
    ).
+
+option_default_select(Opt,Def,O1,O2) :- select_option(Opt,O1,O2,Def).
+simple_query(SPARQL,EP,EP-Result) :- endpoint_query(EP,SPARQL,Result).
+autopage_query(Limit,SPARQL,EP,EP-Result) :- autopage(EP,SPARQL,Limit,0,Result).
+
+autopage(EP,SPARQL,Limit,Offset,Result) :-
+   format(string(Q),'~s LIMIT ~d OFFSET ~d',[SPARQL,Limit,Offset]),
+   findall(R,endpoint_query(EP,Q,R),Results),
+   (  member(Result,Results)
+   ;  length(Results,Limit),     % no next page if length(Results) < Limit
+      Offset1 is Offset + Limit, % next batch of results
+      autopage(EP,SPARQL,Limit,Offset1,Result)
+   ).
+
+parallel_query(_,[],_) :- !, fail.
+parallel_query(P,[X],Y) :- !, call(P,X,Y).
+parallel_query(P,Xs,Y) :-
+   maplist(par_goal(P,Y),Xs,Goals),
+   concurrent_or(Y,Goals,[on_error(continue)]).
+
+par_goal(P,Y,X,call(P,X,Y)).
+
+
+
+% query_autopaged1(EP,SPARQL,Limit,I,Result):-
+%    lazy_nth1_(I,[],0,more1(EP,SPARQL,Limit,0),Result).
+
+% more(EP,SPARQL,Limit,Offset,More,Results) :-
+%    format(string(Q),'~s LIMIT ~d OFFSET ~d',[SPARQL,Limit,Offset]),
+%    findall(R,endpoint_query(EP,Q,R),Results),
+%    length(Results,N),
+%    (  N<Limit -> More=fail2
+%    ;  Offset1 is Offset+Limit,
+%       More=more(EP,SPARQL,Limit,Offset1)
+%    ).
+
+% fail2(_,_) :- fail.
+
+% lazy_nth1_(I, [X|_],  M,_,    X) :- succ(M,I).
+% lazy_nth1_(I, [_|Xs], M,More, X) :- succ(M,M1), lazy_nth1_(I,Xs,M1,More,X).
+% lazy_nth1_(I, [],     M,More, X) :-
+%    call(More,More1,Xs),
+%    lazy_nth1_(I,Xs,M,More1,X).
+
 
 %% query_phrase(+EP,+Q:sparqle_phrase(R),R) is nondet.
 %% query_phrase(-EP,+Q:sparqle_phrase(R),R) is nondet.
-%% query_phrase(+Q:sparqle_phrase(R),R) is nondet.
 %
 % Phrase-based queries using the DCG defined in sparql_dcg.pl.
 % The return type depends on the query:
@@ -119,34 +192,27 @@ goal_to_phrase(Goal,Opts,Phrase,Result) :-
 % ==
 % =|row(N)|= is the type of terms of functor row/N.
 
-query_phrase(Phrase,Result) :- 
-   phrase_to_query(Phrase,Query),
-   sparql_endpoint(EP,_,_,_,_),
-   catch( run_query(EP,Query,Result),
-          Ex, (print_message(warning,Ex), fail)).
-
 query_phrase(EP,Phrase,Result) :- 
-   phrase_to_query(Phrase,Query),
-   run_query(EP,Query,Result).
+   phrase_to_sparql(Phrase,SPARQL),
+   endpoint_query(EP,SPARQL,Result).
 
 
-phrase_to_query(Phrase,Query) :-
+phrase_to_sparql(Phrase,SPARQL) :-
    term_variables(Phrase,Vars),
    copy_term(t(Vars,Phrase),t(Vars1,Phrase1)),
    numbervars(Vars1,0,_),
-   (  phrase(Phrase1,QueryCodes) -> true
+   (  phrase(Phrase1,Codes) -> true
    ;  throw(unrecognised_query(Phrase))
    ),
-   string_codes(Query,QueryCodes),
-   debug(sparkle,'SPARQL query: ~s',[Query]).
+   string_codes(SPARQL,Codes),
+   debug(sparkle,'SPARQL query: ~s',[SPARQL]).
 
 % ----------------------------------------------------
 % In the end, everything comes through this.
-
-run_query(EP,Query,Result) :-
+endpoint_query(EP,SPARQL,Result) :-
    sparql_endpoint(EP,Host,Port,Path,EPOpts),
    debug(sparkle,'Querying endpoint http://~w:~w~w',[Host,Port,Path]),
-   sparql_query(Query,Result,[host(Host),port(Port),path(Path)|EPOpts]).
+   sparql_query(SPARQL,Result,[host(Host),port(Port),path(Path)|EPOpts]).
 
 
 % Forget about provenance for now...
@@ -155,3 +221,44 @@ run_query(EP,Query,Result) :-
 % provenance([rdf(_,_,_)|T],Provenance) :- provenance(T,Provenance).
 % provenance([rdf(_,_,_,Provenance)|T],Provenance) :-
 % 	provenance(T,Provenance).
+
+
+concurrent_or(X, M:List, Options) :-
+   length(List, JobCount),
+   message_queue_create(Done,[max_size(JobCount)]),
+   option(on_error(OnError),Options,stop),
+   setup_call_cleanup(
+      maplist(create_solver(M,X,Done),List,Solvers),
+      wait_for_one(JobCount, Done, success(X), OnError),
+      (  message_queue_destroy(Done),
+         debug(parallel,'Waiting for threads.',[]),
+         maplist(thread_join,Solvers,_)
+      )
+   ).
+
+create_solver(M,X,Done,H,Id) :- thread_create(solve(M:H, X, Done), Id, []).
+
+solve(Goal, Var, Queue) :-
+   thread_self(Me),
+   catch( (  call(Goal),
+             thread_send_message(Queue,success(Me,Var)), fail
+          ;  thread_send_message(Queue,failed(Me))
+          ), 
+          E, (  message_queue_property(Queue,_),
+                debug(parallel,'Running ~q, Caught ~q.',[Goal,E]),
+                catch(thread_send_message(Queue, error(Me, E)),_,fail)
+             )
+        ).
+
+wait_for_one(N, Q, X, OnError) :-
+   succ(N1,N),
+   debug(parallel,'Waiting for one of ~d threads.',[N]),
+   thread_get_message(Q, Msg),
+   (  Msg=success(_,Var) -> (X=success(Var); wait_for_one(N,Q,X,OnError))
+   ;  Msg=failed(_)      -> wait_for_one(N1,Q,X,OnError)
+   ;  Msg=error(_,E)     -> ( OnError=stop -> throw(error(E))
+                            ; print_message(warning,E),
+                              wait_for_one(N1,Q,X,OnError)
+                            )
+   ).
+

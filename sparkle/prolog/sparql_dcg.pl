@@ -78,7 +78,7 @@ select(Vars,Goal,Options) -->
    if_option(distinct," DISTINCT ",Options,O1),
    seqmap_with_sep(" ",expr,Vars), " ",
    where(Goal),
-   if_option(order_by(OB), (" ORDER BY ", variable(OB)), O1,O2),
+   if_option(order_by(OB), (" ORDER BY ", expr(OB)), O1,O2),
    if_option(limit(Limit), (" LIMIT ", at(Limit)), O2,O3),
    if_option(offset(Offs), (" OFFSET ", at(Offs)), O3,O4),
    {check_remaining_options(O4)}.
