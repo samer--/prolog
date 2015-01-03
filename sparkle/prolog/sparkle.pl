@@ -147,8 +147,8 @@ query_goal(EP,Goal,Opts) :-
       call_dcg((  option_default_select(limit(Limit),DefaultLimit),
                   option_default_select(autopage(Auto),true),
                   (  {Auto=true}
-                  -> {Query = autopage_query(Limit,SPARQL)}
-                     option_default_select(offset(_),_),
+                  -> {Query = autopage_query(Limit,SPARQL)},
+                     option_default_select(offset(_),_)
                   ;  {Query = simple_query(SPARQL)},
                      cons(limit(Limit))
                   ) 
