@@ -47,5 +47,8 @@ queries can be written to the right of it without parentheses.
 	query reduces to an ASK SPARQL query. It's up to you to use once/1 etc as necessary
 	if this is not the behaviour you want.
 
+*	Also new in 0.0.6, autopaged queries, that is, you can forget about OFFSET and LIMIT;
+	multiple queries will be made as necessary to fetch data on demand. The default
+	batch size is determined by the sparkle:limit setting.
 
 
