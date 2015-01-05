@@ -35,6 +35,7 @@
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_codes)).
 :- use_module(sparql_dcg).
+:- use_module(concurrency).
 
 
 :- dynamic sparql_endpoint/5.
@@ -43,7 +44,6 @@
 
 :- setting(limit,integer,100,'Default SPARQL SELECT limit').
 
-:- meta_predicate concurrent_or(-,:,+).
 :- meta_predicate query_phrase(+,//,-).
 
 sandbox:safe_meta(sparql_dcg:phrase_to_sparql(Phr,_),[Phr]).
@@ -224,44 +224,4 @@ query_sparql(EP,SPARQL,Result) :-
    sparql_endpoint(EP,Host,Port,Path,EPOpts),
    debug(sparkle,'Querying endpoint http://~w:~w~w',[Host,Port,Path]),
    sparql_query(SPARQL,Result,[host(Host),port(Port),path(Path)|EPOpts]).
-
-
-concurrent_or(X, M:List, Options) :-
-   length(List, JobCount),
-   message_queue_create(Done,[max_size(JobCount)]),
-   option(on_error(OnError),Options,stop),
-   setup_call_cleanup(
-      maplist(create_solver(M,X,Done),List,Solvers),
-      wait_for_one(JobCount, Done, success(X), OnError),
-      (  message_queue_destroy(Done),
-         debug(parallel,'Waiting for threads.',[]),
-         maplist(thread_join,Solvers,_)
-      )
-   ).
-
-create_solver(M,X,Done,H,Id) :- thread_create(solve(M:H, X, Done), Id, []).
-
-solve(Goal, Var, Queue) :-
-   thread_self(Me),
-   catch( (  call(Goal),
-             thread_send_message(Queue,success(Me,Var)), fail
-          ;  thread_send_message(Queue,failed(Me))
-          ), 
-          E, (  message_queue_property(Queue,_),
-                debug(parallel,'Running ~q, Caught ~q.',[Goal,E]),
-                catch(thread_send_message(Queue, error(Me, E)),_,fail)
-             )
-        ).
-
-wait_for_one(N, Q, X, OnError) :-
-   succ(N1,N),
-   debug(parallel,'Waiting for one of ~d threads.',[N]),
-   thread_get_message(Q, Msg),
-   (  Msg=success(_,Var) -> (X=success(Var); wait_for_one(N,Q,X,OnError))
-   ;  Msg=failed(_)      -> wait_for_one(N1,Q,X,OnError)
-   ;  Msg=error(_,E)     -> ( OnError=stop -> throw(error(E))
-                            ; print_message(warning,E),
-                              wait_for_one(N1,Q,X,OnError)
-                            )
-   ).
 

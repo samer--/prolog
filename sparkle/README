@@ -35,6 +35,8 @@ queries can be written to the right of it without parentheses.
 
 ---++++ Change log
 
+	0.0.8: concurrent_or/3 moved to separate module, fixes to concurrent_or/3.
+
 	0.0.7: More documentation. Renamed endpoint_query/3 to query_sparql/3.
 	Non-autopaged queries now use sparkle:limit setting for default limit to
 	avoid getting huge amounts of data when no limit is supplied.
