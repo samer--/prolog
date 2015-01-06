@@ -43,6 +43,7 @@
 :- set_prolog_flag(double_quotes, codes).
 
 :- setting(limit,integer,100,'Default SPARQL SELECT limit').
+:- setting(select_options,list,[distinct],'Default select options').
 
 :- meta_predicate query_phrase(+,//,-).
 
@@ -53,16 +54,19 @@ sandbox:safe_primitive(sparql_dcg:describe(_,_,_)).
 sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 
 %% '??'(+Goal:sparql_goal) is nondet.
-%  Equivalent to query_goal(_,Goal,[]). Will query all endpoints
+%  Equivalent to _ ?? Goal. Will query all endpoints
 %  in parallel. Identical bindings may be returned multiple times.
 %  See query_goal/3 for details.
-??(Goal) :- query_goal(_,Goal,[]).
+??(Goal) :- ??(_,Goal).
 
 %% '??'(EP,+Goal:sparql_goal) is nondet.
-%  Equivalent to query_goal(EP,Goal,[]). See query_goal/3 for details.
+%  Equivalent to query_goal(EP,Goal,Opts) where Opts is the value of
+%  the setting sparkle:select_options. See query_goal/3 for details.
 %  IF EP is unbound on entry, it is bound to the endpoint from which
 %  the current bindings were obtained.
-??(EP,Goal) :- query_goal(EP,Goal,[]).
+??(EP,Goal) :- 
+   setting(select_options,Opts),
+   query_goal(EP,Goal,Opts).
 
 /*
  * Assert/declare a new sparql end point
