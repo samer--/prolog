@@ -486,6 +486,8 @@ facet( iswc(Y),    elem('iswc-list',_,X), xp(X,iswc(text),Y)).
 facet( iswc(Y),    elem('iswc',_,X), get_text(X,Y)).
 facet( isrc(Y),    elem('isrc-list',_,X), xp(X,isrc(text),Y)).
 facet( isrc(Y),    elem('isrc',_,X), get_text(X,Y)).
+facet( recording(E), elem('recording-list',_,X), xp(X,recording,E)).
+facet( work(E),    elem('work-list',_,X), xp(X,work,E)).
 facet( relation(E,R), elem('relation-list',As,Es), decode_relations(As,Es,E,R)).
 
 get_tag(E,N-CC) :- 

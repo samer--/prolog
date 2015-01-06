@@ -67,6 +67,8 @@ by default when you install SWI Prolog.
 
 	*  ADDED new facets for birth place, death place, and whether or not an  artist is dead.
 
+	*	ADDED facets for ecording and work
+
 ---++++ Changes in v0.6
 
    *  CHANGED mb_browse/3 and mb_query(_,browse(...),...)
