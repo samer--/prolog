@@ -8,7 +8,7 @@
    ,  (??)/1
    ,  (??)/2
    ,  op(1150,fx,??)
-   ,  op(1150,xfx,??)
+   ,  op(1150,xfy,??)
 	]).
 
 /** <module> Query to SPARQL endpoints with a more Prolog-like syntax
@@ -43,7 +43,7 @@
 :- set_prolog_flag(double_quotes, codes).
 
 :- setting(limit,integer,100,'Default SPARQL SELECT limit').
-:- setting(select_options,list,[distinct],'Default select options').
+:- setting(select_options,list,[distinct(true)],'Default select options').
 
 :- meta_predicate query_phrase(+,//,-).
 
@@ -57,16 +57,21 @@ sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 %  Equivalent to _ ?? Goal. Will query all endpoints
 %  in parallel. Identical bindings may be returned multiple times.
 %  See query_goal/3 for details.
-??(Goal) :- ??(_,Goal).
+??(Spec) :- ??(_,Spec).
 
 %% '??'(EP,+Goal:sparql_goal) is nondet.
 %  Equivalent to query_goal(EP,Goal,Opts) where Opts is the value of
 %  the setting sparkle:select_options. See query_goal/3 for details.
 %  IF EP is unbound on entry, it is bound to the endpoint from which
 %  the current bindings were obtained.
-??(EP,Goal) :- 
-   setting(select_options,Opts),
-   query_goal(EP,Goal,Opts).
+??(EP,Spec) :- 
+   spec_goal_opts(Spec,Goal,Opts),
+   setting(select_options,Opts0),
+   merge_options(Opts,Opts0,Opts1),
+   query_goal(EP,Goal,Opts1).
+
+spec_goal_opts(Opts ?? Goal, Goal, Opts) :- !.
+spec_goal_opts(Goal,Goal,[]).
 
 /*
  * Assert/declare a new sparql end point

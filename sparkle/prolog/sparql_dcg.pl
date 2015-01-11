@@ -79,7 +79,7 @@
 %
 select(Vars,Goal,Options) -->
    "SELECT ", 
-   if_option(distinct," DISTINCT ",Options,O1),
+   if_option(distinct(Distinct), if(Distinct=true, " DISTINCT "),Options,O1),
    seqmap_with_sep(" ",expr,Vars), " ",
    where(Goal),
    if_option(order_by(OB), (" ORDER BY ", expr(OB)), O1,O2),
