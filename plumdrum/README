@@ -1,0 +1,80 @@
+---++ Humdrum and Kern processing library
+
+This package provides modules for working with Humdrum files in Prolog,
+including those encoded in the **kern representation.
+
+The library can present Humdrum encoded data at one of two levels of
+abstraction. The first, lower level, represents a Humdrum file as
+a big, structured term, composed using a number of algebraic data types.
+This is produced by hum_read/{2,3}. It contains (just about) all the
+information in the Humdrum file, but to make sense of it, you have
+to walk through the data structure, keeping track of various things
+in a fairly complicated way.
+
+The second, higher, level presents the information via a set of predicates
+via which one can, essentially, ask simple questions of the Humdrum object,
+such as, 'how many spines are there in this object?', 'what time does this
+spine start at?', and 'enumerate the events on this spine!'. Each Humdrum
+object is presented as a Prolog module, which one can think of either as
+a deductive database, or an encapsulated world, in the sense of modal logic, 
+where certain things are true. This representation is created by
+assert_humdrum/3 in humdrum_world.pl.
+
+---+++ Humdrum primer
+
+There are a few concepts which are basic to an understanding of Humdrum objects.
+
+The first is the idea of a time slice. Each row, or record, of a Humdrum file,
+excluding header and other metadata, corresponds to a certain time slice, that
+is a definite interval in on a musical timeline, where time is counted metrically
+in beats. Times are represented as rational numbers in this library.
+
+The second is the concept of a 'spine'. Spines are like columns in a database,
+and are used to represent multiple 'voices' in a piece of music, or multiple
+types of information to be attached to a given timeslice. The complicating twist
+is that, since in music, voices can come and go arbitrarily, spines can also come
+and go as you progress through time. Hence, there is syntax for a variety of
+spine operations, including creating, destroy, splitting, joining and rearranging.
+
+The third is the idea of 'interpretations', which are attached to each spine of
+a Humdrum obect, are divided into two classes: 'exclusive interpretations', also known 
+as 'representations', define the basic 'data-type' of a spine, and so each spine
+has, at any time, exactly one exclusive interpretation. Non-exclusive
+interpretations, or just 'interpretations', add information about how data in
+a spine is two be understood, and a spine can have multiple interpretations.
+
+---+++ Extensible representation handling
+
+One of the defining features of Humdrum is that it has an extensible
+system for adding new representation types (which one can think of as
+roughly equivalent to column types in a database).
+
+Plumdrum tries to expose this by defining some hook predicates via which
+parsers for arbitrary representations can be added.   
+Currently, the following representations are included:
+	*	dynam.pl encodes the 'dynamics' representation, for loudness markings,
+		and the 'db' representation for acoustic loudness in decibels.
+	*	kern.pl encodes the 'kern' representation for pitches and other basic
+		score elements.
+Both of these define clauses of hum_data_hook//2 which, given the name
+of the representation, define how to parse characters from the Humdrum file
+according to that representation and return a term representing the data.
+
+Since time is basic to Humdrum objects, there is a hook predicate
+hum_duration_hook/3, which must be able to compute the duration of a data 
+item from any representation, given the item that was parsed using
+hum_data_hook//2.
+
+As well as a mechanism for adding exclusive interpretations, there is a mechanism
+for adding ordinary, non-exclusive interpretations, using hum_interp_hook//1,
+which must be able to parse the characters from a Humdrum file signifying an
+interpretation and return a term encoding the information in the interpretation
+signifier.
+
+
+
+---+++ Usage
+
+
+
+
