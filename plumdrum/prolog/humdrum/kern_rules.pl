@@ -156,7 +156,6 @@
 		,	token//1
 		.
 
-%:- use_module(library(math)).
 :- use_module(library(humdrum/kern)).
 
 %% spine( +S:spine, +R:record) is semidet.
@@ -336,6 +335,8 @@ tied_note( cont, Note, Time, Dur, S) -->
 		), !
 	},
 	tied_note(Tie,Note,Time1,Dur1,S1).
+
+add(X,Y,Z) :- Z is X+Y.
 
 next_tied_note(Constraint, Note, Time1, S,S1, Dur1, Tie) :-
 	context_module(M),

@@ -1,10 +1,8 @@
 :- module(humdrum_world, [	assert_humdrum/3, retract_humdrum/1 ]).
 
 :- use_module(library(dcg_core)).
-%:- use_module(library(utils)).
-%:- use_module(library(argutils)).
 :- use_module(library(humdrum)).
-%:- use_module(library(data/env)).
+:- use_module(library(data/env)).
 
 humdrum_predicates(
 		[	spine/4          % spine( xinterp, spine, record, record). 
@@ -165,7 +163,10 @@ exec(data(X))     -->
 	;	with_key( pending, delta_time(Spines,X,DT)),
 		record_assert(duration(DT))
 	),
-	with_key( time, add(DT)).
+	with_key( time, add_dur(DT)).
+
+add_dur(_,none,none) :- !.
+add_dur(X,Y,Z) :- Z is Y+X.
 
 
 delta_time(Spines,Events,DT,P1,P2) :-
@@ -247,6 +248,6 @@ x_pathop( split(sp(N,R,I),sp(M1,R,J),sp(M2,R,J))) -->
 	->	module_assert(spine(R,N,I,JJ))
 	;	nop).
 
-add(_,none,none) :- !.
-add(X,Y,Z) :- Z is Y+X.
-
+add_arg(X,T1,T2) :-
+   T1=..L1, append(L1,[X],L2),
+   T2=..L2.

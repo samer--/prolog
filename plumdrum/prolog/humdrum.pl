@@ -61,7 +61,6 @@ path_action(A) ---> term(A)
 	,	hum_duration_hook/3
 	.
 
-%:- use_module(library(utils)).
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_codes)).

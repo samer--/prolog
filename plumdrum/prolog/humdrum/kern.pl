@@ -11,7 +11,6 @@
    and hum_duration_hook/3.
 */
 
-%:- use_module(library(ops)).
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_macros)).
 :- use_module(library(humdrum)).
