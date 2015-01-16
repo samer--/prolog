@@ -142,7 +142,7 @@ pipe(M,T) -->          {def(M,P)}, pipe(P,T).
 
 file(Spec,Access) --> 
    {  (  atomic(Spec) -> atom_codes(Spec,Codes)
-      ;  findall(P, absolute_file_name(Spec,P,[access(Access)]), Ps),
+      ;  findall(P, absolute_file_name(Spec,P,[access(Access),solutions(all)]), Ps),
          (  Ps=[] -> throw(no_matching_file(Spec:Access))
          ;  Ps=[_,_|_] -> throw(indeterminate_file(Spec:Access,Ps))
          ;  Ps=[Path] -> atom_codes(Path,Codes)
