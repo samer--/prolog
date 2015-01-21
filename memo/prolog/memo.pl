@@ -319,7 +319,7 @@ reflect(ex(Ex)) :- throw(Ex).
 
 %% current_mode(-Mode:oneof([memo,browse,compute])) is det.
 %  Gets the current memoisation mode.
-current_mode(Mode) :- nb_current(memo_mode,Mode), !.
+current_mode(Mode) :- nb_current(memo_mode,Mode), Mode\=[], !.
 current_mode(memo).
 
 
