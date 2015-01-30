@@ -62,13 +62,11 @@ print_num_list(_,_,[]) :- nl.
 print_num_list(Width,N,[H|T]) :- succ(N,M),
 	copy_term(H,H1),
 	numbervars(H1,0,_),
-	number_codes(N,NC), " "=[Pad],
-	padleft(Pad,Width,NC,PNC),
-	format('~s. ~q\n',[PNC,H1]), 
+   format('~` t~d~*+. ~q\n',[N,Width,H1]),
 	print_num_list(Width,M,T).
 
-padleft(_,W,In,In) :- length(In,W).
-padleft(P,W,In,[P|Out]) :- succ(V,W), padleft(P,V,In,Out).
+% padleft(_,W,In,In) :- length(In,W).
+% padleft(P,W,In,[P|Out]) :- succ(V,W), padleft(P,V,In,Out).
 
 %% cons( ?Head:A, ?Tail:list(A), ?List:list(A)) is det.
 %
@@ -106,6 +104,7 @@ take(N,T,X) :- length(X,N), append(X,_,T).
 %  Remove all elements from head of In that are accepted by P
 %  and return the remained in Out.
 drop_while(P,[X|T],V) :- call(P,X) -> drop_while(P,T,V); V=[X|T].
+drop_while(_,[],[]).
 
 
 %% take_while( +P:pred(A), +In:list(A), -Out:list(A)) is det.
@@ -113,5 +112,6 @@ drop_while(P,[X|T],V) :- call(P,X) -> drop_while(P,T,V); V=[X|T].
 %  Remove all elements from head of In that are accepted by P
 %  and return them in Out.
 take_while(P,[X|T],O) :- call(P,X) -> O=[X|V], take_while(P,T,V); O=[].
+take_while(_,[],[]).
 
 
