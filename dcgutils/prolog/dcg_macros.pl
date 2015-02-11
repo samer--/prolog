@@ -1,4 +1,4 @@
-:- module(dcg_macros, []).
+:- module(dcg_macros, [ goal_expansion/2 ]).
 /** <module> DCG utilities implememnted by term expansion.
 
    This module provides term expansions for the following predicates and DCG goals:
@@ -25,18 +25,18 @@
 
 :- use_module(library(dcg_core)).
 
-system:goal_expansion( run_left(P,S1,S2,T1,T2), call_dcg(P,(S1-T1),(S2-T2))).
-system:goal_expansion( run_right(P,S1,S2,T1,T2), call_dcg(P,(T1-S1),(T2-S2))).
-system:goal_expansion( \<(P,S1,S2), (S1=(L1-R),S2=(L2-R),call_dcg(P,L1,L2)) ).
-system:goal_expansion( \>(P,S1,S2), (S1=(L-R1),S2=(L-R2),call_dcg(P,R1,R2)) ).
-system:goal_expansion( nop(S1,S2), (S1=S2) ).
-system:goal_expansion( out(X,S1,S2), (S1=[X|S2]) ).
-system:goal_expansion( get(S,S1,S2), (S=S1,S1=S2) ). 
-system:goal_expansion( set(S,_,S2), (S=S2) ). 
-system:goal_expansion( A >> B, (A,B) ). 
-system:goal_expansion( set_with(C,_,S2), Call) :- mk_call(C,[S2],Call).
-system:goal_expansion( trans(A1,A2,S1,S2), (S1=A1,S2=A2) ). 
-system:goal_expansion( //(P1,P2,S1,S2), (call_dcg(P1,S1,S2),call_dcg(P2,S1,S2))). %,G2)) :- 
+goal_expansion( run_left(P,S1,S2,T1,T2), call_dcg(P,(S1-T1),(S2-T2))).
+goal_expansion( run_right(P,S1,S2,T1,T2), call_dcg(P,(T1-S1),(T2-S2))).
+goal_expansion( \<(P,S1,S2), (S1=(L1-R),S2=(L2-R),call_dcg(P,L1,L2)) ).
+goal_expansion( \>(P,S1,S2), (S1=(L-R1),S2=(L-R2),call_dcg(P,R1,R2)) ).
+goal_expansion( nop(S1,S2), (S1=S2) ).
+goal_expansion( out(X,S1,S2), (S1=[X|S2]) ).
+goal_expansion( get(S,S1,S2), (S=S1,S1=S2) ). 
+goal_expansion( set(S,_,S2), (S=S2) ). 
+goal_expansion( A >> B, (A,B) ). 
+goal_expansion( set_with(C,_,S2), Call) :- mk_call(C,[S2],Call).
+goal_expansion( trans(A1,A2,S1,S2), (S1=A1,S2=A2) ). 
+goal_expansion( //(P1,P2,S1,S2), (call_dcg(P1,S1,S2),call_dcg(P2,S1,S2))). %,G2)) :- 
 	% expand_goal(call_dcg(P1,S1,S2),G1),
 	% expand_goal(call_dcg(P2,S1,S2),G2).
 
@@ -169,7 +169,7 @@ expand_dcg(Term, Goal) :-
 	nonvar(Prefix), !,
 	expand_call_with_prefix(Prefix, Callable, Args, Goal).
 
-system:goal_expansion(GoalIn, GoalOut) :-
+goal_expansion(GoalIn, GoalOut) :-
 	\+current_prolog_flag(xref, true),
 	expand_dcg(GoalIn, GoalOut).
 
