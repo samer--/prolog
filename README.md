@@ -15,3 +15,6 @@ musicbrainz	- Musicbrainz web service client
 sindice     - Sindice semantic web index client    
 
 
+TODO
+
+Move download links to https://raw.githubusercontent.com/samer--/prolog/master/...
