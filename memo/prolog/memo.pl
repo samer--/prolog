@@ -282,7 +282,7 @@ unbind_outputs(Type,Head0,Head1) :-
 copy_if_input(+_,X,X). 
 copy_if_input(-_,_,_).
 
-%% memo(+Goal:callable, -Meta:metadata) is det.
+%% memo(+Goal:callable, -Meta:metadata) is semidet.
 %% memo(+Goal:callable) is semidet.
 %
 %  Calls memoised predicate if it has not been called before with these input arguments, storing
@@ -301,13 +301,13 @@ memo(Module:Head,Meta) :-
    memoised(Module,Head,Meta,MemoHead),
    computer(Module,Head,Spec,ComputeHead),
    type_and_mode_check(Spec,Head),
-   (  call(Module:MemoHead) 
-   *->debug(memo,"found ~q.",[Module:Head])
+   (  call(Module:MemoHead) *-> true
    ;  debug(memo,"computing ~q...",[Module:Head]),
       timed(reify(Module:ComputeHead,Res),Comp),
       asserter(Module,Head,Meta,AssertHead),
+      Meta=Comp-Res, 
       debug(memo,"storing (~w) ~q...",[Res,Module:Head]),
-      Meta=Comp-Res, call(Module:AssertHead)
+      call(Module:AssertHead)
    ).
 
 reflect(ok) :- !.
