@@ -306,7 +306,7 @@ memo(Module:Head,Meta) :-
       timed(reify(Module:ComputeHead,Res),Comp),
       asserter(Module,Head,Meta,AssertHead),
       Meta=Comp-Res, 
-      debug(memo,"storing (~w) ~q...",[Res,Module:Head]),
+      debug(memo,"storing (~w) ~W...",[Res,Module:Head,[quoted(true),max_depth(6)]]),
       call(Module:AssertHead)
    ).
 
