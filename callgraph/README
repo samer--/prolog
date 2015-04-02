@@ -83,3 +83,10 @@ Allow more control of subgraph layout and style.
 Handling of recorded database is a bit unsatisfactory.
 The system for dealing with style attributes is
 a bit messy and could be cleaned up.
+
+---++++ Change log
+
+Changes in v 0.4.0
+
+- Switched to using swipe for building shell pipelines
+- Now allow filename/1 option to determine full path of output PDF file.

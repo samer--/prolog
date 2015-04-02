@@ -35,6 +35,7 @@
 :- use_module(library(fileutils)).
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_codes)).
+:- use_module(library(swipe)).
 
 :- set_prolog_flag(double_quotes, codes).
 
@@ -68,16 +69,19 @@ arrow(A,B) --> node(A), " -> ", node(B).
 line(A,B)  --> node(A), " -- ", node(B).
 (A=B) --> at(A), "=", B.
 	
+swipe:def(unflatten(Opts), sh($dot >> $dot,'unflatten~s', [\OptCodes])):-
+   phrase(seqmap(uopt,Opts),OptCodes).
 
-dot_method(M,M) :- member(M,[dot,neato,sfdp,fdp,circo,twopi]).
-dot_method(unflatten,M) :- dot_method(unflatten([]),M).
-dot_method(unflatten(Opts),M) :-
-   phrase(("unflatten",seqmap(uopt,Opts)," | dot"),Codes,[]),
-   atom_codes(M,Codes).
+swipe:def(graphviz(unflatten,Fmt), unflatten([]) >> graphviz(dot,Fmt)) :- !.
+swipe:def(graphviz(unflatten(Opts),Fmt), unflatten(Opts) >> graphviz(dot,Fmt)) :- !.
+swipe:def(graphviz(Meth,Fmt), sh($dot >> $Fmt, '~w~w -T~w', [\Meth,\Opts,\Fmt])):-
+   member(Meth,[dot,neato,sfdp,fdp,circo,twopi]), !,
+   must_be(oneof([svg,png,ps,eps,pdf]),Fmt),
+   (Fmt=svg -> Opts=' -Gfontnames=svg'; Opts='').
 
-uopt(l(N)) --> " -l", wr(N).
-uopt(fl(N)) --> " -f -l", wr(N).
 uopt(c(N)) --> " -c", wr(N).
+uopt(l(N)) --> " -l", wr(N).
+uopt(fl(N)) --> " -f", uopt(l(N)).
 
 %% dotrun( +Method:graphviz_method, +Fmt:atom, G:digraph, +File:atom) is det.
 %
@@ -98,13 +102,9 @@ uopt(c(N)) --> " -c", wr(N).
 %
 %  See man page for unflatten for more information.
 %  TODO: Could add more options for dot.
-dotrun(Meth1,Fmt,Graph,File) :-
-   dot_method(Meth1,Meth),
-   must_be(oneof([svg,png,ps,eps,pdf]),Fmt),
-   (Fmt=svg -> Opts=' -Gfontnames=svg'; Opts=''),
-   format(string(Cmd),'~w~w -T~w > "~w.~w"',[Meth,Opts,Fmt,File,Fmt]), 
-   debug(dot,'Running: ~s ...',Cmd),
-	with_output_to_file(pipe(Cmd),writedcg(Graph)).
+dotrun(Meth,Fmt,Graph,File) :-
+   with_pipe_input(S, graphviz(Meth,Fmt) >: File^Fmt, with_output_to(S,writedcg(Graph))).
+
 
 %% graph_dot( +G:digraph, +File:atom) is det.
 graph_dot(Graph,File) :-

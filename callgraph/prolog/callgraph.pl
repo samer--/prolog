@@ -83,9 +83,9 @@
 :- set_prolog_flag(double_quotes, codes).
 
 :- predicate_options(module_dot/2,2,[pass_to(module_graph/3,2)]).
-:- predicate_options(module_render/2,2,[format(any),method(any),pass_to(module_graph/3,2)]).
+:- predicate_options(module_render/2,2,[filename(text), format(any),method(any),pass_to(module_graph/3,2)]).
 :- predicate_options(modules_dot/3,2,[pass_to(modules_graph/4,2)]).
-:- predicate_options(modules_render/3,2,[format(any),method(any),pass_to(modules_graph/4,2)]).
+:- predicate_options(modules_render/3,2,[filename(text), format(any),method(any),pass_to(modules_graph/4,2)]).
 
 :- predicate_options(module_graph/3,2,
       [  prune(boolean)
@@ -387,7 +387,9 @@ module_render(Mod,Opts) :-
    module_graph(Mod,Opts,Graph),
    option(method(Method),Opts,unflatten),
    option(format(Fmt),Opts,pdf),
-   dotrun(Method,Fmt,Graph,Mod).
+   file_name_extension(Mod,Fmt,DefaultFilename),
+   option(filename(Filename),Opts,DefaultFilename),
+   dotrun(Method,Fmt,Graph,Filename).
 
 %% modules_dot(+Modules:list(module),+Opts,+Name) is det.
 %
@@ -423,7 +425,9 @@ modules_render(Mods,Opts,Name) :-
    modules_graph(Mods,Opts,Name,Graph),
    option(method(Method),Opts,unflatten),
    option(format(Fmt),Opts,pdf),
-   dotrun(Method,Fmt,Graph,Name).
+   file_name_extension(Name,Fmt,DefaultFilename),
+   option(filename(Filename),Opts,DefaultFilename),
+   dotrun(Method,Fmt,Graph,Filename).
 
 check_options(Pred,Arg,Opts) :- maplist(check_predicate_option(Pred,Arg),Opts).
 
