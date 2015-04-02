@@ -119,6 +119,7 @@
 
 :- use_module(library(dcg_codes)).
 :- use_module(library(fileutils)).
+:- use_module(library(settings)).
 
 :- set_prolog_flag(double_quotes,string).
 :- set_prolog_flag(back_quotes,codes).
@@ -218,8 +219,8 @@ with_pipe_output(S,Pipe,Goal) :-
 
 %% with_pipe_input(S:stream, Pipe:(0>>$Y), G:callable) is det.
 %  
-%  Starts the given pipeline and calls goal G, with the standard input from
-%  the pipeline available on stream S. The type of Pipe reflects the requirement
+%  Starts the given pipeline and calls goal G, with the standard input to
+%  the pipeline connected to stream S. The type of Pipe reflects the requirement
 %  for it to expect input on stdin input and produce nothing on the output.
 with_pipe_input(S,Pipe,Goal) :-
    command(Pipe, $_ >> 0, Cmd),
