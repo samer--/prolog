@@ -153,7 +153,8 @@ user:term_expansion(init_hostname,hostname(H)) :-
    (  getenv('HOSTNAME',H) -> true
    ;  setup_call_cleanup(open(pipe(hostname),read,S),
                          read_line_to_codes(S,Codes),
-                         close(S)), atom_codes(H,Codes)
+                         close(S)), 
+      atom_codes(H,Codes)
    ),
    format("% memo: setting hostname to '~w'.\n",[H]).
 
@@ -296,7 +297,9 @@ copy_if_input(-_,_,_).
 %  Note that the type and mode are checked strictly. An Input argument X declared with +T
 %  must satisfy must_be(T,X). An output argument declared with a -T must an unbound
 %  variable. 
-memo(Module:Head) :- memo(Module:Head,_-Res), reflect(Res).
+memo(Module:Head) :- 
+   freeze(Res,reflect(Res)), % this will prevent storage on failure or exception
+   memo(Module:Head,_-Res).
 memo(Module:Head,Meta) :-
    memoised(Module,Head,Meta,MemoHead),
    computer(Module,Head,Spec,ComputeHead),

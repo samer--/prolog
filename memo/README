@@ -41,6 +41,14 @@ The debug messages should indicate that repeated computations are being
 avoided, even for failing goals, like =|sqrt1(-4.0,X)|=, and computations
 that throw exceptions, like =|sqrt2(-4.0,X)|=.
 
+---++++ Changes in v0.4
+
+	memo/1 now behaves differently if the memoised predicate fails or throws
+	an exception, in which case the result will now NOT be stored. This is probably
+	the more useful behaviour on the whole, because failures and exceptions
+	are more likely to be due to bugs rather than any inherent partiality in the
+	function being computed.
+
 ---++++ Changes in v0.3
 
 	The library now has a notion of 'current evaluation mode', which applies when
