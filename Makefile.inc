@@ -26,11 +26,11 @@ push:
 	git push && chmod -w $(PACKFILE)
 
 install:
-	swipl -g "pack_install('$(PACKFILE)'), halt"
+	swipl -g "pack_install('$(PACKFILE)',[upgrade(true),interactive(false)]), halt"
 
 install-git: 
 	(git commit $(PACKFILE) || echo 'Local up to date') && (git push || echo 'Remote up to date')
-	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D), halt"
+	swipl -g "pack_property($(PACKNAME),download(D)), pack_install(D,[upgrade(true),interactive(false)]), halt"
 	chmod -w $(PACKFILE)
 
 dist-clean:
