@@ -11,6 +11,7 @@
     , op(1150,fx,volatile_memo)
     , op(1150,fx,persistent_memo)
     , modally/1
+    , meta_property/2
     ]).
 
 /** <module> Memoisation of deterministic predicates
@@ -456,3 +457,23 @@ timed(Goal,comp(_,T1,DT)) :-
 
 reify(Goal,R) :- catch((Goal -> R=ok ; R=fail), Ex, R=ex(Ex)).
 
+
+%% meta_property(+Meta:metadata,-Prop:meta_property) is nondet.
+%
+%  True when Prop is a meta-property of a memoised computation, where Meta
+%  is the metadata term retrieved from memo/2 or browse/2.
+%  Valid properties are:
+%     *  duration(number)
+%        The duration of the computation in seconds.
+%     *  time(timestamp)
+%        The time at which the computation was initiated, as returned by get_time/1
+%     *  host(atom)
+%        The name of host on which the computation was performed.
+%     *  result(result)
+%        The success/fail status of the result
+meta_property(comp(_,_,D)-_, duration(D)).
+meta_property(comp(_,D)-_,   duration(D)).
+meta_property(comp(_,T)-_,   time(T)).
+meta_property(comp(H,_,_)-_, host(H)).
+meta_property(comp(H,_)-_,   host(H)).
+meta_property(_-R,           result(R)).
