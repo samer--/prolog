@@ -4,6 +4,7 @@
       ,  kern_get_events/2
       ,  compare_time_key/3
       ,  pitch_notenum/2
+      ,  pitch_class/2
 		]).
 
 :- meta_predicate kern_get_events(2,-).
@@ -76,4 +77,12 @@ pc_nn(f,65).
 pc_nn(g,67).
 pc_nn(a,69).
 pc_nn(b,71).
+
+%% pitch_class(+P:pitch, -PC:pitch_class) is det.
+%
+%  Get pitch class from pitch by stripping octave modifiers.
+pitch_class(P,_) :- must_be(nonvar,P), fail.
+pitch_class(P/oct,PC) :- !, pitch_class(P,PC).
+pitch_class(P*oct,PC) :- !, pitch_class(P,PC).
+pitch_class(P,P).
 
