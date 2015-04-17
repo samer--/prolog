@@ -1,8 +1,10 @@
-:- module(humdrum_world, [	assert_humdrum/3, retract_humdrum/1 ]).
+:- module(humdrum_world, [	assert_humdrum/3, retract_humdrum/1, with_kern_module/4 ]).
 
 :- use_module(library(dcg_core)).
 :- use_module(library(humdrum)).
 :- use_module(library(data/env)).
+
+:- meta_predicate with_kern_module(+,+,+,0).
 
 humdrum_predicates(
 		[	spine/4          % spine( xinterp, spine, record, record). 
@@ -251,3 +253,11 @@ x_pathop( split(sp(N,R,I),sp(M1,R,J),sp(M2,R,J))) -->
 add_arg(X,T1,T2) :-
    T1=..L1, append(L1,[X],L2),
    T2=..L2.
+
+with_kern_module(File,Enc,Mod,Goal) :-
+   hum_read(File,Enc,Recs),
+   Mod='tmp$mod',
+   setup_call_cleanup(
+      assert_humdrum(library(humdrum/kern_rules),Recs,Mod),
+      Goal, retract_humdrum(Mod)).
+
