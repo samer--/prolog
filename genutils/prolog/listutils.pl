@@ -1,16 +1,15 @@
 :- module(listutils, 
 	[	natural/1		% test or enumerate natural numbers
 	,	int/1				% test or enumerate integers
-	,	take/3
-	,	drop/3
-	,	drop_while/3
-	,	take_while/3
+	,	take/3, takec/3, take_while/3
+	,	drop/3, dropc/3, drop_while/3
 	,  rep/3          % make a list of repeats of the same term
 	,  cons/3         % list constructror
 	,	decons/3       % list deconstructor
 	,	print_list/1	% writes each element on a new line 
 	,	printq_list/1	% as print_list but quotes atom as necessary
 	,	print_numbered_list/1
+   ,  zip/3
 	]).
 
 :- meta_predicate
@@ -90,14 +89,31 @@ rep(N,A,[A|X]) :-
 	; rep(M,A,X), succ(M,N)
 	).
 
-%% drop( +N:natural, +In:list(A), -Out:list(A)) is det.
-drop(0,T,T).
-drop(N,[_|T],V) :- succ(M,N), drop(M,T,V).
+%% drop( +N:natural, +In:list(A), -Out:list(A)) is semidet.
+%  True if removing exactly N elements from the head of In results in Out.
+%  Fails if there are fewer than N elements in In.
+drop(N,X,T) :- length(H,N), append(H,T,X).
 
+%% take( +N:natural, +In:list(A), -Out:list(A)) is semidet.
+%  True when Out consists of the first N elements of Out.
+%  Fails if In contains fewer than N elements.
+take(N,X,H) :- length(H,N), append(H,_,X).
 
-%% take( +N:natural, +In:list(A), -Out:list(A)) is det.
-take(N,T,X) :- length(X,N), append(X,_,T).
+%% dropc( +N:natural, +In:list(A), -Out:list(A)) is det.
+%  Unifies Out with the result of removing N elements from the head if In,
+%  or the empty list if In has fewer than N elements. (The 'c' is for a
+%  'complete' as opposed to a 'partial' function.)
+dropc(0,T,T) :- !.
+dropc(N,[_|T],V) :- !, succ(M,N), dropc(M,T,V).
+dropc(_,[],[]).
 
+%% takec( +N:natural, +In:list(A), -Out:list(A)) is semidet.
+%  Unifies Out with the first N elements of In,
+%  or the empty list if In has fewer than N elements. (The 'c' is for a
+%  'complete' as opposed to a 'partial' function.)
+takec(0,_,[]) :- !.
+takec(_,[],[]) :- !.
+takec(N,[X|XS],[X|YS]) :- succ(M,N), takec(M,XS,YS).
 
 %% drop_while( +P:pred(A), +In:list(A), -Out:list(A)) is det.
 %
@@ -113,5 +129,14 @@ drop_while(_,[],[]).
 %  and return them in Out.
 take_while(P,[X|T],O) :- call(P,X) -> O=[X|V], take_while(P,T,V); O=[].
 take_while(_,[],[]).
+
+%% zip( +X:list(A), +Y:list(B), -Z:list(pair(A,B))) is det.
+%% zip( -X:list(A), -Y:list(B), +Z:list(pair(A,B))) is det.
+%% zip( ?X:list(A), ?Y:list(B), ?Z:list(pair(A,B))) is nondet.
+%
+%  True when Z is the list of pairs formed from corresponding
+%  elements of X and Y. The pair type is =|pair(A,B) ---> A-B|=.
+zip([],[],[]).
+zip([X|XX],[Y|YY],[Z|ZZ]) :- Z=X-Y, zip(XX,YY,ZZ).
 
 
