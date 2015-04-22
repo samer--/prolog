@@ -4,6 +4,7 @@
    ,  command/3
    ,  with_pipe_output/3
    ,  with_pipe_input/3
+   ,  with_pipe_io/3
    ,  op(300,xfy,:>)
    ,  op(300,yfx,>:)
    ,  op(200,fy,@)
@@ -114,7 +115,9 @@
    * Decide on best quoting/escaping mechanism
 */
 
-:- meta_predicate with_pipe_output(-,+,0), with_pipe_input(-,+,0).
+:- meta_predicate with_pipe_output(-,+,0), 
+                  with_pipe_input(-,+,0), 
+                  with_pipe_io(-,+,0).
 :- multifile def/2.
 
 :- use_module(library(dcg_codes)).
@@ -190,9 +193,11 @@ either(P,T1,T2,_) :- throw(type_mismatch(P,T1,T2)).
 %
 %  Formats the shell command for a pipeline expression. Three argument
 %  version unifies Type with the inferred type of the pipeline.
+%  Throws an exception if the types do not unify.
 command(Pipeline,Cmd) :- command(Pipeline,_,Cmd).
 command(Pipeline,Type,Cmd) :-
-   pipe(Pipeline,Type,Codes,[]),
+   pipe(Pipeline,Type1,Codes,[]),
+   (Type=Type1 -> true; throw(swipe_type_mismatch(Pipeline,Type1,Type))),
    string_codes(Cmd,Codes).
 
 %% run(Pipe:(X>>Y)) is det
@@ -207,7 +212,7 @@ run(Pipeline) :-
    ).
 
 
-%% with_pipe_output(S:stream, Pipe:(0>>$Y), G:callable) is det.
+%% with_pipe_output(S:stream, Pipe:(0 >> $Y), G:callable) is det.
 %  
 %  Starts the given pipeline and calls goal G, with the standard output from
 %  the pipeline available on stream S. The type of Pipe reflects the requirement
@@ -227,6 +232,23 @@ with_pipe_input(S,Pipe,Goal) :-
    with_stream(S, open(pipe(Cmd),write,S), Goal).
 
 
+%% with_pipe_io(@Streams:pair(stream), +Pipe:($X >> $Y), P:callable) is det.
+%
+%  Runs the given pipeline with its input and output streams connected to
+%  Prolog streams. On calling =|with_pipe_io(I-O, Pipe, Goal)|=, I is
+%  unified with the Prolog stream feeding the process (and is therefore an
+%  output streams from the Prolog point of view), and O is unified with the
+%  Prolog stream coming out from the process (and is therefore an input stream
+%  from the Prolog point of view). The pipeline must have type $_ >> $_, that is,
+%  having both input and output streams.
+with_pipe_io(In-Out,Pipe,Goal) :-
+   command(Pipe, $_ >> $_, Cmd),
+   setup_call_cleanup( 
+      process_create(path(bash),['-c',Cmd],[stdin(pipe(In)), stdout(pipe(Out))]),
+      Goal,
+      (  close(In, [force(true)]), 
+         close(Out,[force(true)]))).
+      
 quote(strong,Codes) --> "'", esc(strong,Codes), "'".
 quote(weak,Codes) --> "\"", esc(weak,Codes), "\"".
 
