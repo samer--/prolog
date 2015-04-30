@@ -142,7 +142,15 @@ pipe(P+Q,T) -->        !, ppipe(P,T1), " & ", ppipe(Q,T2), {par_types(P+Q,T1,T2,
 pipe(in(D,P),T) -->    !, "cd ", file(D,write), " && ", ppipe(P,T). 
 pipe(sh(T,Str),T) -->  !, at(Str).
 pipe(sh(T,F,A),T) -->  !, {maplist(quote_arg,A,A1)}, fmt(F,A1). 
+pipe(ex(T,E,A),T) -->  !, at(Str), qargs(A).
 pipe(M,T) -->          {def(M,P)}, pipe(P,T).
+
+qargs([])     --> !, [].
+qargs([A|AA]) --> !, " ", qarg(strong,A), qargs(AA).
+
+qarg(QM,A) --> 
+   {format(codes(Codes),'~w',[A])},
+   quote(strong,Codes).
 
 file(Spec,Access) --> 
    {  (  atomic(Spec) -> atom_codes(Spec,Codes)
@@ -159,8 +167,7 @@ file(Spec,Access) -->
 quote_arg(\A,A).
 quote_arg(@A,B) :- 
    setting(quote_method,QM), 
-   format(codes(Codes),'~w',[A]),
-   quote(QM,Codes,Quoted,[]),
+   qarg(QM,A,Quoted,[]),
    string_codes(B,Quoted).
 quote_arg(Spec+Access,B) :- 
    file(Spec,Access,Codes,[]), 
