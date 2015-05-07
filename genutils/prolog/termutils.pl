@@ -28,12 +28,16 @@ with_status_line(Goal) :-
 		set_stream(user_output,buffer(Buff))).
 
 msg(F) :- msg(F,[]).
-msg(F,A) :- format(F,A), nl.
-ask(F,A,Ch) :- format(F,A), flush_output, get_single_char(C), put_char(C), char_code(Ch,C), nl.
-heading(F,A) :- ansi_format([bold],F,A), nl,nl.
+msg(F,A) :- format(user_output,F,A), nl.
+ask(F,A,Ch) :- 
+   format(user_output,F,A), flush_output(user_output), 
+   get_single_char(C), put_char(user_output,C), 
+   char_code(Ch,C), nl.
+heading(F,A) :- 
+   with_output_to(user_output, (ansi_format([bold],F,A), nl,nl)).
 status(F,A) :- 
-	format(string(Msg),F,A), 
+	format(user_output,string(Msg),F,A), 
 	flag(line_len,MaxLen,MaxLen),
 	string_length(Msg,Len),
 	(Len>MaxLen -> sub_string(Msg,0,MaxLen,_,Msg1); Msg=Msg1),
-	write(Msg1), put_cap(ce), put_cap(cr).
+	write(user_output,Msg1), put_cap(ce), put_cap(cr).
