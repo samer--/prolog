@@ -36,7 +36,7 @@ ask(F,A,Ch) :-
 heading(F,A) :- 
    with_output_to(user_output, (ansi_format([bold],F,A), nl,nl)).
 status(F,A) :- 
-	format(user_output,string(Msg),F,A), 
+	format(string(Msg),F,A), 
 	flag(line_len,MaxLen,MaxLen),
 	string_length(Msg,Len),
 	(Len>MaxLen -> sub_string(Msg,0,MaxLen,_,Msg1); Msg=Msg1),
