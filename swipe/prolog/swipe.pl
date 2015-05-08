@@ -5,6 +5,7 @@
    ,  with_pipe_output/3
    ,  with_pipe_input/3
    ,  with_pipe_io/3
+   ,  shell_quote//1
    ,  op(300,xfy,:>)
    ,  op(300,yfx,>:)
    ,  op(200,fy,@)
@@ -68,8 +69,14 @@
    shell_args ---> spec+access % A file spec and access mode, format with ~s
                  ; @ground     % any term, is written and escaped, format with ~s
                  ; \_.         % Any other kind of argument, passed through
+                 ; T<(_>>T)    % bash process redirection with pipeline of output type T
+                 ; T>(T>>_)    % bash process redirection with pipeline of input type T
    access ---> read ; write ; append ; execute.
    ==
+   In process redirection, a command expecting to read to or write from a named file can be
+   redirected to a bash pipeline. In this case, one end of the pipeline is attached to the command,
+   but the other end is left free. The input/output type of that free end interacts with the
+   type of overall command being constructed in the same way as parallel processes interact.
 
    ---+++ File names
 
@@ -120,6 +127,7 @@
                   with_pipe_io(-,+,0).
 :- multifile def/2.
 
+:- use_module(library(dcg_core)).
 :- use_module(library(dcg_codes)).
 :- use_module(library(fileutils)).
 :- use_module(library(settings)).
@@ -135,43 +143,54 @@ def(echo(S^T),sh(0 >> $T,"echo ~s",[@S])).
 
 ppipe(P,T) --> "(",pipe(P,T),")".
 pipe(P>>Q, X>>Z)   --> !, ppipe(P,X>>Y1), " | ", ppipe(Q,Y2>>Z), {u(P>>Q,Y1,Y2)}.
-pipe(F^X:>P, 0>>Y) --> !, ppipe(P, $X1 >> Y), " < ", file(F,read), {u(F^X:>P,X,X1)}.
-pipe(P>:F^Y, X>>0) --> !, ppipe(P, X >> $Y1), " > ", file(F,write), {u(P>:F^Y,Y1,Y)}.
+pipe(F^X:>P, 0>>Y) --> !, ppipe(P, $X1 >> Y), " < ", file(F,[access(read)]), {u(F^X:>P,X,X1)}.
+pipe(P>:F^Y, X>>0) --> !, ppipe(P, X >> $Y1), " > ", file(F,[access(write)]), {u(P>:F^Y,Y1,Y)}.
 pipe(P*Q, T) -->       !, ppipe(P,T1), " && ", ppipe(Q,T2), {seq_types(P*Q,T1,T2,T)}.
 pipe(P+Q,T) -->        !, ppipe(P,T1), " & ", ppipe(Q,T2), {par_types(P+Q,T1,T2,T)}.
-pipe(in(D,P),T) -->    !, "cd ", file(D,write), " && ", ppipe(P,T). 
-pipe(sh(T,Str),T) -->  !, at(Str).
-pipe(sh(T,F,A),T) -->  !, {maplist(quote_arg,A,A1)}, fmt(F,A1). 
-pipe(ex(T,E,A),T) -->  !, at(Str), qargs(A).
+pipe(in(D,P),T) -->    !, "cd ", abs(D,[file_type(directory)]), " && ", ppipe(P,T). 
+pipe(sh(T,Spec),T) --> !, sh(Spec,T).
+pipe(sh(T,F,A),T) -->  !, sh(F-A,T).
 pipe(M,T) -->          {def(M,P)}, pipe(P,T).
 
-qargs([])     --> !, [].
-qargs([A|AA]) --> !, " ", qarg(strong,A), qargs(AA).
+sh(Str,_) --> {atomic(Str)}, !, at(Str).
+sh(Fmt-Args,T) --> !, {maplist(arg_arg(T),Args,QArgs)}, fmt(Fmt,QArgs).
+sh([Cmd|Args],T) --> !, seqmap_with_sep(" ",arg(T),[Cmd|Args]).
+sh(\Phrase,_)  --> !, phrase(Phrase).
 
-qarg(QM,A) --> 
+shell_quote(A) --> 
+   {setting(quote_method,QM)},
    {format(codes(Codes),'~w',[A])},
-   quote(strong,Codes).
-
-file(Spec,Access) --> 
-   {  (  atomic(Spec) -> atom_codes(Spec,Codes)
-      ;  findall(P, absolute_file_name(Spec,P,[access(Access),solutions(all)]), Ps),
-         (  Ps=[] -> throw(no_matching_file(Spec:Access))
-         ;  Ps=[_,_|_] -> throw(indeterminate_file(Spec:Access,Ps))
-         ;  Ps=[Path] -> atom_codes(Path,Codes)
-         )
-      ),
-      setting(quote_method,QM) 
-   },
    quote(QM,Codes).
 
-quote_arg(\A,A).
-quote_arg(@A,B) :- 
-   setting(quote_method,QM), 
-   qarg(QM,A,Quoted,[]),
-   string_codes(B,Quoted).
-quote_arg(Spec+Access,B) :- 
-   file(Spec,Access,Codes,[]), 
-   string_codes(B,Codes).
+file(Spec,Opts) --> 
+   (  {compound(Spec); is_absolute_file_name(Spec)} 
+   -> abs(Spec,Opts)
+   ;  shell_quote(Spec)
+   ).
+
+abs(Spec,Opts) --> 
+   {  setof(P, absolute_file_name(Spec,P,[solutions(all)|Opts]), Ps)
+   -> (  Ps=[_,_|_] -> throw(indeterminate_file(Spec,Opts,Ps))
+      ;  Ps=[Path] -> true
+      )
+   ;  throw(no_matching_file(Spec,Opts))
+   },
+   shell_quote(Path).
+
+arg_arg(_,\A,A) :- !.
+arg_arg(T,Spec,String) :-
+   arg(T,Spec,Codes,[]),
+   string_codes(String,Codes).
+
+arg(_, \A) --> phrase(A).
+arg(_, @A) --> shell_quote(A).
+arg(_, Spec+Access) --> file(Spec,[access(Access)]). 
+arg(_, file(Spec))  --> file(Spec,[]).
+arg(_, file(Spec,Opts))  --> file(Spec,Opts).
+arg(X >> _, Z<Pipe) --> "<(", pipe(Pipe, Y >> $Z), ")", {lte(proc_subs_in(X,Y,Pipe),Y,X)}.
+arg(_ >> X, Z>Pipe) --> ">(", pipe(Pipe, $Z >> Y), ")", {lte(proc_subs_out(X,Y,Pipe),Y,X)}.
+arg(X >> _, $Pipe)  --> "$(", pipe(Pipe, Y >> _),  ")", {lte(cmd_subs(X,Y,Pipe),Y,X)}.
+arg(_, A) --> {atomic(A)}, at(A).
 
 
 seq_types(P,In1>>Out1,In2>>Out2,In>>Out) :-
@@ -185,6 +204,10 @@ par_types(P,In1>>Out1,In2>>Out2,In>>Out) :-
 
 u(_,T,T) :- !.
 u(P,T1,T2) :- throw(type_mismatch(P,T1,T2)).
+
+lte(_,T,T) :- !.
+lte(_,0,_) :- !.
+lte(P,T1,T2) :- throw(type_mismatch(P,T1,T2)).
 
 meet(_,T,T,T) :- !.
 meet(_,0,T,T) :- !.
@@ -227,6 +250,7 @@ run(Pipeline) :-
 %  standard output.
 with_pipe_output(S,Pipe,Goal) :-
    command(Pipe, 0 >> $_, Cmd),
+   debug(swipe,'reading from pipeline: ~s',[Cmd]),
    with_stream(S, open(pipe(Cmd),read,S), Goal).
 
 %% with_pipe_input(S:stream, Pipe:(0>>$Y), G:callable) is det.
@@ -236,6 +260,7 @@ with_pipe_output(S,Pipe,Goal) :-
 %  for it to expect input on stdin input and produce nothing on the output.
 with_pipe_input(S,Pipe,Goal) :-
    command(Pipe, $_ >> 0, Cmd),
+   debug(swipe,'writing to pipeline: ~s',[Cmd]),
    with_stream(S, open(pipe(Cmd),write,S), Goal).
 
 
@@ -250,6 +275,7 @@ with_pipe_input(S,Pipe,Goal) :-
 %  having both input and output streams.
 with_pipe_io(In-Out,Pipe,Goal) :-
    command(Pipe, $_ >> $_, Cmd),
+   debug(swipe,'reading/writing pipeline: ~s',[Cmd]),
    setup_call_cleanup( 
       process_create(path(bash),['-c',Cmd],[stdin(pipe(In)), stdout(pipe(Out))]),
       Goal,
