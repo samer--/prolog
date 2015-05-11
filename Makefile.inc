@@ -8,6 +8,7 @@
 
 VER=$(shell cat VERSION)
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
+ZIPFILE=release/$(PACKNAME)-$(VER).zip
 
 main: 
 
@@ -21,6 +22,11 @@ pack: packdir
 	tar czf $(PACKFILE) $(PACKNAME)
 	rm -rf $(PACKNAME)
 	git add $(PACKFILE)
+
+zip: packdir
+	zip -r $(ZIPFILE) $(PACKNAME)
+	rm -rf $(PACKNAME)
+	git add $(ZIPFILE)
 
 push:
 	git push && chmod -w $(PACKFILE)
