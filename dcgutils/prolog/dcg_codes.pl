@@ -1,6 +1,9 @@
 :- module(dcg_codes, [
 		writedcg/1
 
+   % Types
+   ,  ctype//1
+
    % Constants
 	,	null//0
    ,	cr//0
@@ -60,6 +63,12 @@ writedcg(Phrase) :-
 	phrase(Phrase,Codes),
 	format('~s',[Codes]).
 		
+
+%% ctype(Type)// is nondet.
+%  Matches a code C that satisfies code_type(C,Type). See char_type/2 
+%  for listing of types.
+ctype(T) --> [X], {code_type(X,T)}.
+
 %% null// is det.
 %  Empty string.
 null  --> "".
