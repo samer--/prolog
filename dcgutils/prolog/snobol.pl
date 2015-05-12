@@ -8,6 +8,8 @@
    ,  break//1
    ,  len//1
    ,  rem//0
+   ,  ($)//2
+   ,  op(400,yfx,$)
    ]).
 
 
@@ -18,6 +20,9 @@
    SUCCEED is {repeat} or dcg_core:repeat.
    FENCE is ! (cut).
 
+   Sequence capture in SNOBOL ($) is also $ here: use Phrase $ List to
+   capture the sequence matched by Phrase in the List.
+
    ABORT cannot be implemented in plain Prolog because there is no
    ancestral cut operator. Instead abort//0 just throws an exception
    which you must arrange to catch yourself.
@@ -27,7 +32,7 @@
    the string.
 */
 
-:- meta_predicate arbno(//,?,?).
+:- meta_predicate arbno(//,?,?), $(//,?,?,?).
 
 % SNOBOL4ish rules
 %
@@ -35,6 +40,12 @@
 %		maxarb
 %		pos rpos
 %		tab rtab
+
+
+%% Phrase $ List is nondet.
+%  True when Phrase is true an List is the sequence of
+%  terminals matched by it.
+$(P,L,S1,S2) :- phrase(P,S1,S2), append(L,S2,S1).
 
 %% rem// is det.
 rem(_,[]).
@@ -57,7 +68,7 @@ arb       --> []; [_], arb.
 %% arbno(+P:phrase)// is nondet.
 %  Matches an arbitrary number of P. Proceeds cautiously.
 %  Any variables in P are shared across calls.
-arbno(P)  --> []; phrase(P), arbno(P).
+arbno(P)  --> []; call_dcg(P), arbno(P).
 
 %% span(+L:list(_))// is nondet.
 %  Matches the longest possible sequence of symbols from L.
