@@ -10,6 +10,7 @@
 	,	once//1
 	,	repeat//0
    ,  fail//0
+   ,  (\+)//1
 
    % combinators
 	,	(>>)//2
@@ -96,6 +97,7 @@ arguments.
 	,	opt(//,?,?)
 	,	once(//,?,?)
 	,	repeat(?,?)
+	,	\+(//,?,?)
 	,	>>(//,//,?,?)
    ,  //(//,//,?,?)
 
@@ -187,6 +189,10 @@ repeat(A,A) :- repeat.
 %% fail// is nondet.
 %  Fails immediately.
 fail(_,_) :- fail.
+
+%% \+(G:phrase(_)) is semidet.
+%  Succeeds if G fails..
+\+(G,A,B) :- \+call_dcg(G,A,B).
 
 %% >>(G1:phrase(S), G2:phrase(S))// is nondet.
 % Sequential conjuction of phrases G1 and G2, equivalent to (G1,G2),
