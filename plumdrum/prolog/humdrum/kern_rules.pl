@@ -121,14 +121,13 @@
 	*	post_appoggiatura
 
 
-	---++++ TODO
+	---++++ TODO (these are from the kern player - what are they doing here?)
 
 	-	slurs, glissandi, phrasing (using supercollider?)
 	-  grace notes, groupettos etc.
 	-  elided phrases and slurs
  	- 	expansion lists
 	-	live intervention
-
 	-	trail stack and local stack size growth
 */
 
@@ -370,7 +369,8 @@ kern_note(Event,Dur,Tie,S,R) :-
 	xinterp(kern,S,R),
 	data_token(Data,Tok),
 	(	kern_pitch(Tok,Pitch) -> Event=pitch(Pitch)
-	;	kern_rest(Tok)        -> Event=rest),
+	;	kern_rest(Tok)        -> Event=rest
+   ),
 	kern_duration(Tok,Dur),
 	kern_tie(Tok,Tie).
 

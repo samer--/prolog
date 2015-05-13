@@ -1,13 +1,13 @@
-:- module(kern, 
+:- module(kern,
 		[	kern_duration/2
 		,	kern_pitch/2
 		,	kern_rest/1
-		]). 
+		]).
 
 /** <module> Kern spine format for Humdrum objects
 
    This defines hooks into the humdrum module to enable it to parse
-   Kern format spines. The predicates exported are hum_data_hook//2 
+   Kern format spines. The predicates exported are hum_data_hook//2
    and hum_duration_hook/3.
 */
 
@@ -23,7 +23,7 @@
 humdrum:hum_data_hook(kern,Sigs) --> !, seqmap(kern,Sigs).
 
 humdrum:hum_duration_hook(kern,tok(E),D) :- !, kern_duration(E,D).
-humdrum:hum_duration_hook(kern,sub(EX),D) :- !, 
+humdrum:hum_duration_hook(kern,sub(EX),D) :- !,
 	(	maplist(dur_token(D),EX) -> true
 	;	throw(kern_semantics(subtoken_duration_mismatch(EX)))
 	).
@@ -38,7 +38,7 @@ kern_duration(_,0).
 
 %% kern_pitch( +S:data, -P:pitch) is nondet.
 %  True when P is one of the pitches contained in a Kern data term.
-kern_pitch(Sigs,Pitch) :- member(pitch(Note,Oct),Sigs), !, oct_note_pitch(Oct,Note,Pitch). 
+kern_pitch(Sigs,Pitch) :- member(pitch(Note,Oct),Sigs), !, oct_note_pitch(Oct,Note,Pitch).
 
 %% kern_rest( +S:data) is nondet.
 %  True when Kern data term S signifies a rest.
@@ -62,7 +62,6 @@ kern(articulation(_)).
 kern(ornament(_)).
 kern(grace(_)).
 kern(par(_,_)).
-kern(elision(_)).
 kern(beam(_)).
 kern(stem(_)).
 kern(editorial).
@@ -74,13 +73,13 @@ rest --> "r";"rr".
 par(open,tie)   --> "[".
 par(cont,tie)   --> "_".
 par(close,tie)  --> "]".
-par(open,slur)  --> "(".
-par(close,slur) --> ")".
-par(open,phrase)   --> "{".
-par(close,phrase)  --> "}".
+par(open,slur-0)  --> "(".
+par(close,slur-0) --> ")".
+par(open,phrase-0)   --> "{".
+par(close,phrase-0)  --> "}".
 par(open,glissando)   --> "H".
 par(close,glissando)  --> "h".
-elision(par(A,B)) --> "&", par(A,B). 
+par(Op,Type-N) --> peek("&"), rep_shared(N,"&"), par(Op,Type-0).
 
 articulation(staccato)  --> "'".
 articulation(spiccato)  --> "s".
@@ -88,15 +87,15 @@ articulation(pizzicato) --> "\"".
 articulation(attacca)   --> "`".
 articulation(tenuto)    --> "~".
 articulation(accent)    --> "^".
-articulation(generic)    --> "I".
-articulation(harmonic)    --> "o".
-articulation(sordino)    --> "U".
-articulation(sforzando)  --> "z".
-articulation(down_bow)   --> "u".
-articulation(up_bow)     --> "v".
-articulation(arpeggio)   --> ":".
-articulation(pause) --> ";".
-articulation(breath) --> ",".
+articulation(generic)   --> "I".
+articulation(harmonic)  --> "o".
+articulation(sordino)   --> "U".
+articulation(sforzando) --> "z".
+articulation(down_bow)  --> "u".
+articulation(up_bow)    --> "v".
+articulation(arpeggio)  --> ":".
+articulation(pause)     --> ";".
+articulation(breath)    --> ",".
 
 ornament(turn) --> "S".
 ornament(wagnerian_turn) --> "$".
@@ -131,7 +130,7 @@ grace(post_appoggiatura) --> "p".
 	\	down-stem
 */
 
-beam(B) --> ("kk";"k";"JJ";"J";"KK";"K";"LL";"L")//list(Codes), {atom_codes(B,Codes)}. 
+beam(B) --> ("kk";"k";"JJ";"J";"KK";"K";"LL";"L")//list(Codes), {atom_codes(B,Codes)}.
 stem(S) --> ("/";"\\")//list(Codes), {atom_codes(S,Codes)}.
 
 /*
@@ -148,7 +147,7 @@ editorial --> "xx";"x";"y";"XX";"X";"Y";"??";"?".
 
 % !!!RDF**piano: X=hands cross, left over right
 
-undefined(XX) --> [X], {member(X,"VijlNZ@+|<>"), char_code(XX,X)}. 
+undefined(XX) --> [X], {member(X,"VijlNZ@+|<>"), char_code(XX,X)}.
 undefined('%') --> "%".
 
 
