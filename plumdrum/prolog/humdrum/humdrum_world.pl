@@ -4,7 +4,8 @@
 :- use_module(library(humdrum)).
 :- use_module(library(data/env)).
 
-:- meta_predicate with_kern_module(+,+,+,0).
+% :- meta_predicate with_kern_module(+,+,+,0).
+:- module_transparent with_kern_module/4.
 
 humdrum_predicates(
 		[	spine/4          % spine( xinterp, spine, record, record). 
@@ -255,9 +256,13 @@ add_arg(X,T1,T2) :-
    T2=..L2.
 
 with_kern_module(File,Enc,Mod,Goal) :-
+   context_module(CM),
    hum_read(File,Enc,Recs),
-   Mod='tmp$mod',
-   setup_call_cleanup(
+   in_temporary_module(Mod,
       assert_humdrum(library(humdrum/kern_rules),Recs,Mod),
-      Goal, retract_humdrum(Mod)).
+      @(Goal,CM)).
+   % Mod='tmp$mod',
+   % setup_call_cleanup(
+   %    assert_humdrum(library(humdrum/kern_rules),Recs,Mod),
+   %    Goal, retract_humdrum(Mod)).
 
