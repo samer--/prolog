@@ -8,8 +8,9 @@
 
 VER=$(shell cat VERSION)
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
+EPACKFILE=release\/$(PACKNAME)-$(VER).tgz
 ZIPFILE=release/$(PACKNAME)-$(VER).zip
-DOWNLOAD=https://raw.githubusercontent.com/samer--/prolog/master/$(PACKNAME)/$(PACKFILE)
+DOWNLOAD=https:\/\/raw.githubusercontent.com\/samer--\/prolog\/master\/$(PACKNAME)\/$(EPACKFILE)
 
 main: 
 
