@@ -17,8 +17,3 @@ genutils    - Miscellaneous utilities
 webutils    - Web-related utilities
 plumdrum    - Humdrum symbolic music format reading
 
-
-
-TODO
-
-Move download links to https://raw.githubusercontent.com/samer--/prolog/master/...

@@ -9,12 +9,13 @@
 VER=$(shell cat VERSION)
 PACKFILE=release/$(PACKNAME)-$(VER).tgz
 ZIPFILE=release/$(PACKNAME)-$(VER).zip
+DOWNLOAD=https://raw.githubusercontent.com/samer--/prolog/master/$(PACKNAME)/$(PACKFILE)
 
 main: 
 
 packdir:
 	mkdir -p $(PACKNAME) $(PACKNAME)/prolog 
-	sed -e "s/<VER>/$(VER)/g" < pack.pl | sed -e "s/<PACKNAME>/$(PACKNAME)/g" > $(PACKNAME)/pack.pl
+	sed -e "s/<VER>/$(VER)/g" < pack.pl | sed -e "s/<PACKNAME>/$(PACKNAME)/g" | sed -e "s/<DOWNLOAD>/$(DOWNLOAD)/g" > $(PACKNAME)/pack.pl
 	rsync -ar --delete --exclude '.*' prolog $(PACKNAME)
 	cp -p README $(PACKNAME)
 
