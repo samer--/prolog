@@ -116,7 +116,9 @@
    - check for duplicate declarations
    - check for missing predicate definitions
 */
+
 :- meta_predicate 
+      memo_attach(:,+),
       modally(0),
       call_with_mode(+,0),
       memo(0), memo(0,-), 
@@ -165,16 +167,17 @@ user:term_expansion(init_hostname,hostname(H)) :-
 init_hostname.
 
 
-%% memo_attach(+File:text, +Options:options) is det.
+%% memo_attach(:File:text, +Options:options) is det.
 %
 %  Convenience wrapper for db_attach/2. Attaches a persistent database file with the
 %  given name in the directory specified in the memo:db_directory setting. Options
 %  is passed to db_attach/2. If File is an absolute path, then the db_directory setting
 %  is ignored.
-memo_attach(File,Opts) :-
+memo_attach(Module:File,Opts) :-
    setting(db_directory,Dir),
    directory_file_path(Dir,File,Path),
-   db_attach(Path,Opts).
+   debug(memo,'Attaching db file ~s to module ~w.',[Path,Module]),
+   db_attach(Module:Path,Opts).
 
 
 %% volatile_memo(+Spec) is det.
