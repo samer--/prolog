@@ -12,6 +12,7 @@
     , op(1150,fx,persistent_memo)
     , modally/1
     , meta_property/2
+    , memo_attach/2
     ]).
 
 /** <module> Memoisation of deterministic predicates
@@ -148,6 +149,7 @@
 
 :- setting(confirmation_style, list(ground), [bold,fg(red)], "Confirmation message style options.").
 :- setting(confirmation_threshold, integer, 1, "Maximum entries for silent clear_all deletion.").
+:- setting(db_directory, text, '.', "Directory prefix for database files via memo_attach/2").
 
 
 user:term_expansion(init_hostname,hostname(H)) :-
@@ -161,6 +163,19 @@ user:term_expansion(init_hostname,hostname(H)) :-
 
 :- dynamic hostname/1.
 init_hostname.
+
+
+%% memo_attach(+File:text, +Options:options) is det.
+%
+%  Convenience wrapper for db_attach/2. Attaches a persistent database file with the
+%  given name in the directory specified in the memo:db_directory setting. Options
+%  is passed to db_attach/2. If File is an absolute path, then the db_directory setting
+%  is ignored.
+memo_attach(File,Opts) :-
+   setting(db_directory,Dir),
+   directory_file_path(Dir,File,Path),
+   db_attach(Path,Opts).
+
 
 %% volatile_memo(+Spec) is det.
 %
