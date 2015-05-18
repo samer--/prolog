@@ -151,7 +151,6 @@
 
 :- setting(confirmation_style, list(ground), [bold,fg(red)], "Confirmation message style options.").
 :- setting(confirmation_threshold, integer, 1, "Maximum entries for silent clear_all deletion.").
-:- setting(db_directory, text, '.', "Directory prefix for database files via memo_attach/2").
 
 
 user:term_expansion(init_hostname,hostname(H)) :-
@@ -167,16 +166,16 @@ user:term_expansion(init_hostname,hostname(H)) :-
 init_hostname.
 
 
-%% memo_attach(:File:text, +Options:options) is det.
+%% memo_attach(:Spec:filespec, +Options:list) is det.
 %
-%  Convenience wrapper for db_attach/2. Attaches a persistent database file with the
-%  given name in the directory specified in the memo:db_directory setting. Options
-%  is passed to db_attach/2. If File is an absolute path, then the db_directory setting
-%  is ignored.
-memo_attach(Module:File,Opts) :-
-   setting(db_directory,Dir),
-   directory_file_path(Dir,File,Path),
-   debug(memo,'Attaching db file ~s to module ~w.',[Path,Module]),
+%  Convenience wrapper for db_attach/2. Attaches a persistent database file. Spec is
+%  interpreted by absolute_file_name/3, with a default extension of 'db'.
+memo_attach(Module:Spec,Opts) :-
+   (  absolute_file_name(Spec,Path,[access(read),extensions([db]), file_errors(fail)])
+   -> debug(memo,'memo spec ~w: found old db file ~s',[Spec,Path])
+   ;  absolute_file_name(Spec,Path,[access(write)]),
+      debug(memo,'memo spec ~w: creating new db file ~s',[Spec,Path])
+   ),
    db_attach(Module:Path,Opts).
 
 
@@ -390,8 +389,6 @@ compile_memo(volatile, Spec, Module) -->
       build_term([MemoName], [MetaA|Args], AssertHead),
       build_term([MemoName], [Meta|Args], RetractHead),
       build_term(['compute_',Name],Args, ComputeHead),
-      debug(memo,"-  backed  by ~q...",[MemoName/MemoArity]),
-      debug(memo,"-  computed by ~q...",[ComputeHead]),
       hostname(Host), MetaA=comp(Host,_,_)-_
    },
    [ :- dynamic(MemoName/MemoArity),
@@ -422,8 +419,6 @@ compile_memo(persistent, Spec, Module) -->
 
       maplist(mtype_to_ptype, ArgSpecs, PTypes),
       PersistencySpec =.. [MemoName,meta:metadata | PTypes],
-      debug(memo,"-  backed  by ~q...",[PersistencySpec]),
-      debug(memo,"- computed by ~q...",[ComputeHead]),
       expand_term( (:- persistent(PersistencySpec)), PersistClauses),
       hostname(Host), MetaA=comp(Host,_,_)-_
    },
