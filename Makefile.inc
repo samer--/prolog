@@ -19,6 +19,7 @@ packdir:
 	sed -e "s/<VER>/$(VER)/g" < pack.pl | sed -e "s/<PACKNAME>/$(PACKNAME)/g" | sed -e "s/<DOWNLOAD>/$(DOWNLOAD)/g" > $(PACKNAME)/pack.pl
 	rsync -ar --delete --exclude '.*' prolog $(PACKNAME)
 	cp -p README $(PACKNAME)
+	cp -p COPYING* $(PACKNAME)
 
 pack: packdir
 	tar czf $(PACKFILE) $(PACKNAME)
