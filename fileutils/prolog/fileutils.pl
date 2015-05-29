@@ -1,5 +1,5 @@
 /* Part of fileutils
-	Copyright 2012-2014 Samer Abdallah (Queen Mary University of London; UCL)
+	Copyright 2012-2015 Samer Abdallah (Queen Mary University of London; UCL)
 	 
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU Lesser General Public License
@@ -33,7 +33,8 @@
       extension_in/2,
 
       with_temp_dir/2,        % @Dir, +Goal
-      in_temp_dir/1           % +Goal          
+      in_temp_dir/1,          % +Goal          
+      file_modes/4            % +File, -UserClass, -Action, -Legal
 	]).
 
 /** <module> File reading, writing, and finding utilities
@@ -383,3 +384,41 @@ with_temp_dir(Dir,Goal) :-
 %    delete_file(Path).
 
 
+:- if(current_prolog_flag(unix,true)).
+
+:- if(current_prolog_flag(apple,true)).
+stat_args(File,['-f','%Sp',File]).
+:- else.
+stat_args(File,['-f','%A',File]).
+:- endif.
+
+%% file_modes(+File:path, +UserClass:oneof([owner,group,other]), +Action:oneof([read,write,execute]), -Legal:boolean) is det.
+%% file_modes(+File:path, -UserClass:oneof([owner,group,other]), -Action:oneof([read,write,execute]), -Legal:boolean) is multi.
+file_modes(File,UserClass,Action,Legal) :-
+   stat_args(File,StatArgs),
+   setup_call_cleanup(
+      process_create('/usr/bin/stat',StatArgs,[stdout(pipe(Out))]),
+      read_line_to_string(Out,Modes),
+      close(Out)),
+   user_action_index(UserClass,Action,I,TrueVal),
+   sub_string(Modes,I,1,_,Val),
+   (  Val=TrueVal -> Legal=true
+   ;  Val="-"     -> Legal=false
+   ;  throw(unexpected_mode_char(File,I,Val))
+   ).
+
+user_action_index(owner,read,1,"r").
+user_action_index(owner,write,2,"w").
+user_action_index(owner,execute,3,"x").
+user_action_index(group,read,4,"r").
+user_action_index(group,write,5,"w").
+user_action_index(group,execute,6,"x").
+user_action_index(other,read,7,"r").
+user_action_index(other,write,8,"w").
+user_action_index(other,execute,9,"x").
+
+:- else.
+
+file_modes(_,_,_,_) :- throw(not_implemented(file_modes/4)).
+
+:- endif.
