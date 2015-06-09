@@ -19,12 +19,14 @@
 :- module(dcg_pair, [
 		(\<)//1
 	,	(\>)//1
+   ,  (<\>)//2
 	,	run_left//3
 	,	run_right//3
 	,	(\#)//2
 
 	,  op(900,fy,\<)
 	,	op(900,fy,\>)
+	,	op(900,xfx,<\>)
 	,  op(900,xfy,\#)
    ]).
 
@@ -49,6 +51,7 @@
 	,	run_right(//,?,?,?,?)
 	,	\<(//,?,?)
 	,	\>(//,?,?)
+	,	<\>(//,//,?,?)
 	,	\#(?,//,?,?)
    .
 
@@ -66,6 +69,12 @@
 %  Apply phrase P which must be of type pred(B,B) to right
 %  part of a paired state.
 \>(P,A-B1,A-B2) :- call_dcg(P,B1,B2).
+
+%% <\>(PA:phrase(A), PB:phrase(B), ?S1:pair(A,B), ?S2:pair(A,B)) is nondet.
+%
+%  Apply phrases PA and PB to paired states by applying PA to left state and PB to
+%  right state.
+<\>(A,B,L1-R1,L2-R2) :- call_dcg(A,L1,L2), call_dcg(B,R1,R2).
 
 %% run_left(P:phrase(pair(A,B)), ?A1:A, ?A2:A, ?B1:B, ?B2:B) is multi.
 %

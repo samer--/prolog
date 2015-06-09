@@ -31,6 +31,7 @@
    *  run_right//3
    *  (\<)//1
    *  (\>)//1
+   *  (<\>)//1
    *  (//)//2
    *  seqmap//N
    *  seqmap_with_sep//N
@@ -39,6 +40,7 @@
 
 :- op(900,fy,\<).
 :- op(900,fy,\>).
+:- op(900,fy,<\>).
 :- op(900,xfy,\#).
 
 :- use_module(library(dcg_core)).
@@ -179,6 +181,8 @@ goal_expansion( run_left(P,S1,S2,T1,T2), call_dcg(P,(S1-T1),(S2-T2))).
 goal_expansion( run_right(P,S1,S2,T1,T2), call_dcg(P,(T1-S1),(T2-S2))).
 goal_expansion( \<(P,S1,S2), (S1=(L1-R),S2=(L2-R),call_dcg(P,L1,L2)) ).
 goal_expansion( \>(P,S1,S2), (S1=(L-R1),S2=(L-R2),call_dcg(P,R1,R2)) ).
+%goal_expansion( <\>(A,B,S1,S2), (S1=L1-R1, S2=L2-R2, call_dcg(A,L1,L2), call_dcg(B,R1,R2))).
+goal_expansion( <\>(A,B,S1,S2), (call_dcg(A,L1,L2), call_dcg(B,R1,R2))) :- !, S1=L1=R1, S2=L2-R2.
 goal_expansion( nop(S1,S2), (S1=S2) ).
 goal_expansion( out(X,S1,S2), (S1=[X|S2]) ).
 goal_expansion( get(S,S1,S2), (S=S1,S1=S2) ).
