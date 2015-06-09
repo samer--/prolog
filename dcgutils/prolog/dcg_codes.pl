@@ -18,6 +18,7 @@
 
 :- module(dcg_codes, [
 		writedcg/1
+   ,  phrase_string/2
 
    % Types
    ,  ctype//1
@@ -62,6 +63,7 @@ be used to generate sequences, not parse them.
 
 :- meta_predicate 
 		writedcg(2)
+   ,  phrase_string(//,-)
 	,	brace(//,?,?)
 	,	paren(//,?,?)
 	,	sqbr(//,?,?)
@@ -81,6 +83,16 @@ writedcg(Phrase) :-
 	phrase(Phrase,Codes),
 	format('~s',[Codes]).
 		
+
+%% phrase_string(+P:phrase,-S:string) is nondet.
+%% phrase_string(+P:phrase,+S:string) is nondet.
+%
+%  Use list-of-codes DCG phrase P to parse or generate a string S.
+phrase_string(Phrase,String) :-
+   (  var(String)
+   -> phrase(Phrase,Codes), string_codes(String,Codes).
+   ;  string_codes(String,Codes), phrase(Phrase,Codes)
+   ).
 
 %% ctype(Type)// is nondet.
 %  Matches a code C that satisfies code_type(C,Type). See char_type/2 

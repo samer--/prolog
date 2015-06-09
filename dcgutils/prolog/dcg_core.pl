@@ -29,6 +29,7 @@
 	,	repeat//0
    ,  fail//0
    ,  (\+)//1
+   ,  freeze//2
 
    % combinators
 	,	(>>)//2
@@ -116,6 +117,7 @@ arguments.
 	,	once(//,?,?)
 	,	repeat(?,?)
 	,	\+(//,?,?)
+   ,  freeze(-,//,?,?)
 	,	>>(//,//,?,?)
    ,  //(//,//,?,?)
 
@@ -212,12 +214,16 @@ fail(_,_) :- fail.
 %  Succeeds if G fails..
 \+(G,A,B) :- \+call_dcg(G,A,B).
 
+%% freeze(@V:var,+G:phrase(A),?S1:A,?S2:A) is nondet.
+%  Suspends the application of DCG goal G to S1 and S2 until variable V is instantiated.
+freeze(Var,Goal,S1,S2) :- freeze(Var,call_dcg(Goal,S1,S2)).
+
 %% >>(G1:phrase(S), G2:phrase(S))// is nondet.
 % Sequential conjuction of phrases G1 and G2, equivalent to (G1,G2),
 % but sometimes more convenient in terms of operator priorities.
 A >> B --> call_dcg(A), call_dcg(B).
 
-%% //(+P1:phrase(A), +P2:phrase(A), ?S1:list(A), ?S2:list(A)) is nondet.
+%% //(+P1:phrase(A), +P2:phrase(A), ?S1:A, ?S2:A) is nondet.
 %
 %  Parallel goal operator - succeeds if both phrases succeeds with the
 %  same start and end states. P1 is called first. 
