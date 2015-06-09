@@ -1,0 +1,20 @@
+This is a template for a SWI Prolog add-on package.
+To complete it:
+1. Write something helpful in this README;
+2. Edit the Makefile to give the package a name;
+3. Edit the pack.pl to dependencies, keywords etc;
+4. Write the code in prolog/;
+5. Do a local test using 'make install';
+6. Put the whole lot on github;
+7. Do a public install using 'make install-git'.
+
+------------------------------------------------
+
+This package provides ...
+
+---++++ Prerequisites
+
+---++++ Simple usage
+
+---++++ Planned enhancements
+
