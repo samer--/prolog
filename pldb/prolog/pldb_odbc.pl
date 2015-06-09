@@ -1,7 +1,7 @@
 :- module(pldb_odbc,[]).
 
 :- use_module(library(odbc)).
-:- use_module(pldb).
+:- use_module(library(pldb_core)).
 
 pldb:dbh_connect(odbc(DSN,Opts),odbc(Con))       :- odbc_connect(DSN,Con,Opts).
 pldb:dbh_disconnect(odbc(Con))                   :- odbc_disconnect(Con).

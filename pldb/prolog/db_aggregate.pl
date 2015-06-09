@@ -1,6 +1,6 @@
 :- module(db_aggregate, [db_aggregate/5]).
 
-:- use_module(library(pldb)).
+:- use_module(library(pldb_core)).
 
 %% db_aggregate( +Con, +Head:head(selector), +Spec:list(aggr), +GVars:list(var), -Res:list(_)) is nondet.
 %

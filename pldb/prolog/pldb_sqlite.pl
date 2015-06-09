@@ -1,7 +1,7 @@
 :- module(pldb_sqlite,[]).
 
 :- use_module(library(prosqlite)).
-:- use_module(pldb).
+:- use_module(library(pldb_core)).
 
 pldb:dbh_connect(sqlite(File,Opts),sqlite(Con))    :- sqlite_connect(File,Con,[ext('')|Opts]).
 pldb:dbh_disconnect(sqlite(Con))                   :- sqlite_disconnect(Con).
