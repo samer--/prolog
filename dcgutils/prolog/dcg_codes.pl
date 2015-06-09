@@ -90,7 +90,7 @@ writedcg(Phrase) :-
 %  Use list-of-codes DCG phrase P to parse or generate a string S.
 phrase_string(Phrase,String) :-
    (  var(String)
-   -> phrase(Phrase,Codes), string_codes(String,Codes).
+   -> phrase(Phrase,Codes), string_codes(String,Codes)
    ;  string_codes(String,Codes), phrase(Phrase,Codes)
    ).
 
