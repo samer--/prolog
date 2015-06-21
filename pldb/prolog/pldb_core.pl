@@ -25,7 +25,7 @@
 	,	db_current_table/3
 	,	db_transaction/2
 
-	,	db_create_table/3
+	,	db_create_table/4
    ,  db_drop_table/2
 	,	db_update/3
 	,	db_delete/3
@@ -210,16 +210,14 @@ end_trans(Con,Act) :- del_state(trans,Con,_),   dbx(Con,at(Act)).
 
 % ----------------- CREATE/DROP TABLES -------------------------------
 
-%% db_create_table(+Con, +Spec:table_spec, +Opts) is semidet.
+%% db_create_table(+Con, +TableName:atom, +Columns:list(column_spec), +Opts) is semidet.
 %
-% create a table with given name and column types in Spec
-% Spec should be a term like table_name(Name1:Type1,Name2:Type2,...)
-db_create_table(Con,Spec,Opts) :- 
-   Spec =.. [Table|Columns],
-   dbx(Con,sql(create(table(Table,Columns,Opts)))).
+% Create a table with given name and column types.
+db_create_table(Con,Table,Columns,Opts) :- 
+   dbx(Con,sql(create_table(Table,Columns,Opts))).
 
 db_drop_table(Con,Table) :-
-   dbx(Con,sql(drop(table(Table)))),
+   dbx(Con,sql(drop_table(Table))),
    del_state(table(Table),Con,_).
 
 % ----------------- INSERTING  ----------------------------
@@ -233,9 +231,6 @@ db_drop_table(Con,Table) :-
 db_insert(Con,Head) :-
 	analyse_head(Con,Head,Table,Args,Cols), % !!! exclude oids!
 	dbx(Con, sql(insert(Table,Args,Cols))).
-
-% need code to convert terms to text..
-%term_to_codes(V,Codes)}, quote_escaped(Codes).
 
 % -------------------- SELECT -------------------------------- 
 
@@ -288,10 +283,7 @@ build_select(Actions,Cols,SelArgs1,Where,Args1) :-
 
 
 %% sel( +X:selector, +Col:column_spec)// is det.
-%
-%  Handle one selector and generate match conditions and selection arguments
-%  as necessary. 
-% no condition, select value X from column N.
+%  Handle one selector and generate match conditions and selection arguments  as necessary. 
 sel(V,N:T) --> \< match(V,N:T), \> if( sel_out(V,V1), out(N) <\> out(V1:T)).
 
 sel_out(V,V) :- var(V), !.
@@ -330,18 +322,34 @@ db_delete(Con,Head,N) :-
 	dbh_query_affected(Con,SQL,N), !.
 
 
+% --------- Generation of matching conditions -----------
+
 %% match( +X:selector, +Col:column_spec)// is det.
 match(V,     _)   --> {var(V)}, !.
-match(V:=C,  N:T) --> !, {must_be(var,V)}, test_cond(N:T,C).
-match(V,     N:T) --> ( {ground(V);V=null(_)} -> out((N=V):T)
-                      ; {phrase_string(term_pattern(V),Pattern)}, out(like(N,Pattern):T)
-                      ).
+match(V:=C,  N:T) --> !, {must_be(var,V),mk_cond(N:T,C,C1)}, out(C1).
+% match(V,     N:T) --> ( {ground(V);V=null(_)} -> out((N:T)=V)
+%                       ; {phrase_string(term_pattern(V),Pattern)}, out(like(N,Pattern):T)
+%                       ).
+
+%% mk_cond( +Name:column_name, +C1:tester, -C2:condition) is det.
+% Translate unary algebra of conditions on column into boolean expression.
+mk_cond(S, (C1,C2), (C11,C21)) :- !, mk_cond(S,C1,C11), mk_cond(S,C2,C21).
+mk_cond(S, (C1;C2), (C11;C21)) :- !, mk_cond(S,C1,C11), mk_cond(S,C2,C21).
+mk_cond(S, \+(C),  \+(C1))    :- !, mk_cond(S,C,C1).
+mk_cond(S, =(C),   S=C) :- !.
+mk_cond(S, \=(C),  S\=C) :- !.
+mk_cond(S, <(C),   S<C) :- !.
+mk_cond(S, >(C),   S>C) :- !.
+mk_cond(S, =<(C),  S=<C) :- !.
+mk_cond(S, >=(C),  S>=C) :- !.
+mk_cond(S, null,   S=null(_)) :- !.
+mk_cond(S, like(C),like(S,C)) :- !.
+mk_cond(S, in(C),  in(S,C)) :- !.
+mk_cond(S, ~(C),   S~C) :- !.
 
 % ================== Support predicates =========================
 
-
 %% analyse_head( +Con, +Head:head(A), -Table:table_name, -Actions:list(A), -Cols:list(column_spec)) is det.
-%
 %  Decompose a Head term into table name, list of per-column arguments, and
 %  a matching list of column names and types.
 analyse_head(Con,proj(Projection,Actions),Table,Actions,QCols) :- !,
@@ -358,109 +366,22 @@ analyse_head(Con,Head,Table,Actions,QCols) :-
 name_colspec(TabCols,Name,Name:Type) :- 
    memberchk(Name:Type,TabCols).
 
+% memoised table columns and types
 table_columns(Con,Tab,Typelist) :- 
    get_state(table(Tab),Con,Typelist),!.
 table_columns(Con,Tab,Typelist) :-
    db_current_table(Con,Tab,Typelist),
 	put_state(table(Tab),Con,Typelist).
 
-		
 %% query_columns( +A:list(action), +Cols:list(column_spec), -Cols1:list(column_spec)) is det.
 %
 %  Matches the elements of A with the first N Cols. If there is an element
 %  of A left over, it is matched with oid:oid.
-%  
-%  @error error(db_columns_mismatch) 
-%    if the list of actions is longer than 1 plus the number
-%    of columns.
 query_columns([_|AX],[C1|CX],[C1|DX]) :- !, query_columns(AX,CX,DX).
-query_columns([_],[],[oid:oid]) :- !.
 query_columns([],_,[]) :- !.
 query_columns(_,_,_) :- throw(error(pldb:columns_mismatch)).
 
-
-%% test_cond( +S:column_spec, +C1:tester)// is det.
-%  Emits list(condition) corresponding to test applied
-%  to given column.
-test_cond(S,C) --> {mk_cond(S,C,C1)}, out(C1).
-
-%% mk_cond( +Name:column_name, +C1:tester, -C2:condition) is det.
-% Used by get_select_cond, get_update_cond 
-
-mk_cond(S, (C1,C2), (C11,C21)) :- !, mk_cond(S,C1,C11), mk_cond(S,C2,C21).
-mk_cond(S, (C1;C2), (C11;C21)) :- !, mk_cond(S,C1,C11), mk_cond(S,C2,C21).
-mk_cond(S, \+(C),  \+(C1))    :- !, mk_cond(S,C,C1).
-mk_cond(S, =(C),   S=C) :- !.
-mk_cond(S, \=(C),  S\=C) :- !.
-mk_cond(S, <(C),   S<C) :- !.
-mk_cond(S, >(C),   S>C) :- !.
-mk_cond(S, =<(C),  S=<C) :- !.
-mk_cond(S, >=(C),  S>=C) :- !.
-mk_cond(S, null,   S=null(_)) :- !.
-mk_cond(S, like(C),like(S,C)) :- !.
-mk_cond(S, in(C),  in(S,C)) :- !.
-mk_cond(S, ~(C),   S~C) :- !.
-
-% ----- Dealing with terms ---------------------------------------------------
-
-% This formats any term such that it can be read back. 
-% It MUST be a ground term. Atoms and functors are quoted properly. 
-% '$VAR'(_) terms are written as with numbervars(true) option to write_term.
-% Current operator declarations are used so must be present when reading back.
-%
-% NB. we do not use numbervars or write_canonical/1 here, because it will
-% probably be more useful to label all the variables in one row together,
-% so that variables shared across muliple columns will be properly labelled.
-%
-% !!! TODO: make sure that variables shared across multiple columns are
-% properly reinstated all together in the aftermath of SELECT.
-%
-% NB. Strings are always written using double quotes.
-term_to_codes(V,L) :-
-	(ground(V) -> true; throw(error(pldb:nonground(V)))),
-	with_output_to(codes(L), write_term(V,[numbervars(true),quoted(true),ignore_ops(true),back_quotes(symbol_char)])). 
-
-% sql_string(Term) --> 
-%    quote(esc(run_left(sql),Codes)), 
-%    {  read_term_from_codes(Codes,Term,[back_quoted_string(false),double_quotes(string),variable_names(Bindings)]),
-%       maplist(bind_var,Bindings)
-%    }.
-
-string_to_term(Text,Term,Bindings) :- 
-   read_term_from_atom(Text,Term,[back_quoted_string(false),double_quotes(string),variable_names(Bindings)]).
-
-strings_to_terms(Strings,Terms) :-
-   maplist(string_to_term,Strings,Terms,Bindings),
-   maplist(maplist(includes_binding(_)),Bindings).
-
-includes_binding(Master,Name=Var) :- memberchk(Name=Var,Master).
-% bind_var(Name='$VAR'(Name)).
-
-term_pattern(Term,Pattern,Tail) :- 
-   term_variables(Term,Vars),
-   with_output_to(codes(C1),write_with_variables_as(1,Vars,Term)),
-   with_output_to(codes(C2),write_with_variables_as(2,Vars,Term)),
-   escape_term_pattern(C1-(C2-Pattern),[]-([]-Tail)).
-
-write_with_variables_as(X,Vars,Term) :-
-   maplist(=(X),Vars),
-   write_term(Term,[quoted(true),ignore_ops(true),numbervars(true),back_quotes(symbol_char)]),
-   fail.
-write_with_variables_as(_,_,_).
-
-escape_term_pattern --> \< eos, !.
-escape_term_pattern --> "1" <\> ("2" <\> "%"), !, escape_term_pattern. 
-escape_term_pattern --> [_] <\> pattern, !, escape_term_pattern.
-
-% escape string for use in SQL LIKE pattern (generate only, not parse)
-% (still needs escaping for writing as quoted SQL literal.)
-pattern --> "%" <\> "\\%", !.
-pattern --> "_" <\> "\\_", !.
-pattern --> "\\" <\> "\\\\", !.
-pattern --> [X] <\> [X].
-
-
-% ----------------- Quasi-quatation -----------------------------------------
+% ======================== Quasi-quatation ============================
 
 sql(Content,Vars,Dict,Phrase) :-
    include(qq_vars(Vars),Dict,QQDict),
@@ -486,7 +407,8 @@ qq_vars(Vars,_=Var) :- member(V,Vars), V==Var, !.
 %
 %  Top DCG phrase for SQL language. Term language is:
 %  ==
-%  sql_command ---> create( oneof([table]),table_name,column_spec)
+%  sql_command ---> create_table(table_name,column_spec,options)
+%                 ; drop_table(table_name)
 %                 ; select( table_name, list(column_name), where_spec)
 %                 ; update( table_name, assignment, where_spec)
 %                 ; delete( table_name, where_spec).
@@ -515,58 +437,62 @@ qq_vars(Vars,_=Var) :- member(V,Vars), V==Var, !.
 sql(@Ident) --> expr(_,@Ident).
 sql(Ident:=Expr) --> identifier(Ident), "=", expr(_,Expr).
 sql(\Phrase) --> phrase(Phrase).
-sql(drop(table(Name))) --> "drop table ", identifier(Name).
 
-sql(create(table(Name,Spec,Opts)))--> 
-   "create table ", identifier(Name), 
+sql(drop_table(Name)) --> "DROP TABLE ", identifier(Name).
+
+sql(create_table(Name,Spec,Opts))--> 
+   "CREATE TABLE ", identifier(Name), 
    paren(seqmap_with_sep(comma,colspec,Spec)), 
-   if(option(oids(true),Opts,false), " with oids").
+   if(option(oids(true),Opts,false), " WITH OIDS").
 
 sql(insert(Table,Args,Cols)) --> 
 	{ maplist(snd,Cols,Types) },
-	"insert into ", identifier(Table), 
-	" values", paren(seqmap_with_sep(",",expr,Types,Args)).
+	"INSERT INTO ", identifier(Table), 
+	" VALUES", paren(seqmap_with_sep(comma,expr,Types,Args)).
 
-sql(delete(Tab,Where)) --> "delete from ", identifier(Tab), where_clause(Where).
+sql(delete(Tab,Where)) --> "DELETE FROM ", identifier(Tab), where(Where).
 		
 sql(update(Tab,Set,Where)) -->
-	"update ", identifier(Tab), 
-	" set ", seqmap(set_x,Set),
-	where_clause(Where).
+	"UPDATE ", identifier(Tab), 
+	" SET ", seqmap_with_sep(comma,assign,Set),
+	where(Where).
 
 sql(select(Tab,Selection,Where)) -->
-	"select ", seqmap_with_sep(",",wr,Selection),
-	" from ", identifier(Tab), where_clause(Where).
+	"SELECT ", seqmap_with_sep(comma,wr,Selection),
+	" FROM ", identifier(Tab), where(Where).
 
 colspec(Name:Type) --> identifier(Name), sp, wr(Type).
 snd(_:Y,Y).
 
-% Used by compose_select, compose_update 
-where_clause([]) --> !, [].
-where_clause(L) --> " where ", expr(boolean,and(L)).
+where([]) --> [].
+where(L) --> " WHERE ", expr(boolean,and(L)).
 
-set_x(S:T) --> set_x(S,T).
-set_x(M=null(_),_) --> !, identifier(M), "=null".
-set_x(M=V,T) --> !, identifier(M), "=", expr(T,V).
+assign(S:T) --> assign(S,T).
+assign(M=V,T) --> identifier(M), "=", expr(T,V).
 
-order_by([]) --> !, [].
-order_by(Y) --> " order by ", seqmap_with_sep(",",order_x,Y).
-order_x(ord(N,T))--> wr(N), " ", identifier(T).
+order_by([]) --> [].
+order_by(Y) --> " ORDER BY ", seqmap_with_sep(comma,order,Y).
+order(ord(N,T))--> identifier(N), direction(T).
 
-group_by([]) --> !, [].
-group_by(Y) --> " group by ", seqmap_with_sep(",",wr,Y).
+direction(asc) --> " ASC".
+direction(desc) --> " DESC".
+
+group_by([]) --> [].
+group_by(Y) --> " GROUP BY ", seqmap_with_sep(comma,identifier,Y).
 
 
 % -- Quoting and escaping ----------------
 
-quote(A) --> "'", A, "'".
-quote_escaped(A) --> {phrase(A,Codes)}, "'", esc(run_left(esc_sql),Codes), "'".
+quote(A) --> {phrase(A,Codes)}, "'", esc(run_left(esc_sql),Codes), "'".
 
 % escaping strings for SQL quoted literal (generate or parse)
 esc_sql -->  "'" <\> "''".
 esc_sql -->  [X] <\> [X], {X\=0''}.
 
 % --- Conditions and expressions ------------------------------
+
+and --> " AND ".
+or  --> " OR ".
 
 pexpr(T,C) --> paren(expr(T,C)).  % parenthesised expression
 
@@ -596,14 +522,10 @@ expr(_,@Ident)  --> !, identifier(Ident).
 expr(_,\Phrase) --> !, phrase(Phrase).
 expr(T,V)       --> freeze(T,typed_value(T,V)).
 
-
-typed_value(T,V) --> {number(V), type_class(T,floating)},!, fmt('~15g',[V]).
+typed_value(T,V) --> {number(V), type_class(T,floating)},!, fmt('~16g',[V]).
 typed_value(T,V) --> {number(V), type_class(T,numeric)},!, at(V).
-typed_value(T,V) --> {atomic(V), type_class(T,textual)},!, quote_escaped(at(V)).
+typed_value(T,V) --> {atomic(V), type_class(T,textual)},!, quote(at(V)).
 typed_value(T,B) --> {T=boolean, !, bool_bool(B,BB)}, boolean(BB).
-
-and --> " and ".
-or  --> " or ".
 
 identifier(A^B) --> !, at(A), ".", identifier(B).
 identifier(A)   --> at(A).
@@ -621,9 +543,6 @@ type_decode(F,X,P) :- type_class(F,numeric),!, atom_to_term(X,P,_).
 
 bool_bool(true,t).
 bool_bool(false,f).
-bool_bool(fail,f).
-bool_bool(yes,t).
-bool_bool(no,f).
 
 type_class(char(_),   textual).
 type_class(varchar(_),textual).
