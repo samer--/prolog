@@ -413,7 +413,7 @@ token(d,string(char))  --> string_of(char//notany("'");"''").
 token(n,string(char))  --> ("n";"N"), string_of(char//notany("'");"''").
 token(n,string(hex))   --> ("x";"X"), string_of(digit;any("abcdefABCDEF")).
 token(n,string(bit))   --> ("b";"B"), string_of("0";"1").
-token(n,unsigned)      --> exact_number, ?exponent, not(".").
+token(n,unsigned)      --> exact_number, (not("eE");exponent), not(".").
 token(d,operator)      --> "<="; ">="; "<>"; "||"; ".."
                          ; ">", not("="); "<", not(">="); ".", not("."); "-", not("-")
                          ; any(",+*/&?%:;=()[]").
@@ -432,7 +432,7 @@ to_lower(Char,Char) :- code_type(Char,graph), \+code_type(Char,upper).
 esc_qq([0'"|Cs],Cs) --> "\"\"".
 esc_qq([C|Cs],Cs) --> [C]//char//notany("\"").
 
-exact_number --> digits, ? (".", ?digits); ".", digits.
+exact_number --> digits, ? (".", **(digit)); ".", digits.
 exponent --> ("e";"E"), ?("+";"-"), digits.
 regular_ident --> letter, **(letter;"_";digit).
 string_of(Class) --> ++(separator,q(*(Class))).
