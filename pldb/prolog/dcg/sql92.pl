@@ -52,6 +52,8 @@
       7. The tokenisation rules are a bit unclear about how numeric tokens interact with "." and
          ".." tokens. Under what circumstances is the "." absorbed into the numeric token?
          Eg, can "2.34.foo" be parsed as "2.34", ".", "foo"? What about "2..10"?
+
+      8. Not sure about the legality of an un-parenthesised joined_table as a query_expr.
  */
 
 :- use_module(library(dcg_core)).
@@ -102,7 +104,11 @@ algebra([post(Op)|Ops],All,Base) --> algebra(Ops,All,Base), Op.
 
 % ================ STATEMENTS ================
 
-statement --> table_defn; view_defn; insert; delete; update; multi_row_select.
+statement --> 
+   table_defn; view_defn; insert; delete; update; select_multi_row; select_single_row;
+   declare_cursor; open_statement; close_statement; fetch_statement; 
+   set_transaction; commit_statement; rollback_statement;
+   set_constraints_mode_statement.
 
 collate_clause --> @collate, qualified_name.
 
@@ -145,7 +151,6 @@ set_clause --> column_name, o(=), (expr(_); @null; @default).
 where_current --> @where, @current, @of, cursor_name.
 
 % -- Query ----
-multi_row_select --> query_expr, ?order_by_clause.
 where_clause --> @where, condition.
 order_by_clause --> @order, @by, clist(sort_spec).
 sort_spec --> (column_name;unsigned_int), ?collate_clause, ?(@asc;@desc). % can also be expr in some dbmss!
@@ -176,7 +181,7 @@ table_reference --> table_name, ?correlation_spec
 correlation_spec --> ? @(as), identifier, ?paren(clist(column_name)).
 corresponding_spec --> @corresponding, ? ( @by, paren(clist(column_name))).
 
-select --> @select, ?set_quantifier, (star ; clist(select_sublist)), table_expr.
+select_multi_row --> query_expr, ?order_by_clause.
 
 select_single_row -->
    @select, ?set_quantifier,
@@ -184,6 +189,7 @@ select_single_row -->
    @into, clist(target_spec),
    table_expr.
 
+select --> @select, ?set_quantifier, (star ; clist(select_sublist)), table_expr.
 
 set_quantifier --> @all; @distinct.
 select_sublist --> expr(_), ? (@(as), column_name) ; qualifier, dot, star.
@@ -193,7 +199,7 @@ table_expr -->
      ? (@group, @by, clist((column_reference, ?collate_clause))),
      ? (@having, condition).
 
-target_spec --> with_indicator(param_name); with_indicator(embedded_variable_name);
+target_spec --> with_indicator(param_name); with_indicator(embedded_variable_name).
 
 % ------------------ CURSORS ------------------
 declare_cursor -->
@@ -205,6 +211,7 @@ updatability_clause --> @for, (@read, @only; @update, ? (@of, clist(column_name)
 open_statement --> @open, cursor_name.
 close_statement --> @close, cursor_name.
 fetch_statement --> @fetch, ? (?fetch_orientation, @from), cursor_name, @into, clist(target_spec).
+fetch_orientation --> @next; @prior; @first; @last; (@absolute;@relative), simple_val.
 cursor_name --> identifier.
 
 % ------------------ TRANSACTIONS --------------------
@@ -215,7 +222,6 @@ set_transaction --> @set, @transaction, clist(isolation_level;trans_access_mode;
 isolation_level --> @isolation, @level, (@read, (@uncommitted;@committed); @repeatable, @read; @serializable).
 trans_access_mode --> @read, (@only;@write).
 diagnostics_size --> @diagnostics, @size, simple_val.
-
 
 % =================== SEARCH CONDITIONS ===================
 condition --> algebra([left(@or), left(@and), pre(@not), post(boolean_test)],(predicate;paren(condition))).
@@ -385,16 +391,16 @@ tokens(Pred,[t(D1,T1,S1)|Ts]) --> call(Pred,D1,T1,S1), tokens(Pred,D1,Ts).
 tokens(Pred,D1,[t(D2,T2,S2)|Ts]) --> inter_token(D1,D2), call(Pred,D2,T2,S2), !, tokens(Pred,D2,Ts).
 tokens(_,_,[]) --> ?separator.
 
-inter_token(d,_) --> ?separator.
+inter_token(d,_) --> [].
 inter_token(n,d) --> [].
-inter_token(n,_) --> separator.
+inter_token(_,_) --> separator.
 
 separator --> +(any(" \n\t\r");comment).
 comment --> "--", *(notany("\n\r")), any("\n\r").
 
 scheme(n,identifier(I),_) --> {nonvar(I)}, !, fmt('~s',[I]).
 scheme(D,T,S) --> {nonvar(S)}, !, {string_codes(S,C)}, list(C)//token(D,T).
-scheme(n,C,_) --> fmt("<~@>",[(write_canonical(C),fail;true)]).
+scheme(n,C,_) --> fmt("[~@]",[(write_canonical(C),fail;true)]).
 
 parse(D,T,S) --> token(D,T)//list(C), {string_codes(S,C)}.
 
