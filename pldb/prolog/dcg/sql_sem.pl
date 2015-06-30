@@ -628,14 +628,8 @@ isolation_level(repeatable_read) --> @repeatable, @read.
 isolation_level(serializable)    --> @serializable.
 
 % =================== SEARCH CONDITIONS ===================
-% condition(Cond) --> algebra8(4, bool_op, predicate, Cond).
-
-% bool_op(4,in(y,x),or) --> @or.
-% bool_op(3,in(y,x),and) --> @and.
-% bool_op(2,pre(x),not) --> @not.
-% bool_op(1,post(x),T) --> boolean_test(T).
-
 condition(Cond) --> 
+   % algebra9(5,bool_op,bool_primary,boolean,Cond).
    algebra2( [  in(y,x)-(@or>or)
              ,  in(y,x)-(@and>and)
              ,  pre(x) -(@not>not)
@@ -644,29 +638,45 @@ condition(Cond) -->
 
 boolean_test(is(Val,Pos)) --> @(is), neg(Pos), @([true,false,unknown],Val).
 
-% NB it does not seem to be possible to introduce boolean-valued columns or expressions
-% into this algebra.
-predicate(exists(X))    --> @exists, subquery(X).
-predicate(is(Pred,Pos)) --> negatable_predicate(Pred,Pos).
-predicate(paren(Cond))  --> paren(condition(Cond)).
-predicate(Sem)          --> row_val(X), predicate_continue(X,Sem).
+predicate(exists(X)) --> @exists, subquery(X).
+predicate(X) --> paren(condition(X)).
+predicate(Sem) --> row_val(X), predicate_continue(X,Sem).
+predicate(op(is(like(X,Esc),Pos),X,Y)) --> 
+   expr(string(char),X), neg(Pos), @like, expr(string(char),Y), 
+   maybe(E, (@escape, expr(string(char),E)),Esc).
 
-predicate_continue(X,cmp(X,O,Y))--> comp_op(O), row_val(Y).
-predicate_continue(X,cmp(X,O,Quant,Q)) --> comp_op(O), @([all,some,any],Quant), subquery(Q).
-predicate_continue(X,overlaps(X,Y)) --> @overlaps, row_val(Y).
-predicate_continue(X,match(X,Q,Unique,Partiality)) --> 
+predicate_continue(X,op(cmp(O),X,Y))--> comp_op(O), row_val(Y).
+predicate_continue(X,op(cmp(O,Quant,Q),X)) --> comp_op(O), @([all,some,any],Quant), subquery(Q).
+predicate_continue(X,op(overlaps,X,Y)) --> @overlaps, row_val(Y).
+predicate_continue(X,op(is(null,Pos),X)) --> @(is), neg(Pos), @null.
+predicate_continue(X,op(is(between(L,U),Pos),X)) --> neg(Pos), @between, row_val(L), @and, row_val(U).
+predicate_continue(X,op(is(in(Set),Pos),X)) --> neg(Pos), @in, in_spec(Set).
+predicate_continue(X,op(match(Q,Unique,Partiality),X)) --> 
    @match, if(Unique, @unique), 
    Partiality ? @[partial,full], 
    subquery(Q).
 
-negatable_predicate(S,Pos) --> row_val(X), negatable_predicate_continue(X,S,Pos).
-negatable_predicate(like(X,Y,Esc),Pos) --> 
-   expr(string(char),X), neg(Pos), @like, expr(string(char),Y), 
-   maybe(E, (@escape, expr(string(char),E)),Esc).
+% bool_op(5, in(y:boolean,x:boolean), boolean, or)  --> @or.
+% bool_op(4, in(y:boolean,x:boolean), boolean, and) --> @and.
+% bool_op(3, pre(x:boolean),          boolean, not) --> @not.
+% bool_op(2, post(x:boolean),         boolean, is(Val,Pos)) --> 
+%    @(is), neg(Pos), @([true,false,unknown],Val).
 
-negatable_predicate_continue(X,null(X),Pos) --> @(is), neg(Pos), @null.
-negatable_predicate_continue(X,between(L,U,X),Pos) --> neg(Pos), @between, row_val(L), @and, row_val(U).
-negatable_predicate_continue(X,in(X,Set),Pos) --> neg(Pos), @in, in_spec(Set).
+% bool_op(1, in(x:row,x:row), boolean, cmp(O))    --> comp_op(O).
+% bool_op(1, in(x:row,x:row), boolean, overlaps)  --> @overlaps.
+% bool_op(1, post(x:row),     boolean, cmpq(O,Quant,Q)) --> comp_op(O), @([all,some,any],Quant), subquery(Q).
+% bool_op(1, post(x:row),     boolean, match(Q,Unique,Partiality)) -->
+%    @match, if(Unique, @unique), 
+%    Partiality ? @[partial,full], 
+%    subquery(Q).
+% bool_op(1, post(x:row), boolean, is(Pos,null)) --> @(is), neg(Pos), @null.
+% bool_op(1, post(x:row), boolean, is(Pos,between(L,U))) --> neg(Pos), @between, row_val(L), @and, row_val(U).
+% bool_op(1, post(x:row), boolean, is(Pos,in(Set))) --> neg(Pos), @in, in_spec(Set).
+% bool_op(1, custom(_),   boolean, op(is(Pos,like(Esc)),X,Y)) --> 
+%    expr(string(char),X), neg(Pos), @like, expr(string(char),Y), 
+%    maybe(E, (@escape, expr(string(char),E)),Esc).
+
+% bool_primary(row,X) --> row_val(X).
 
 in_spec(subquery(Q)) --> subquery(Q).
 in_spec(list(Items)) --> paren(clist(expr(_),Items)).
