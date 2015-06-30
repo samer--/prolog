@@ -1,4 +1,9 @@
-:- module(sql92,[]).
+:- module(sql92,
+      [  statement//0
+      ,  tokens//2
+      ,  scheme//3
+      ,  parse//3
+      ]).
 
 /** <module> SQL '92 reference grammar
 
@@ -29,6 +34,10 @@
       5. Because of certain problems in the grammar, I have classified the two character
          operators <= >= <> and || as delimiter tokens, not non-delimiter tokens.
 
+      6. To simplify the grammar bit, I've made the CURRENT_{DATE,TIME,TIMESTAMP} value
+         functions into literals. This allows them to be used as defaults without having
+         to add them to the default_option rule.
+
    Some remaing questions about the underlying language:
 
       1. It's not clear whether the rules for query expression are correct, because
@@ -54,6 +63,26 @@
          Eg, can "2.34.foo" be parsed as "2.34", ".", "foo"? What about "2..10"?
 
       8. Not sure about the legality of an un-parenthesised joined_table as a query_expr.
+
+      9. The rules state that <date string>, <time string> etc. is a kind of delimiter token, 
+         but the tokeniser cannot decide that a particular string literal should be interpreted 
+         as a date/time string without partially parsing the token stream.
+
+   TYPES
+
+   ==
+   simple_val ---> param(identifier)
+                 ; embedded(identifier)
+                 ; literal(literal(_)).
+
+   general_val ---> param(identifier, maybe(identifier))
+                  ; embedded(identifier, maybe(identifier))
+                  ; dynamic
+                  ; current_user
+                  ; session_user
+                  ; system_user
+                  ; user.
+   ==
  */
 
 :- use_module(library(dcg_core)).
@@ -124,8 +153,8 @@ table_element --> column_name, (data_type(_) ; domain_name), ?default_clause, ?c
 
 default_clause --> @default, default_option.
 default_option --> literal(_)
-                 ; @user; @current, @user
-                 ; @session, @user, @system, @user, @null.
+                 ; @user; @current_user
+                 ; @session_user; @system_user; @null.
 
 column_constraint_defn --> ?constraint_name_defn, column_constraint, ?constraint_attributes.
 
@@ -157,8 +186,8 @@ sort_spec --> (column_name;unsigned_int), ?collate_clause, ?(@asc;@desc). % can 
 
 subquery --> paren(query_expr).
 
-query_expr --> algebra( [ ((@union;@except), ? @all, ?corresponding_spec)
-                        , (@intersect, ? @all, ?corresponding_spec)
+query_expr --> algebra( [ left((@union;@except), ? @all, ?corresponding_spec)
+                        , left(@intersect, ? @all, ?corresponding_spec)
                         ], query_primary).
 
 query_primary --> select
@@ -300,9 +329,12 @@ term(interval) --> factor(interval)
 factor(interval) --> ?sign, primary(interval), ?interval_qualifier.
 
 time_zone_spec --> @local; @time, @zone, expr(interval).
-interval_qualifier --> start_field, @to, end_field ; start_field; end_field.
+interval_qualifier --> start_field, @to, end_field 
+                     ; start_field
+                     ; @second, ?paren((unsigned_int, ? (comma,unsigned_int))).
+
 start_field --> non_second_datetime_field, ?paren(unsigned_int).
-end_field --> non_second_datetime_field; @second, paren(unsigned_int).
+end_field --> non_second_datetime_field; @second, ?paren(unsigned_int).
 non_second_datetime_field --> @year;@month;@day;@hour;@minute.
 
 % -------------------- FUNCTIONS ---------------------
@@ -335,7 +367,7 @@ identifier --> t(identifier(_)).
 literal(numeric)  --> t(unsigned).
 literal(signed)   --> ?sign, t(unsigned).
 literal(datetime) --> @date, qt(date) ; @time, qt(time) ; @timestamp, qt(date_time_tz)
-                    ; @current, @date ; @current, @time, paren(unsigned_int); @current, @timestamp, paren(unsigned_int).
+                    ; @current_date ; @current_time, paren(unsigned_int); @current_timestamp, paren(unsigned_int).
 literal(interval) --> @interval, ?sign, qt(year_month;day_time), interval_qualifier.
 literal(string(T)) --> t(string(T)).
 
@@ -359,7 +391,7 @@ time_zone_interval --> ("+";"-"), hours, ":", minutes.
 simple_val --> param_name ; embedded_variable_name ; literal(_).
 general_val --> with_indicator(param_name)
             ;   with_indicator(embedded_variable_name)
-            ;   @user ; @current, @user; @session, @user; @system, @user; @value
+            ;   @user ; @current_user; @session_user; @system_user; @value
             ;   o('?').
 
 with_indicator(Phrase) --> Phrase, ? (@indicator, Phrase).
