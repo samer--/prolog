@@ -44,6 +44,7 @@
 :- op(900,xfy,\#).
 
 :- use_module(library(dcg_core)).
+:- use_module(library(apply_macros)).
 
 mk_call(C,XX,Call) :- var(C), !, mk_call(call(C),XX,Call).
 mk_call(M:C,XX,M:Call) :- !, mk_call(C,XX,Call).
@@ -183,6 +184,7 @@ goal_expansion( \<(P,S1,S2), (S1=(L1-R),S2=(L2-R),call_dcg(P,L1,L2)) ).
 goal_expansion( \>(P,S1,S2), (S1=(L-R1),S2=(L-R2),call_dcg(P,R1,R2)) ).
 %goal_expansion( <\>(A,B,S1,S2), (S1=L1-R1, S2=L2-R2, call_dcg(A,L1,L2), call_dcg(B,R1,R2))).
 goal_expansion( <\>(A,B,S1,S2), (call_dcg(A,L1,L2), call_dcg(B,R1,R2))) :- !, S1=L1-R1, S2=L2-R2.
+
 goal_expansion( nop(S1,S2), (S1=S2) ).
 goal_expansion( out(X,S1,S2), (S1=[X|S2]) ).
 goal_expansion( get(S,S1,S2), (S=S1,S1=S2) ).
@@ -191,3 +193,4 @@ goal_expansion( A >> B, (A,B) ).
 goal_expansion( set_with(C,_,S2), Call) :- mk_call(C,[S2],Call).
 goal_expansion( trans(A1,A2,S1,S2), (S1=A1,S2=A2) ).
 goal_expansion( //(P1,P2,S1,S2), (call_dcg(P1,S1,S2),call_dcg(P2,S1,S2))).
+
