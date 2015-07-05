@@ -1,8 +1,9 @@
-:- module(sql_sem,
+:- module(sql,
       [  sql_tokenise/2
       ,  sql_generate/3, sql_generate/2
       ,  sql_parse/2
       ,  statement//1
+      ,  expr//2
       ]).
 
 /** <module> SQL DCG with semantic representation
@@ -86,11 +87,11 @@
    join_op --> cross_join 
              ; join(join_type, maybe(join_spec)).
 
-   op(setop, query, query) :: query.
-   values(list(row_value)) :: query.
-   table(table_name)       :: query.
-   query(query)            :: query.
-   select                  :< query.
+   op(setop, query, query)    :: query.
+   values(list(expr(row(_)))) :: query.
+   table(table_name)          :: query.
+   query(query)               :: query.
+   select                     :< query.
 
    setop ---> setop({union,except,intersect}, boolean, maybe(maybe(list(column_name))))
 
@@ -106,39 +107,38 @@
    insert(table_name, insert_spec) :: statement.
    delete(table_name, where_spec) :: statement.
 
-   set_clause ---> column_name=value.
+   set_clause ---> column_name=(expr(_) | {default}).
    insert_spec ---> defaults; query(maybe(list(column_name)), query).
    ==
 
    Conditions
    ==
-   condition ---> op(boolean_op(X,Y), X, Y)
-                ; op(boolean_op(X), X)
-                ; exists(query)
+   condition == expr(boolean).
 
-   {and,or}      :< boolean_op(condition,condition).
-   not           :: boolean_op(condition).
-   comparison_op :< boolean_op(row_value,row_value).
+   exists(query) :: condition.
+   and(condition, condition) :: condition.
+   or(condition, condition)  :: condition.
+   not(condition)            :: condition.
+   is(negatable_predicate,boolean) :: condition.
 
-   cmp(comparison_op,{all,some,any}, query)     :: boolean_op(row_value).
-   match(query, boolean, maybe({partial,full})) :: boolean_op(row_value).
-   overlaps                                     :: boolean_op(row_value,row_value).
+   cmp( comparison_op, expr(T), expr(T))                 :: condition.
+   cmpq(comparison_op, expr(_), {all,some,any}, query)   :: condition.
+   match(expr(_), boolean, maybe({partial,full}), query) :: condition.
+   overlaps(expr(interval), expr(interval))              :: condition.
 
-   is(negatable_predicate(T),boolean) :< boolean_op(T).
+   expr(boolean)={true,false,unknown} :: negatable_predicate.
+   null(expr(_))                      :: negatable_predicate.
+   between(expr(T),expr(T),expr(T))   :: negatable_predicate.
+   in(expr(T),in_spec(T))             :: negatable_predicate.
 
-   {true;false;unknown}         :< negatable_predicate(condition).
-   null                         :: negatable_predicate(row_value).
-   between(row_value,row_value) :: negatable_predicate(row_value).
-   in(in_spec)                  :: negatable_predicate(row_value).
-   like(expr(string(char)),expr(string(char))) :: negatable_predicate(expr(string(char))).
+   like(expr(string(char)),expr(string(char)),expr(string(char))) :: negatable_predicate.
 
    comparison_op ---> '='; '<'; '>'; '<>'; '<='; '>='. 
+   in_spec(T) ---> subquery(query); list(T).
    ==
 
    Values and expressions
    ==
-   row_value ---> row(list(value)); val(value); subquery(query).
-   value(T)     ---> expr(T) | {default}.
 
    simple_value ---> param(identified)
                    ; embedded(identifier)
@@ -154,6 +154,7 @@
                     ; value.
 
    literal(T)              :< expr(T).
+   row(hlist(Types))       :: expr(row(Types)).
    gen(T,general_value)    :: expr(T).
    col(T,column_reference) :: expr(T).
    nullif(expr(T),expr(T)) :: expr(T).
@@ -165,17 +166,33 @@
    fn(function(T)) :: expr(T).
    subquery(query) :: expr(_).
 
-   op(binary_operator(X,Y,Z), X, Y) :: expr(Z).
-   op(unary_operator(X,Z), X)       :: expr(Z).
+   expr(numeric) + expr(numeric) :: expr(numeric).
+   expr(numeric) - expr(numeric) :: expr(numeric).
+   expr(numeric) * expr(numeric) :: expr(numeric).
+   expr(numeric) / expr(numeric) :: expr(numeric).
 
-   {+,-,*,/} :< binary_operator(numeric, numeric, numeric).
-   {+,-}     :< unary_operator(numeric, numeric).
+   + expr(numeric) :: expr(numeric).
+   - expr(numeric) :: expr(numeric).
 
-   concat                  :: binary_operator(string(T), string(T), string(T)).
-   collate(qualified_name) :: unary_operator(string(char), string(char)).
-   at(time_zone)           :: unary_operator(datetime, datetime).
-   iq(interval_qualifier)  :: unary_operator(interval, interval).
+   expr(interval) + expr(datetime) :: expr(datetime).
+   expr(datetime) + expr(interval) :: expr(datetime).
+   expr(datetime) - expr(interval) :: expr(datetime).
+   expr(interval) + expr(interval) :: expr(interval).
+   expr(interval) - expr(interval) :: expr(interval).
+   
+   expr(numeric) * expr(interval) :: expr(interval).
+   expr(interval) * expr(numeric) :: expr(interval).
+   expr(interval) / expr(numeric) :: expr(interval).
 
+   + expr(interval) :: expr(interval).
+   - expr(interval) :: expr(interval).
+
+   iq(interval_qualifier, interval) :: interval.
+   iq(interval_qualifier, datetime, datetime) :: interval.
+   at(time_zone,datetime)           :: datetime.
+
+   concat(expr(string(T)), expr(string(T)))     :: expr(string(T)).
+   collate(qualified_name, expr(string(char)))) :: expr(string(char)).
 
    when(T,R) ---> when(T,value(R)).
 
@@ -199,6 +216,7 @@
 
    Literals
    ==
+   null                                     :: literal(_).
    unsigned(numeric)                        :: literal(numeric).
    signed({+,-},numeric)                    :: literal(numeric).
    string(T:{char,hex,bit},list(code))      :: literal(string(T)).
@@ -240,6 +258,10 @@
    maybe(X)  ---> nothing; just(X).
    pair(X,Y) ---> X-Y.
    boolean   ---> true; false.
+
+   % heterogenous list type - needed for rows
+   [T1|hlist(Ts)]  :: hlist([T1|Ts]).
+   []              :: hlist([]).
    ==
 
    Tokens
@@ -448,7 +470,7 @@ query_primary(table(T))     --> @table, table_name(T).
 query_primary(Q)            --> paren(query_expr(Q)).
 
 table_reference(X) --> table_expr(tref(_),X).
-table_expr(T,X) --> typed_algebra2(1,table_op,table_primary,T,X).
+table_expr(T,X) --> typed_algebra(1,table_op,table_primary,T,X).
 
 table_op(1, in(y<S1:tref(_),y<S2:tref(_)), cross_join(S1,S2):tref(joined), (@cross,@join)).
 table_op(1, custom(PA), join(JT,JS,S1,S2):tref(joined), join(PA,JT,JS,S1,S2)).
@@ -554,10 +576,10 @@ isolation_level(serializable)    --> @serializable.
 % ======================== EXPRESSIONS =====================
 condition(Cond) --> expr(boolean,Cond). 
 
-expr(T,X) --> typed_algebra1(9,expr_op,primary,T,X).
-expr(L,T,X) --> typed_algebra1(L,expr_op,primary,T,X).
+expr(T,X) --> typed_algebra(9,expr_op,primary,T,X).
+expr(L,T,X) --> typed_algebra(L,expr_op,primary,T,X).
 
-% operator database for typed_algebra{1,2}//5, also extended with boolean operators and predicates
+% operator database for typed_algebra//5, also extended with boolean operators and predicates
 expr_op(9, in(y<S1:boolean,x<S2:boolean), or(S1,S2):boolean, @or).
 expr_op(8, in(y<S1:boolean,x<S2:boolean), and(S1,S2):boolean, @and).
 expr_op(7, pre(x<S1:boolean),     not(S1):boolean, @not).
