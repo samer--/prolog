@@ -12,12 +12,6 @@
    as well a some other modifications. It is primarily intended for generating SQL
    statements, but it can also be used for parsing. 
 
-   In both directions, the depth of
-   the search tree must be limited to prevent infinite recursion: in the parsing
-   direction, the depth of parsed semantic representation can be limited using
-   max_depth/2 to prevent infinite left-recursion. In the generating directions,
-   the length of the resulting list of tokens can be limited using max_length/2.
-
    ---++ TYPES
 
    These types are specified using a mixture of algebraic date types (=|Type ---> Constructor, Constructor ... .|=),
@@ -51,7 +45,7 @@
    table_element ---> column(column_name, type, maybe(default),list(column_constraint), maybe(collation))
                     ; constraint(maybe(qualified_name),pair(list(column_name), constraint_spec),check_time).
 
-   default ---> literal(literal); null; current_user; session_user; system_user.
+   default ---> literal(literal(_)); null; current_user; session_user; system_user.
 
    column_constraint ---> constraint(maybe(qualified_name), 
                                      constraint_spec | {not_null}, 
@@ -65,7 +59,7 @@
    Queries
    ==
    ordered_query(query,maybe(list(ordering))) :: statement.
-   select(select_variant, select) :: statement. 
+   select_into(list(target), select) :: statement. 
 
    select ---> select( maybe(quantifier),            % all or distinct
                        list(select_sublist),
@@ -76,8 +70,7 @@
 
    quantifier ---> all; distinct.
 
-   select_variant ---> general; single(list(target)).
-   select_sublist ---> sel(expr,maybe(column_name))
+   select_sublist ---> sel(expr(_),maybe(column_name))
                      ; all(table_name).
 
    where_spec ---> all; cond(condition); current(identifier).
@@ -86,24 +79,20 @@
    column     ---> named(column_name)
                  ; numbered(natural).
 
-   table_reference ---> table(table_name, maybe(correlation_spec))
-                      ; subquery(query,correlation_spec)
-                      ; join.
-
-   query ---> setop({union,except,intersect}, boolean, maybe(maybe(list(column_name))))
-            ; values(list(row_value))
-            ; table(table_name)
-            ; query(query)
-            ; select(select).
-
-   join ---> op(join_op,table_reference,table_reference).
+   table_reference ---> op(join_op, table_reference, table_reference)
+                      ; table(table_name, maybe(correlation_spec))
+                      ; subquery(query,correlation_spec).
 
    join_op --> cross_join 
-             ; join(maybe(join_type), maybe(join_spec)).
+             ; join(join_type, maybe(join_spec)).
 
+   op(setop, query, query) :: query.
+   values(list(row_value)) :: query.
+   table(table_name)       :: query.
+   query(query)            :: query.
+   select                  :< query.
 
-           ; natural(table_reference, table_reference, boolean, maybe(join_type), maybe(join_spec))
-           ; paren(join).
+   setop ---> setop({union,except,intersect}, boolean, maybe(maybe(list(column_name))))
 
    join_type ---> inner; union; left; right; full.
    join_spec ---> on(condition); using(list(column_name)); natural.
@@ -123,38 +112,37 @@
 
    Conditions
    ==
-   condition ---> op(binary_boolean_op, condition, condition)
-                ; op(unary_boolean_op, condition)
-                ; cmp(row_value, comparison_op, row_value)
-                ; cmp(row_value, comparison_op, {all,some,any}, query)
+   condition ---> op(boolean_op(X,Y), X, Y)
+                ; op(boolean_op(X), X)
                 ; exists(query)
-                ; overlaps(row_value, row_value)
-                ; match(row_value, query, boolean, maybe({partial,full}))
-                ; is_not(negatable_predicate)
-                ; is(negatable_predicate)
-                ; paren(condition).
 
-   binary_boolean_op ---> or; and.
-   unary_boolean_op ---> not; is(trinary); is_not(trinary).
-   trinary ---> true; false; unknown.
+   {and,or}      :< boolean_op(condition,condition).
+   not           :: boolean_op(condition).
+   comparison_op :< boolean_op(row_value,row_value).
 
-   negatable_predicate ---> null(row_value)
-                          ; between(row_value,row_value,row_value)
-                          ; in(row_value, in_spec) % in_spec = query | list(expr) ?
-                          ; like(expr, expr, maybe(expr)). 
+   cmp(comparison_op,{all,some,any}, query)     :: boolean_op(row_value).
+   match(query, boolean, maybe({partial,full})) :: boolean_op(row_value).
+   overlaps                                     :: boolean_op(row_value,row_value).
+
+   is(negatable_predicate(T),boolean) :< boolean_op(T).
+
+   {true;false;unknown}         :< negatable_predicate(condition).
+   null                         :: negatable_predicate(row_value).
+   between(row_value,row_value) :: negatable_predicate(row_value).
+   in(in_spec)                  :: negatable_predicate(row_value).
+   like(expr(string(char)),expr(string(char))) :: negatable_predicate(expr(string(char))).
 
    comparison_op ---> '='; '<'; '>'; '<>'; '<='; '>='. 
    ==
 
    Values and expressions
    ==
-   row_value ---> row(list(value)); element(value); subquery(query).
-   value     ---> val(expr); default; null.
-   result    ---> null; val(expr).
+   row_value ---> row(list(value)); val(value); subquery(query).
+   value(T)     ---> expr(T) | {default}.
 
    simple_value ---> param(identified)
                    ; embedded(identifier)
-                   ; literal(literal).
+                   ; literal(literal(_)).
 
    general_value ---> param(identifier,maybe(identifier))
                     ; embedded(identifier,maybe(identifier)).
@@ -165,68 +153,63 @@
                     ; user
                     ; value.
 
-   expr ---> expr + expr
-           ; expr - expr
-           ; expr * expr
-           ; expr / expr
-           ; -expr
-           ; +expr
+   literal(T)              :< expr(T).
+   gen(T,general_value)    :: expr(T).
+   col(T,column_reference) :: expr(T).
+   nullif(expr(T),expr(T)) :: expr(T).
+   coalesce(list(expr(T))) :: expr(T).
+   case(expr(S), list(when(expr(S),expr(T))), maybe(value(T))) :: expr(T).
+   case(list(when(condition,expr(T))), maybe(value(T)))        :: expr(T).
+   cast(expr(_),type) :: expr(_).
+   aggr(aggregate) :: expr(numeric).
+   fn(function(T)) :: expr(T).
+   subquery(query) :: expr(_).
 
-           ; right(concat, expr, expr)
-           ; post(collation, expr) 
-         
-           ; at(expr, time_zone)
-           ; expr : interval_qualifier
+   op(binary_operator(X,Y,Z), X, Y) :: expr(Z).
+   op(unary_operator(X,Z), X)       :: expr(Z).
 
-           ; lit(literal)
-           ; gen(general_value)
-           ; col(column_reference)
-           ; case(case_spec)
-           ; cast(expr,type)
-           ; aggr(aggregate)
-           ; fn(function)
-           ; subquery(query)
-           ; expr(expr).
+   {+,-,*,/} :< binary_operator(numeric, numeric, numeric).
+   {+,-}     :< unary_operator(numeric, numeric).
 
-   case_spec ---> nullif(expr,expr)
-                ; coalesce(list(expr))
-                ; case(expr,list(when(expr)), maybe(result))
-                ; case(list(when(condition)), maybe(result)).
-
-   when(T) ---> when(T,result).
+   concat                  :: binary_operator(string(T), string(T), string(T)).
+   collate(qualified_name) :: unary_operator(string(char), string(char)).
+   at(time_zone)           :: unary_operator(datetime, datetime).
+   iq(interval_qualifier)  :: unary_operator(interval, interval).
 
 
-   time_zone ---> local; interval(expr).
+   when(T,R) ---> when(T,value(R)).
 
-   aggregate ---> count(maybe(pair(maybe(quantifier),expr)))
-                ; agg({avg,max,min,sum}, pair(maybe(quantifier),expr)).
+   time_zone ---> local; interval(expr(interval)).
+
+   aggregate ---> count(maybe(pair(maybe(quantifier),expr(_))))
+                ; agg({avg,max,min,sum}, pair(maybe(quantifier),expr(numeric))).
                
-   function ---> substring(expr, expr, expr)
-               ; upper(expr)
-               ; lower(expr)
-               ; convert(expr, qualified_name)
-               ; translate( expr, qualified_name)
-               ; trim(maybe({leading,trailing,both}), maybe(expr), expr)
-               ; position(expr, expr)
-               ; extract(dt_field | {timezone_hour, timezone_minute}, extract_source) 
-               ; length({char,character,octet,bit}, expr).
+   length({char,character,octet,bit}, expr(string(_))) :: function(numeric).
+   position(expr(string(char)), expr(string(char)))    :: function(string(char)).
+   upper(expr(string(char)))                           :: function(string(char)).
+   lower(expr(string(char)))                           :: function(string(char)).
+   convert(expr(string(char)), qualified_name)         :: function(string(char)).
+   translate( expr(string(char)), qualified_name)      :: function(string(char)).
+   extract(dt_field | {timezone_hour, timezone_minute}, extract_source) :: function(numeric).
+   substring(expr(string(T)), expr(string(T)), expr(string(T)))         :: function(string(T)).
+   trim(maybe({leading,trailing,both}), maybe(expr(string(char))), expr(string(char))) :: function(string(char)). 
 
-   extract_source ---> expr. % datetime or interval
+   extract_source ---> expr(datetime | interval). % datetime or interval
    ==
 
    Literals
    ==
-   unsigned(numeric)                        :: literal.
-   signed({+,-},numeric)                    :: literal.
-   string({char,hex,bit},list(code))        :: literal.
-   timestamp(date,time,maybe(time_zone_interval)) :: literal.
-   current_date                             :: literal.
-   current_time(natural)                    :: literal.
-   current_timestamp(natural)               :: literal.
-   interval(maybe(sign), year_month | date_time, interval_qualifier) :: literal.
+   unsigned(numeric)                        :: literal(numeric).
+   signed({+,-},numeric)                    :: literal(numeric).
+   string(T:{char,hex,bit},list(code))      :: literal(string(T)).
+   timestamp(date,time,maybe(time_zone_interval)) :: literal(datetime).
+   current_date                             :: literal(datetime).
+   current_time(natural)                    :: literal(datetime).
+   current_timestamp(natural)               :: literal(datetime).
+   interval(maybe(sign), year_month | date_time, interval_qualifier) :: literal(interval).
 
-   date :< literal.
-   time :< literal.
+   date :< literal(datetime).
+   time :< literal(datetime).
 
    date    ---> date(integer,integer,integer).
    time    ---> time(integer,integer,integer,maybe(numeric)).
@@ -256,6 +239,7 @@
    ==
    maybe(X)  ---> nothing; just(X).
    pair(X,Y) ---> X-Y.
+   boolean   ---> true; false.
    ==
 
    Tokens
@@ -270,7 +254,6 @@
                   ; unsigned(numeric)
                   ; operator(atom).
    ==
-
  */
 
 :- use_module(library(dcg_core), except([if//2, if//3])).
@@ -278,6 +261,7 @@
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
 :- use_module(library(snobol)).
+:- use_module(library(dcg/algebra)).
 
 :- op(900,fy,?).
 :- op(900,xfy,?).
@@ -324,86 +308,15 @@ maybe(T,Phrase,just(T)) --> call_dcg(Phrase).
 maybe_list(_,[]) --> [].
 maybe_list(M:[Head^P1|Ps],[Head|Tail]) --> call_dcg(M:P1), maybe_list(M:Ps,Tail).
 
+opt_default(_,Default,Default) --> [].
+opt_default(Pred,_,X) --> call(Pred,X).
+
 *(Phrase,Things) --> seqmap(Phrase,Things).
 clist(Phrase,Things) --> seqmap_with_sep(comma,Phrase,Things).
+clist(Phrase,Xs,Ys) --> seqmap_with_sep(comma,Phrase,Xs,Ys).
 
 clist(Phrase) --> +(comma,Phrase).
 paren(Phrase) --> o('('), Phrase, o(')').
-
-:- setting(max_left_recursion,nonneg,3,'Maximum depth for parsing left-recursive operators').
-
-algebra(Ops,Base,S) --> {setting(max_left_recursion,M)}, algebra(M,M,Ops,Base,S).
-algebra(_,_,[],Base,S) --> call(Base,S).
-algebra(M,_,[_|Ops],Base,S) --> algebra(M,M,Ops,Base,S).
-algebra(M,M0,[O|Ops],Base,S) --> {O=Class-Op}, a_app(Class,Op,a(M0,[O|Ops],M,Base),S).
-a_app(pre(A1),Op,State,op(SO,S1))  --> call(Op,SO), a_arg(State,A1,S1).
-a_app(post(A1),Op,State,op(SO,S1)) --> a_arg(State,A1,S1), call(Op,SO).
-a_app(in(A1,A2),Op,State,op(SO,S1,S2)) --> a_arg(State,A1,S1), call(Op,SO), a_arg(State,A2,S2). 
-a_arg(a(M0,Ops,M,Base),A1,S1) --> {assoc(M,M0,Ops,A1,M1,Ops1)}, algebra(M,M1,Ops1,Base,S1).
-
-algebra2(Ops,Base,S) --> {setting(max_left_recursion,M)}, algebra2(M,M,Ops,Base,S).
-algebra2(_,_,[],Base,S) --> call(Base,S).
-algebra2(M,M0,[O|Ops],Base,S) --> {O=Class-Op}, a2_app(Class,Op,a(M0,[O|Ops],M,Base),S).
-a2_app(pre(A1),Op,State,op(SO,S1))  --> call(Op,SO), a2_arg(State,A1,S1).
-a2_app(Class,Op,State,S) --> {class_assoc1(Class,A1)}, a2_arg(State,A1,S1), a2_cont(A1,Class,Op,State,S1,S).
-a2_cont(x,_,_,_,S,S) --> [].
-a2_cont(A1,post(A1),Op,_,S1,op(SO,S1)) --> call(Op,SO).
-a2_cont(A1,in(A1,A2),Op,State,S1,op(SO,S1,S2)) --> call(Op,SO), a2_arg(State,A2,S2). 
-a2_arg(a(M0,Ops,M,Base),A1,S1) --> {assoc(M,M0,Ops,A1,M1,Ops1)}, algebra2(M,M1,Ops1,Base,S1).
-
-% this is to avoid parsing arg 1 as y if the current op class precludes it
-class_assoc1(_,x).
-class_assoc1(post(y),y).
-class_assoc1(in(y,_),y).
-
-
-assoc(M,_,[_|Ops],x,M,Ops).
-assoc(_,M0,Ops,y,M1,Ops) :- succ(M1,M0).
-
-% Untyped algebra
-:- meta_predicate algebra8(+,5,3,-,?,?).
-algebra8(L,DB,Base,Sem) --> 
-   {setting(max_left_recursion,M)},
-   a8_top(L,M,a(M,DB,Base),Sem).
-
-a8_top(0,_,Alg,Sem) --> {Alg=a(_,_,Base)}, call(Base,Sem).
-a8_top(L,M,Alg,Sem) --> {L>0}, a8_x(L-M,Alg,Sem).
-
-% ideally, 3rd clause would not bother with A1=y if no operator will accept it.
-a8_x(LM,Alg,op(SO,S1)) --> a8_op(Alg,LM,pre(A1),SO), a8_arg(LM,Alg,A1,S1).
-a8_x(LM,Alg,Sem) --> a8_op(Alg,LM,custom(a8_arg(LM,Alg)),Sem).
-a8_x(LM,Alg,Sem) --> a8_arg(LM,Alg,A1,S1), a8_cont(A1,LM,Alg,S1,Sem). 
-
-a8_cont(x,_,_,S1,S1) --> [].
-a8_cont(A1,LM,Alg,S1,op(SO,S1))  --> a8_op(Alg,LM,post(A1),SO).
-a8_cont(A1,LM,Alg,S1,op(SO,S1,S2)) --> a8_op(Alg,LM,in(A1,A2),SO), a8_arg(LM,Alg,A2,S2).
-
-a8_arg(LM,Alg,A,S) --> {Alg=a(M,_,_), assoc(M,LM,A,L1-M1)}, a8_top(L1,M1,Alg,S).
-a8_op(a(_,DB,_),L-_,Class,SO) --> call(DB,L,Class,SO).
-
-% Typed algebra
-:- meta_predicate algebra9(+,6,4,-,-,?,?).
-algebra9(L,DB,Base,Type,Sem) --> 
-   {setting(max_left_recursion,M)},
-   a9_top(L,M,a(M,DB,Base),Type,Sem).
-
-a9_top(0,_,Alg,Type,Sem) --> {Alg=a(_,_,Base)}, call(Base,Type,Sem).
-a9_top(L,M,Alg,Type,Sem) --> {L>0}, a9_x(L-M,Alg,Type,Sem).
-
-% ideally, 3rd clause would not bother with A1=y if no operator will accept it.
-a9_x(LM,Alg,Type,op(SO,S1)) --> a9_op(Alg,LM,pre(A1:T1),Type,SO), a9_arg(LM,Alg,A1,T1,S1).
-a9_x(LM,Alg,Type,Sem) --> a9_op(Alg,LM,custom(a9_arg(LM,Alg)),Type,Sem).
-a9_x(LM,Alg,Type,Sem) --> a9_arg(LM,Alg,A1,T1,S1), a9_cont(A1,LM,Alg,T1,S1,Type,Sem).
-
-a9_cont(x,_,_,T1,S1,T1,S1) --> [].
-a9_cont(A1,LM,Alg,T1,S1,TO,op(SO,S1))  --> a9_op(Alg,LM,post(A1:T1),TO,SO).
-a9_cont(A1,LM,Alg,T1,S1,TO,op(SO,S1,S2)) --> a9_op(Alg,LM,in(A1:T1,A2:T2),TO,SO), a9_arg(LM,Alg,A2,T2,S2).
-
-a9_arg(LM,Alg,A,T,S) --> {Alg=a(M,_,_), assoc(M,LM,A,L1-M1)}, a9_top(L1,M1,Alg,T,S).
-a9_op(a(_,DB,_),L-_,Class,TO,SO) --> call(DB,L,Class,TO,SO).
-
-assoc(M,L-_,x,L1-M) :- succ(L1,L).
-assoc(_,L-M,y,L-M1) :- succ(M1,M).
 
 % ================ STATEMENTS ================
 
@@ -446,7 +359,7 @@ statement(declare_cursor(CN,Insensitive,Scroll,Statement)) -->
    if(Scroll, @scroll),
    @cursor, @for, cursor_statement(Statement).
 
-statement(select(Variant,Select)) --> select(Variant,Select).
+statement(select_into(Targets,Select)) --> select(just(Targets),Select).
 
 collate_clause(X) --> @collate, qualified_name(X).
 
@@ -465,8 +378,8 @@ type_or_domain(TC,T) --> data_type(TC,T).
 type_or_domain(_,D) --> domain_name(D).
 
 default_clause(D) --> @default, default_option(D).
-default_option(literal(X)) --> literal(_,X).
-default_option(X) --> @X, {member(X,[user, null, current_user, session_user, system_user])}.
+default_option(X) --> literal(_,X).
+default_option(X) --> @X, {member(X,[user, current_user, session_user, system_user])}. % null is now literal
 
 column_constraint_defn(constraint(CN,Constraint,CheckTime,Deferrable)) -->
    CN ? constraint_name_defn,
@@ -496,7 +409,6 @@ unique_spec(primary_key) --> @primary, @key.
 unique_spec(unique) --> @unique.
 
 % -- Data modification ----
-
 insert_spec(defaults) --> @default, @values.
 insert_spec(query(Columns,Q)) -->
    maybe(Cs, column_names(Cs), Columns),
@@ -506,7 +418,10 @@ where_spec(all) --> [].
 where_spec(cond(Cond)) --> where_clause(Cond).
 where_spec(current(Cursor)) --> @where, @current, @of, cursor_name(Cursor).
 
-set_clause(C=V) --> column_name(C), o(=), value(V).
+set_clause(C=V) --> column_name(C), o(=), set_value(V).
+set_value(X) --> expr(_,X).
+set_value(default) --> @default.
+
 
 % -- Query ----
 where_clause(Cond) --> @where, condition(Cond).
@@ -519,35 +434,46 @@ sort_spec(ord(Column,Collation,Direction)) -->
    Direction ? @[asc,desc].
 
 subquery(Q) --> paren(query_expr(Q)).
+query_expr(Q) --> algebra([in(y,x)-setop(2), in(y,x)-setop(1)],query_primary,Q).
+setop(L,setop(Op,All,CS)) --> @Op, {setop(L,Op)}, if(All,@all), CS?corresponding_spec.
 
-query_expr(Q) --> algebra9(2,setop,query_primary,query,Q).
+setop(2,union).
+setop(2,except).
+setop(1,intersect).
 
-setop(Level,in(y:query,x:query),query,setop(Op,All,CS)) --> 
-   @Op, {setop_level(Op,Level)}, if(All,@all), CS?corresponding_spec.
-
-setop_level(union,2).
-setop_level(except,2).
-setop_level(intersect,1).
-
-query_primary(query,select(S))    --> select(general,S).
-query_primary(query,values(Vals)) --> @values, clist(row_val,Vals).
-query_primary(query,table(T))     --> @table, table_name(T).
-% query_primary(query,join(J))    --> joined_table(J). 
-query_primary(query,Q)            --> paren(query_expr(Q)).
+query_primary(S)            --> select(nothing,S).
+query_primary(values(Vals)) --> @values, clist(expr(row(_)),Vals). 
+query_primary(table(T))     --> @table, table_name(T).
+% query_primary(join(J))    --> joined_table(J). 
+query_primary(Q)            --> paren(query_expr(Q)).
 
 table_reference(X) --> table_expr(tref(_),X).
-table_expr(T,X) --> algebra9(1,table_op,table_primary,T,X).
+table_expr(T,X) --> typed_algebra2(1,table_op,table_primary,T,X).
 
-table_op(1,in(y:tref(_),y:tref(_)),tref(join),cross_join) --> @cross, @join.
+table_op(1, in(y<S1:tref(_),y<S2:tref(_)), cross_join(S1,S2):tref(joined), (@cross,@join)).
+table_op(1, custom(PA), join(JT,JS,S1,S2):tref(joined), join(PA,JT,JS,S1,S2)).
+
+join(PA,JT,JS,T1,T2) --> 
+   call(PA,y<T1:tref(_)),
+   (  join_op(JT),
+      call(PA,y<T2:tref(_)),
+      JS?join_spec
+   ;  {JS=just(natural)}, @natural, join_op(JT),
+      opt_default(join_type,inner,JT), @join,
+      call(PA,y<T2:tref(_))
+   ).
+
+table_op(1,in(y:tref(_),y:tref(_)),tref(joined),cross_join) --> @cross, @join.
 table_op(1,custom(PA),tref(joined),op(join(JT,JS),T1,T2)) --> 
    call(PA,y,tref(_),T1),
-   (  JT?join_type, @join,
+   (  join_op(JT),
       call(PA,y,tref(_),T2),
       JS?join_spec
-   ;  {JS=just(natural)}, @natural, 
-      JT?join_type, @join,
+   ;  {JS=just(natural)}, @natural, join_op(JT),
       call(PA,y,tref(_),T2)
    ).
+
+join_op(JT) --> opt_default(join_type,inner,JT), @join.
 
 join_type(X) --> @([inner,union],X).
 join_type(X) --> @([left,right,full],X), ? @outer.
@@ -574,21 +500,21 @@ reserved(using).
 reserved(on).
 reserved(as).
 
-select(Variant,select(Quant,SList,From,Cond,GroupBy,Having)) -->
-   @select, Quant?set_quantifier,
-   select_list(Variant,SList),
+select(Targets,select(Quant,SList,From,Cond,GroupBy,Having)) -->
+   @select, Quant ? set_quantifier,
+   select_list(Targets,SList),
    maybe(Ts, (@from, clist(table_reference,Ts)), From),
    Cond ? where_clause,
    maybe(Gs, (@group, @by, clist(grouping_spec,Gs)), GroupBy),
    maybe(C, (@having, condition(C)), Having).
 
-select_list(general,[]) --> star.
-select_list(general,SList) --> clist(select_sublist,SList).
-select_list(single(Targets),SList) -->
+select_list(nothing,[]) --> star.
+select_list(nothing,SList) --> clist(select_sublist,SList).
+select_list(just(Targets),SList) -->
    clist(select_sublist,SList),
    @into, clist(target_spec,Targets).
 
-set_quantifier(Q) --> (@all; @distinct) // @Q.
+set_quantifier(Q) --> @([all,distinct],Q).
 select_sublist(sel(X,CN)) --> expr(_,X), maybe(C, (@(as), column_name(C)), CN).
 select_sublist(all(Q)) --> table_name(Q), dot, star.
 
@@ -600,7 +526,6 @@ target_spec(param(X,Ind)) --> with_indicator(param_name,X,Ind).
 target_spec(embedded(X,Ind)) --> with_indicator(embedded_variable_name,X,Ind).
 
 % ------------------ CURSORS ------------------
-
 cursor_statement(query(Q,Order,Updatability)) --> cursor_spec(Q,Order,Updatability).
 cursor_statement(statement(N)) --> identifier(N).
 
@@ -617,7 +542,6 @@ fetch_orientation(rel(X)) --> @relative, simple_val(X).
 cursor_name(X) --> identifier(X).
 
 % ------------------ TRANSACTIONS --------------------
-
 transaction_setting(isolation_level(IL)) --> @isolation_level, isolation_level(IL).
 transaction_setting(writable(Bool))      --> @read, if(Bool, @write, @only).
 transaction_setting(diagnostics_size(X)) --> @diagnostics, @size, simple_val(X).
@@ -627,109 +551,85 @@ isolation_level(read_uncommitted) --> @read, @uncommitted.
 isolation_level(repeatable_read) --> @repeatable, @read.
 isolation_level(serializable)    --> @serializable.
 
-% =================== SEARCH CONDITIONS ===================
-condition(Cond) --> 
-   % algebra9(5,bool_op,bool_primary,boolean,Cond).
-   algebra2( [  in(y,x)-(@or>or)
-             ,  in(y,x)-(@and>and)
-             ,  pre(x) -(@not>not)
-             ,  post(x)-boolean_test
-             ], predicate, Cond).
+% ======================== EXPRESSIONS =====================
+condition(Cond) --> expr(boolean,Cond). 
+
+expr(T,X) --> typed_algebra1(9,expr_op,primary,T,X).
+expr(L,T,X) --> typed_algebra1(L,expr_op,primary,T,X).
+
+% operator database for typed_algebra{1,2}//5, also extended with boolean operators and predicates
+expr_op(9, in(y<S1:boolean,x<S2:boolean), or(S1,S2):boolean, @or).
+expr_op(8, in(y<S1:boolean,x<S2:boolean), and(S1,S2):boolean, @and).
+expr_op(7, pre(x<S1:boolean),     not(S1):boolean, @not).
+expr_op(6, post(x<S1:boolean),    is(S1=Val,Pos):boolean, boolean_test(is(Val,Pos))).
+
+expr_op(5, in(x<S1:T,x<S2:T),       overlaps(S1,S2)    :boolean, @overlaps) :- T=interval.
+expr_op(5, in(x<S1:T,x<S2:T),       cmp(O,S1,S2)       :boolean, comp_op(O)).
+expr_op(5, post(x<S1:_),            cmpq(O,S1,Quant,Q) :boolean, query_comparison(O,Quant,Q)).
+expr_op(5, post(x<S1:_),            is(null(S1),Pos)   :boolean, (@(is), neg(Pos), @null)).
+expr_op(5, post(x<S1:T),            is(between(L,U,S1) ,Pos):boolean, between(T,L,U,Pos)).
+expr_op(5, post(x<S1:T),            is(in(S1,Set),Pos) :boolean, (neg(Pos), @in, in_spec(T,Set))).
+expr_op(5, post(x<S1:_),            match(S1,U,P,Q)    :boolean, match(U,P,Q)).
+expr_op(5, post(x<S1:string(char)), is(like(S1,Y,Esc),Pos):boolean, like(Y,Esc,Pos)).
+
+expr_op(4, in(y<S1:numeric,x<S2:numeric), (S1+S2):numeric, plus).
+expr_op(4, in(y<S1:numeric,x<S2:numeric), (S1-S2):numeric, minus).
+expr_op(3, in(y<S1:numeric,x<S2:numeric), (S1*S2):numeric, star).
+expr_op(3, in(y<S1:numeric,x<S2:numeric), (S1/S2):numeric, slash).
+expr_op(2, pre(x<S1:numeric), -S1:numeric, minus).
+expr_op(2, pre(x<S1:numeric), +S1:numeric, plus).
+
+expr_op(2, in(x<S1:string(T),y<S2:string(T)),concat(S1,S2):string(T),concat).
+expr_op(1, post(x<S1:string(char)),collate(C,S1):string(char),collate_clause(C)).
+
+expr_op(4, in(y<S1:interval,x<S2:datetime), (S1+S2):datetime, plus).
+expr_op(4, in(y<S1:datetime,x<S2:interval), (S1+S2):datetime, plus).
+expr_op(4, in(y<S1:datetime,x<S2:interval), (S1-S2):datetime, minus).
+expr_op(4, in(y<S1:interval,x<S2:interval), (S1+S2):interval, plus).
+expr_op(4, in(y<S1:interval,x<S2:interval), (S1-S2):interval, minus).
+expr_op(4, in(y<S1:datetime,x<S2:datetime), (S1-S2):preival, minus).
+
+expr_op(3, in(x<S1:numeric,y<S2:interval), S1*S2:interval, star).
+expr_op(3, in(y<S1:interval,x<S2:numeric), S1*S2:interval, star).
+expr_op(3, in(y<S1:interval,x<S2:numeric), S1/S2:interval, slash).
+ 
+expr_op(2, pre(x<S1:interval),    -S1:interval, minus).
+expr_op(2, pre(x<S1:interval),    +S1:interval, plus).
+expr_op(1, post(x<S1:interval),   iq(Q,S1):interval,        interval_qualifier(Q)).
+expr_op(1, post(x<D1-D2:preival), ival(Q,D1,D2):interval,   interval_qualifier(Q)).
+expr_op(1, post(x<S1:datetime),   at(TZ,S1):datetime, (@at, time_zone_spec(TZ))).
 
 boolean_test(is(Val,Pos)) --> @(is), neg(Pos), @([true,false,unknown],Val).
-
-predicate(exists(X)) --> @exists, subquery(X).
-predicate(X) --> paren(condition(X)).
-predicate(Sem) --> row_val(X), predicate_continue(X,Sem).
-predicate(op(is(like(X,Esc),Pos),X,Y)) --> 
-   expr(string(char),X), neg(Pos), @like, expr(string(char),Y), 
-   maybe(E, (@escape, expr(string(char),E)),Esc).
-
-predicate_continue(X,op(cmp(O),X,Y))--> comp_op(O), row_val(Y).
-predicate_continue(X,op(cmp(O,Quant,Q),X)) --> comp_op(O), @([all,some,any],Quant), subquery(Q).
-predicate_continue(X,op(overlaps,X,Y)) --> @overlaps, row_val(Y).
-predicate_continue(X,op(is(null,Pos),X)) --> @(is), neg(Pos), @null.
-predicate_continue(X,op(is(between(L,U),Pos),X)) --> neg(Pos), @between, row_val(L), @and, row_val(U).
-predicate_continue(X,op(is(in(Set),Pos),X)) --> neg(Pos), @in, in_spec(Set).
-predicate_continue(X,op(match(Q,Unique,Partiality),X)) --> 
+query_comparison(O,Quant,Q) --> comp_op(O), @([all,some,any],Quant), subquery(Q).
+between(T,L,U,Pos) --> neg(Pos), @between, expr(4,T,L), @and, expr(4,T,U).
+like(Y,Esc,Pos) -->
+   neg(Pos), @like, expr(2,string(char),Y), 
+   maybe(E, (@escape, expr(2,string(char),E)), Esc).
+match(Unique,Partiality,Q) -->
    @match, if(Unique, @unique), 
    Partiality ? @[partial,full], 
    subquery(Q).
-
-% bool_op(5, in(y:boolean,x:boolean), boolean, or)  --> @or.
-% bool_op(4, in(y:boolean,x:boolean), boolean, and) --> @and.
-% bool_op(3, pre(x:boolean),          boolean, not) --> @not.
-% bool_op(2, post(x:boolean),         boolean, is(Val,Pos)) --> 
-%    @(is), neg(Pos), @([true,false,unknown],Val).
-
-% bool_op(1, in(x:row,x:row), boolean, cmp(O))    --> comp_op(O).
-% bool_op(1, in(x:row,x:row), boolean, overlaps)  --> @overlaps.
-% bool_op(1, post(x:row),     boolean, cmpq(O,Quant,Q)) --> comp_op(O), @([all,some,any],Quant), subquery(Q).
-% bool_op(1, post(x:row),     boolean, match(Q,Unique,Partiality)) -->
-%    @match, if(Unique, @unique), 
-%    Partiality ? @[partial,full], 
-%    subquery(Q).
-% bool_op(1, post(x:row), boolean, is(Pos,null)) --> @(is), neg(Pos), @null.
-% bool_op(1, post(x:row), boolean, is(Pos,between(L,U))) --> neg(Pos), @between, row_val(L), @and, row_val(U).
-% bool_op(1, post(x:row), boolean, is(Pos,in(Set))) --> neg(Pos), @in, in_spec(Set).
-% bool_op(1, custom(_),   boolean, op(is(Pos,like(Esc)),X,Y)) --> 
-%    expr(string(char),X), neg(Pos), @like, expr(string(char),Y), 
-%    maybe(E, (@escape, expr(string(char),E)),Esc).
-
-% bool_primary(row,X) --> row_val(X).
-
-in_spec(subquery(Q)) --> subquery(Q).
-in_spec(list(Items)) --> paren(clist(expr(_),Items)).
+in_spec(_,subquery(Q)) --> subquery(Q).
+in_spec(T,list(Items)) --> paren(clist(expr(T),Items)).
 comp_op(O) --> o(O), {member(O,['=','<>','<','>','<=','>='])}.
 neg(Pos) --> if(Pos, [], @not).
-
-% ======================== EXPRESSIONS =====================
-:- discontiguous expr//2, term//2, factor//2.
-
-row_val(row(Elements)) --> paren(clist(value,Elements)).
-row_val(element(X))    --> value(X).
-row_val(subquery(Q))   --> subquery(Q).
-
-value(val(X)) --> expr(_,X).
-value(default) --> @default.
-value(null) --> @null.
-
-expr(T,X) --> algebra9(4,expr_op,primary,T,X).
-
-expr_op(4,in(y:numeric,x:numeric),numeric,S) --> sign(S).
-expr_op(3,in(y:numeric,x:numeric),numeric,*) --> star.
-expr_op(3,in(y:numeric,x:numeric),numeric,/) --> slash.
-expr_op(2,pre(x:numeric),numeric,S) --> sign(S).
-
-expr_op(2,in(x:string(T),y:string(T)),string(T),concat) --> concat.
-expr_op(1,post(x:string(char)),string(char),collate(C)) --> collate_clause(C).
-
-expr_op(4,in(y:interval,x:datetime),datetime,+) --> plus.
-expr_op(4,in(y:datetime,x:interval),datetime,S) --> sign(S).
-expr_op(4,in(y:interval,x:interval),interval,S) --> sign(S).
-expr_op(4,in(y:datetime,x:datetime),preival,ival) --> minus.
-
-expr_op(3,in(x:numeric,y:interval),interval,*) --> star.
-expr_op(3,in(y:interval,x:numeric),interval,*) --> star.
-expr_op(3,in(y:interval,x:numeric),interval,/) --> slash.
-
-expr_op(2,pre(x:interval),interval,S) --> sign(S).
-expr_op(1,post(x:interval),interval,qual(Q)) --> interval_qualifier(Q).
-expr_op(1,post(x:preival),interval,qual(Q)) --> interval_qualifier(Q).
-expr_op(1,post(x:datetime),datetime,at(TZ)) --> @at, time_zone_spec(TZ).
 
 time_zone_spec(local) --> @local.
 time_zone_spec(interval(X)) --> @time, @zone, expr(interval,X).
 
-primary(T,lit(X)) --> {dif(T,signed)}, literal(T,X).
-primary(T,gen(T,X)) --> general_val(X).
-primary(T,col(T,X)) --> column_reference(X).
-primary(T,case(X)) --> case(T,X).
-primary(T,cast(X,DT)) --> cast(T,X,DT).
-primary(T,aggr(X))   --> set_function(T,X).
-primary(T,fn(X))      --> function(T,X).
-primary(T,expr(X)) --> paren(expr(T,X)).
-primary(_,subq(X)) --> subquery(X).
+primary(T,X)           --> {dif(T,signed)}, literal(T,X).
+primary(T,gen(T,X))    --> general_val(X).
+primary(T,col(T,X))    --> column_reference(X).
+primary(T,X)           --> case(T,X).
+primary(T,nullif(X,Y)) --> @nullif, paren((expr(T,X), comma, expr(T,Y))).
+primary(T,coalesce(X)) --> @coalesce, paren(clist(expr(T),X)).
+primary(T,cast(X,DT))  --> cast(T,X,DT).
+primary(T,aggr(X))     --> set_function(T,X).
+primary(T,fn(X))       --> function(T,X).
+primary(row(Types),row(Vals)) --> paren(clist(expr,Types,Vals)).
+primary(boolean,exists(X))    --> @exists, subquery(X).
+primary(T,X)                  --> paren(expr(T,X)).
+primary(_,subquery(X))        --> subquery(X).
 
 % -- date/time --------------------
 interval_qualifier(X-Y) --> start_field(X), @to, end_field(Y).
@@ -741,7 +641,6 @@ end_field(second(FPrec))  --> @second, paren(unsigned_int(FPrec)).
 end_field(Field)          --> datetime_field(Field).
 datetime_field_with_precision(F^LP) --> datetime_field(F), maybe(P,paren(unsigned_int(P)),LP).
 datetime_field(F) --> @([year,month,day,hour,minute,second],F).
-
 
 % -------------------- FUNCTIONS ---------------------
 function(string(T),substring(X,Y,N)) --> 
@@ -770,30 +669,25 @@ set_function(T,agg(F,Q)) --> @([avg,max,min,sum],F), paren(quant(T,Q)).
 
 quant(T,qual(Q,X)) --> Q?set_quantifier, expr(T,X).
 
-cast(T,X,TorD) --> @cast, paren(((expr(_,X) ; @null), @(as), type_or_domain(T,TorD))).
+cast(T,X,TorD) --> @cast, paren((expr(_,X), @(as), type_or_domain(T,TorD))). % includes null
 
-case(T,nullif(X,Y)) --> @nullif, paren((expr(T,X), comma, expr(T,Y))).
-case(T,coalesce(X)) --> @coalesce, paren(clist(expr(T),X)).
 case(T,case(X,Whens,Else)) -->
    @case, expr(TX,X), 
    seqmap(when_clause(TX,T),Whens),
-   maybe(Y, else(result(T,Y)), Else), 
+   maybe(Y, else(expr(T,Y)), Else), 
    @end.
 
 case(T,case(Whens,Else)) -->
    @case, 
    seqmap(when_clause(T),Whens),
-   maybe(Y, else(result(T,Y)), Else), 
+   maybe(Y, else(expr(T,Y)), Else), 
    @end.
 
-when_clause(TX,TR,when(X,R)) --> when(expr(TX,X),result(TR,R)). 
-when_clause(TR,when(C,R))  --> when(condition(C),result(TR,R)). 
+when_clause(TX,TR,when(X,R)) --> when(expr(TX,X),expr(TR,R)). 
+when_clause(TR,when(C,R))  --> when(condition(C),expr(TR,R)). 
 
 when(Phrase,Result) --> @when, Phrase, @then, Result.
 else(Result) --> @else, Result.
-result(_,null) --> @null.
-result(T,val(X)) --> expr(T,X).
-
 
 % ------------------- IDENTIFIERS -------------------
 table_name(X) --> qualified_name(X).
@@ -819,6 +713,9 @@ literal( interval,  interval(Sign,X,Q)) --> @interval, Sign?sign, qt(year_month_
 literal( datetime,  current_date)         --> @current_date.
 literal( datetime,  current_time(N))      --> @current_time, paren(unsigned_int(N)).
 literal( datetime,  current_timestamp(N)) --> @current_timestamp, paren(unsigned_int(N)).
+literal( boolean,   true)  --> @true.
+literal( boolean,   false) --> @false.
+literal( _,         null). % !!! I have added this to simplify elsewhere.
 
 unsigned_int(X)--> t(unsigned(int(X))).
 qt(Phrase) --> string(char,Phrase).
@@ -840,7 +737,6 @@ hours(H)   --> unsigned_int_codes(H).
 minutes(M) --> unsigned_int_codes(M).
 seconds(S) --> unsigned_int_codes(S).
 fraction(fixed(D,S)) --> peek("."), token(_,unsigned(fixed(D,S))).
-
 
 unsigned_int_codes(X) --> 
    (  {nonvar(X)} 
@@ -1056,9 +952,9 @@ parsing(S,S) :- nonvar(S), S=[C|_], nonvar(C).
 data_type(numeric,T) --> @([integer,real],T).
 data_type(string(char),T) --> @([text, varchar],T).
 data_type(datetime,T) --> @([datetime,date,time],T).
+data_type(boolean,boolean) --> @boolean.
 
 % ================= TOP LEVEL UTILITIES ============
-tokens_to_phrase(Phrase,Tokens,Opts) :- limit_size(max_depth,Phrase,Opts), phrase(Phrase,Tokens).
 phrase_to_tokens(Phrase,Tokens,Opts) :- limit_size(max_length,Tokens,Opts), phrase(Phrase,Tokens).
 tokens_to_string(Tokens,String) :- phrase_string(tokens(scheme,Tokens),String).
 
@@ -1080,10 +976,6 @@ sql_generate(Phrase,String,Opts) :-
 
 % delayed length checker, useful for generating from grammars.
 max_length(N,L) :- freeze(L,(L=[]->true;L=[_|T],succ(M,N),max_length(M,T))).
-max_depth(N,T) :- freeze(T,check_depth(N,T)).
-
-check_depth(_,T) :- atomic(T), !.
-check_depth(N,T) :- T=..[_|Args], succ(M,N), maplist(max_depth(M),Args).
 
 limit_size(Limiter,Term,Opts) :-
    option(step(DD),Opts,15),
