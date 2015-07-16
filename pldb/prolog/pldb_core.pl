@@ -183,6 +183,7 @@ put_state(K1,K2,V) :-
    ;  asserta(db_state(K1,K2,V))
    ).
 
+dbxs(Con,String) :- dbh_query_affected(Con,String,_).
 dbx(Con,Phrase) :- phrase_string(Phrase,String), !, dbh_query_affected(Con,String,_).
 dbx_row(Con,Phrase,Row) :- phrase_string(Phrase,String), !, dbh_query_row(Con,String,Row).
 dbx_affected(Con,Phrase,N) :- phrase_string(Phrase,String), !, dbh_query_affected(Con,String,N).
@@ -204,20 +205,23 @@ db_transaction(Con,Goal) :-
                                   end_trans(Con,"ROLLBACK")
                                )).
 
-begin_trans(Con)   :- put_state(trans,Con,open), dbx(Con,at("BEGIN")).
-end_trans(Con,Act) :- del_state(trans,Con,_),   dbx(Con,at(Act)).
+begin_trans(Con)   :- put_state(trans,Con,open), dbxs(Con,"BEGIN").
+end_trans(Con,Act) :- del_state(trans,Con,_),   dbxs(Con,Act).
 
 
 % ----------------- CREATE/DROP TABLES -------------------------------
 
-%% db_create_table(+Con, +TableName:atom, +Columns:list(column_spec), +Opts) is semidet.
+%% db_create_table(+Con, +TableName:atom, +Columns:list(column_spec)) is semidet.
 %
 % Create a table with given name and column types.
-db_create_table(Con,Table,Columns,Opts) :- 
-   dbx(Con,sql(create_table(Table,Columns,Opts))).
+db_create_table(Con,Table,Columns) :- 
+   maplist(column_spec_to_table_element,Columns,Elements),
+   dbx(Con,statement(create_table(Table,Elements,nothing))).
+
+column_spec_to_table_element(Name:Type,column(Name,Type,nothing,[],nothing)).
 
 db_drop_table(Con,Table) :-
-   dbx(Con,sql(drop_table(Table))),
+   dbx(Con,statement(drop_table(Table))),
    del_state(table(Table),Con,_).
 
 % ----------------- INSERTING  ----------------------------
@@ -407,8 +411,7 @@ qq_vars(Vars,_=Var) :- member(V,Vars), V==Var, !.
 %
 %  Top DCG phrase for SQL language. Term language is:
 %  ==
-%  sql_command ---> create_table(table_name,column_spec,options)
-%                 ; drop_table(table_name)
+%  sql_command ---> 
 %                 ; select( table_name, list(column_name), where_spec)
 %                 ; update( table_name, assignment, where_spec)
 %                 ; delete( table_name, where_spec).
@@ -438,13 +441,6 @@ sql(@Ident) --> expr(_,@Ident).
 sql(Ident:=Expr) --> identifier(Ident), "=", expr(_,Expr).
 sql(\Phrase) --> phrase(Phrase).
 
-sql(drop_table(Name)) --> "DROP TABLE ", identifier(Name).
-
-sql(create_table(Name,Spec,Opts))--> 
-   "CREATE TABLE ", identifier(Name), 
-   paren(seqmap_with_sep(comma,colspec,Spec)), 
-   if(option(oids(true),Opts,false), " WITH OIDS").
-
 sql(insert(Table,Args,Cols)) --> 
 	{ maplist(snd,Cols,Types) },
 	"INSERT INTO ", identifier(Table), 
@@ -461,7 +457,6 @@ sql(select(Tab,Selection,Where)) -->
 	"SELECT ", seqmap_with_sep(comma,wr,Selection),
 	" FROM ", identifier(Tab), where(Where).
 
-colspec(Name:Type) --> identifier(Name), sp, wr(Type).
 snd(_:Y,Y).
 
 where([]) --> [].

@@ -39,6 +39,7 @@
 
    Table and view creation
    ==
+   drop_table(table_name) :: statement.
    create_table(table_name, list(table_element), maybe({delete,preserve})) :: statement.
    create_view(table_name, maybe(list(column_name)), query, maybe(maybe({cascaded,local}))) :: statement.
    set_constraints_mode(maybe(list(qualified_name)), {immediate,deferred}) :: statement.
@@ -340,6 +341,9 @@ clist(Phrase,Xs,Ys) --> seqmap_with_sep(comma,Phrase,Xs,Ys).
 clist(Phrase) --> +(comma,Phrase).
 paren(Phrase) --> o('('), Phrase, o(')').
 
+term_expansion(set_members(Name,Items),Clauses) :- seqmap(set_member(Name),Items,Clauses,[]).
+set_member(Name,Item) --> [Clause], {Clause =.. [Name,Item]}.
+
 % ================ STATEMENTS ================
 
 statements(XX) --> seqmap_with_sep(o(;),statement,XX).
@@ -363,6 +367,7 @@ statement(close_cursor(X)) --> @close, cursor_name(X).
 statement(fetch(X,Orient,Targets)) -->
    @fetch, Orient?fetch_orientation, @from, cursor_name(X), @into, clist(target_spec,Targets).
 
+statement(drop_table(T)) --> @drop, @table, table_name(T).
 statement(create_table(T,Elements,OnCommit)) -->
    @create, @table, table_name(T), paren(clist(table_element,Elements)),
    maybe(X, (@on, @commit, @([delete,preserve],X), @rows), OnCommit).
@@ -511,16 +516,7 @@ corresponding_spec(ColSpec) --> @corresponding, maybe(Cs, (@by, column_names(Cs)
 
 % incomplete list, enough to avoid incorrect parses of join expressions
 % due to reserved words being parsed as correlation names.
-reserved(outer).
-reserved(inner).
-reserved(left).
-reserved(right).
-reserved(full).
-reserved(union).
-reserved(natural).
-reserved(using).
-reserved(on).
-reserved(as).
+set_members(reserved,[outer,inner,left,right,full,union,natural,using,on,as]).
 
 select(Targets,select(Quant,SList,From,Cond,GroupBy,Having)) -->
    @select, Quant ? set_quantifier,
