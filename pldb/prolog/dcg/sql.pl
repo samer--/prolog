@@ -4,6 +4,7 @@
       ,  sql_parse/2
       ,  statement//1
       ,  expr//2
+      ,  phrase_token//2
       ]).
 
 /** <module> SQL DCG with semantic representation
@@ -12,6 +13,9 @@
    but with extra arguments to carry a semantic representation of the SQL syntax,
    as well a some other modifications. It is primarily intended for generating SQL
    statements, but it can also be used for parsing. 
+
+   TODO
+   Extensible database type system?
 
    ---++ TYPES
 
@@ -439,7 +443,7 @@ unique_spec(unique) --> @unique.
 insert_spec(defaults) --> @default, @values.
 insert_spec(query(Columns,Q)) -->
    maybe(Cs, column_names(Cs), Columns),
-   query_expr(Q).
+   query_expr(Q). % NB. no way to make sure expr types match column types
 
 where_spec(all) --> [].
 where_spec(cond(Cond)) --> where_clause(Cond).
@@ -646,8 +650,9 @@ primary(T,aggr(X))     --> set_function(T,X).
 primary(T,fn(X))       --> function(T,X).
 primary(row(Types),row(Vals)) --> paren(clist(expr,Types,Vals)).
 primary(boolean,exists(X))    --> @exists, subquery(X).
-primary(T,X)                  --> paren(expr(T,X)).
 primary(_,subquery(X))        --> subquery(X).
+primary(T,token(T,DC,Phrase)) --> {nonvar(Phrase)}, phrase_token(DC,Phrase).
+primary(T,X)                  --> paren(expr(T,X)).
 
 % -- date/time --------------------
 interval_qualifier(X-Y) --> start_field(X), @to, end_field(Y).
@@ -799,6 +804,9 @@ o(Op)    --> [t(d,operator(Op))].
 string(T,Phrase) --> [t(_,string(T,Codes))], {freeze(Codes,phrase(Phrase,Codes))}.
 t(Class) --> [t(_,Class)].
 
+:- meta_predicate phrase_token(+,//,?,?).
+phrase_token(DC,Phrase) --> [t(DC,\Phrase)].
+
 % ============== TOKENISATION ===========
 
 %% sql_tokenise(+Input:string, -Tokens:list(token)) is det.
@@ -857,6 +865,8 @@ token(d,operator(Op))  --> (  {nonvar(Op)}
                            -> {atom_codes(Op,Codes)}, list(Codes), {operator(Codes,[])}
                            ;  operator//dlist(Codes), {atom_codes(Op,Codes)}
                            ).
+
+token(_,\Phrase) --> {nonvar(Phrase)}, phrase(Phrase).
 
 % -- Identifiers ----------
 identifier(A) :- freeze(A, atom(A);string(A)).
