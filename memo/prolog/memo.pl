@@ -337,10 +337,10 @@ memo(Module:Head) :-
    freeze(Res,reflect(Res)), % this will prevent storage on failure or exception
    memo(Module:Head,_-Res).
 memo(Module:Head,Meta) :-
-   memoised(Module,Head,Meta,MemoHead),
+   memoised(Module,Head,Meta1,MemoHead),
    computer(Module,Head,Spec,ComputeHead),
    type_and_mode_check(Spec,Head),
-   (  call(Module:MemoHead) *-> true
+   (  call(Module:MemoHead) *-> Meta=Meta1
    ;  debug(memo,"computing ~q...",[Module:Head]),
       timed(reify(Module:ComputeHead,Res),Comp),
       asserter(Module,Head,Meta,AssertHead),
@@ -349,6 +349,7 @@ memo(Module:Head,Meta) :-
       call(Module:AssertHead)
    ).
 
+:- public reflect/1.
 reflect(ok) :- !.
 reflect(fail) :- !, fail.
 reflect(ex(Ex)) :- throw(Ex).
@@ -486,6 +487,7 @@ timed(Goal,comp(_,T1,DT)) :-
    get_time(T1), call(Goal), 
    get_time(T2), DT is T2-T1.
 
+:- public reify/2.
 reify(Goal,R) :- catch((Goal -> R=ok ; R=fail), Ex, R=ex(Ex)).
 
 
