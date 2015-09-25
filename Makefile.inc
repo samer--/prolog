@@ -32,7 +32,7 @@ zip: packdir
 	git add $(ZIPFILE)
 
 push:
-	git push && chmod -w $(PACKFILE)
+	git push
 
 install:
 	swipl -g "pack_install('$(PACKFILE)',[upgrade(true),interactive(false)]), halt"
