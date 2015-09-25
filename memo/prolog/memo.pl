@@ -332,9 +332,10 @@ copy_if_input(-_,_,_).
 %  if the computation was not actually repeated but was retrieve from the memo table.
 %  memo/2 _reifies_ this behaviour, returing information in Meta.
 %
-%  Note that the type and mode are checked strictly. An Input argument X declared with +T
-%  must satisfy must_be(T,X). An output argument declared with a -T must an unbound
-%  variable. 
+%  Note that the types are checked strictly. An Input argument X declared with +T
+%  must satisfy must_be(T,X). An output argument declared with a -T may be bound or unbound.
+%  If it is bound, the predicate behaves as if it were unbound, followed by a final
+%  semi-deterministic unification. (Prior to v0.5.0, outputs had to be unbound.)
 memo(Module:Head) :- 
    freeze(Res,reflect(Res)), % this will prevent storage on failure or exception
    memo(Module:Head,_-Res).
