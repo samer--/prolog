@@ -41,6 +41,19 @@ The debug messages should indicate that repeated computations are being
 avoided, even for failing goals, like =|sqrt1(-4.0,X)|=, and computations
 that throw exceptions, like =|sqrt2(-4.0,X)|=.
 
+---++++ Changes in v0.5
+
+	memo/1 and memo/2 are now steadfast with respect to output arguments in the
+	memoised goal. This means that instead of throwing an exception if an
+	output argument is nonvar on entry, the computation proceeeds _exactly_ as
+	if it were unbound, followed by a final semi-deterministic unification.
+	Any side-effects of calling the memoised computation (ie the memoisation of
+	the result) goes ahead even if the output arguments do not unify and the
+	call as a whole fails.
+	
+	An alternative approach would be to abort the memoisation if the output
+	values do not unify with those provided on input.
+
 ---++++ Changes in v0.4
 
 	memo/1 now behaves differently if the memoised predicate fails or throws
