@@ -103,11 +103,11 @@ spec_goal_opts(Goal,Goal,[]).
 sparql_endpoint(EP,Url) :- sparql_endpoint(EP,Url,[]).
 sparql_endpoint(EP,Url,Options) :-
    url_endpoint(Url,Host,Port,Path), 
-	(	sparql_endpoint(EP,Host,Port,Path,_)
+   (  sparql_endpoint(EP,Host,Port,Path,_)
    -> format('% WARNING: Updating already registered SPARQL end point ~w.\n',[Url]),
       retractall(sparql_endpoint(EP,Host,Port,Path,_))
    ),
-	debug(sparkle,'Asserting SPARQL end point ~w: ~w ~w ~w ~w.',[EP,Host,Port,Path,Options]),
+   debug(sparkle,'Asserting SPARQL end point ~w: ~w ~w ~w ~w.',[EP,Host,Port,Path,Options]),
    assert(sparql_endpoint(EP,Host,Port,Path,Options)).
 
 user:term_expansion(:-(sparql_endpoint(EP,Url)), Expanded) :- 
