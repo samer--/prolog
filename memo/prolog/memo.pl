@@ -26,6 +26,7 @@
     , (persistent_memo)/1
     , call_with_mode/2
     , current_mode/1
+    , current_memo/3
     , op(1150,fx,volatile_memo)
     , op(1150,fx,persistent_memo)
     , modally/1
@@ -150,7 +151,7 @@
 :- use_module(library(settings)).
 :- use_module(library(sandbox)).
 
-:- multifile memoised/5, asserter/4, retracter/4, computer/3.
+:- multifile memoised/4, lookerup/4, asserter/4, retracter/4, computer/3.
 
 :- set_prolog_flag(double_quotes,string).
 :- set_prolog_flag(back_quotes,codes).
@@ -233,7 +234,7 @@ persistent_memo(Spec) :- throw(error(context_error(nodirective, persistent_memo(
 browse(Module:Head) :- browse(Module:Head,_-ok).
 browse(Module:Head,Meta) :- 
    must_be(module,Module),
-   memoised(Module,Head,_,Meta,MemoHead), 
+   lookerup(Module,Head,Meta,MemoHead), 
    call(Module:MemoHead).
 
 %% clear_all(@Goal:callable, @Meta:metadata) is det.
@@ -250,7 +251,7 @@ browse(Module:Head,Meta) :-
 clear_all(Module:Head) :- clear_all(Module:Head,_).
 clear_all(Module:Head,Meta) :- 
    must_be(nonvar,Head), 
-   memoised(Module,Head,_,Meta,MemoHead),
+   lookerup(Module,Head,Meta,MemoHead),
    retracter(Module,Head,Meta,RetractHead), 
    aggregate_all(count,Module:MemoHead,Count),
    setting(confirmation_threshold,Thresh),
@@ -267,7 +268,7 @@ confirm(Printer) :-
 %
 %  Calls the original un-memoised predicate without checking or modifying memo-tables.
 compute(Module:Head) :- 
-   memoised(Module,Head,Spec,_,_),
+   memoised(Module,Head,Spec),
    type_and_mode_check(Spec,Head),
    computer(Module,Head,ComputeHead),
    call(Module:ComputeHead).
@@ -277,7 +278,7 @@ compute(Module:Head) :-
 %  Calls the original un-memoised predicate without checking or modifying memo-tables.
 %  If the underlying predicate fails or throws an exception, Meta is set accordingly.
 compute(Module:Head,Meta) :- 
-   memoised(Module,Head,Spec,Meta,_),
+   memoised(Module,Head,Spec),
    type_and_mode_check(Spec,Head),
    computer(Module,Head,ComputeHead),
    timed(reify(Module:ComputeHead,Res),Comp),
@@ -293,15 +294,16 @@ compute(Module:Head,Meta) :-
 %  with Res. Otherwise, the recomputed version is discarded.
 recompute_all(Module:Head,Meta,Res) :- 
    must_be(nonvar,Head),
-   memoised(Module,Head,Spec,Meta,MemoHead),
+   memoised(Module,Head,Spec),
+   unbind_outputs(Spec,Head,Head1),
+   lookerup(Module,Head,Meta,MemoHead), % use bound outputs to lookup
+   computer(Module,Head1,ComputeHead),  % use unbound outputs to compute
+   asserter(Module,Head1,Comp-Res,AssertHead), % to add new computation
    retracter(Module,Head,Meta,RetractHead), % to remove old computation
    forall( Module:MemoHead, (
-      unbind_outputs(Spec,Head,Head1),
-      computer(Module,Head1,ComputeHead),
       debug(memo,"recomputing ~q...",[Module:Head1]),
       (  timed(reify(Module:ComputeHead,Res),Comp) 
       -> debug(memo,"storing (~w) ~q...",[Res,Module:Head1]),
-         asserter(Module,Head1,Comp-Res,AssertHead), 
          call(Module:RetractHead), % ideally these would be atomic
          call(Module:AssertHead)
       ;  debug(memo,"rejecting (~w) ~q...",[Res,Module:Head1])
@@ -337,17 +339,18 @@ memo(Module:Head) :-
    freeze(Res,reflect(Res)), % this will prevent storage on failure or exception
    memo(Module:Head,_-Res).
 memo(Module:Head,Meta) :-
-   memoised(Module,Head,Spec,Meta1,MemoHead),
+   memoised(Module,Head,Spec),
    type_and_mode_check(Spec,Head,Head1),
+   lookerup(Module,Head1,Meta1,MemoHead),
    (  call(Module:MemoHead) *-> Meta=Meta1
    ;  debug(memo,"computing ~q...",[Module:Head]),
       computer(Module,Head1,ComputeHead),
       timed(reify(Module:ComputeHead,Res),Comp), Meta=Comp-Res, 
       asserter(Module,Head1,Meta,AssertHead),
       debug(memo,"storing (~w) ~W...",[Res,Module:Head,[quoted(true),max_depth(6)]]),
-      call(Module:AssertHead),
-      Head=Head1
-   ).
+      call(Module:AssertHead)
+   ),
+   Head=Head1.
 
 :- public reflect/1.
 reflect(ok) :- !.
@@ -412,7 +415,8 @@ compile_memo(volatile, Spec, Module) -->
    },
    [ :- dynamic(MemoName/MemoArity),
 
-     memo:memoised(Module, Head, Type, Meta, MemoHead),
+     memo:memoised(Module, Head, Type, volatile),
+     memo:lookerup(Module, Head, Meta, MemoHead),
      memo:computer(Module, Head, ComputeHead),
      memo:asserter(Module, Head, MetaA, assertz(Module:AssertHead)),
      memo:retracter(Module, Head, Meta, retractall(Module:RetractHead)),
@@ -442,7 +446,8 @@ compile_memo(persistent, Spec, Module) -->
       hostname(Host), MetaA=comp(Host,_,_)-_
    },
    phrase(PersistClauses),
-   [ memo:memoised(Module, Head, Type, Meta, MemoHead),
+   [ memo:memoised(Module, Head, Type, persistent),
+     memo:lookerup(Module, Head, Meta, MemoHead),
      memo:computer(Module, Head, ComputeHead),
      memo:asserter(Module, Head, MetaA, Module:AssertHead),
      memo:retracter(Module, Head, Meta, Module:RetractHead),
@@ -461,6 +466,13 @@ strip_name(+_:T,+T) :- !.
 strip_name(-_:T,-T) :- !.
 strip_name(S,S) :- !.
 
+memoised(Module,Head,Type) :- memoised(Module,Head,Type,_).
+
+%% current_memo(-Goal,-Type,-StorageClass:oneof([persistent,volatile])) is nondet.
+%  Enumerates memoised predicates.
+current_memo(Module:Head,Type,StorageClass) :-
+   memoised(Module,Head,Type,StorageClass).
+
 type_and_mode_check(Type,Head) :-
    forall( arg(I,Type,ArgSpec), 
       (  arg(I,Head,Arg), 
@@ -474,7 +486,7 @@ type_and_mode_check(Spec,Head0,Head1) :-
    Head1 =.. [Name|Args1].
 
 check_arg(+Type,X,X) :- must_be(Type,X).
-check_arg(-_,X0,X1).
+check_arg(-_,_,_).
 
 user:term_expansion((:- volatile_memo(Spec)), Clauses) :-
    prolog_load_context(module, Module),
@@ -493,7 +505,7 @@ user:term_expansion(Head,ComputeHead) :-
    computer(Module,Head,ComputeHead).
 
 timed(Goal,comp(_,T1,DT)) :- 
-   get_time(T1), call(Goal), 
+   get_time(T1), call(Goal), !, 
    get_time(T2), DT is T2-T1.
 
 :- public reify/2.
