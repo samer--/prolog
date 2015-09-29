@@ -26,7 +26,7 @@
     , (persistent_memo)/1
     , call_with_mode/2
     , current_mode/1
-    , current_memo/3
+    , memo_property/2
     , op(1150,fx,volatile_memo)
     , op(1150,fx,persistent_memo)
     , modally/1
@@ -469,10 +469,18 @@ strip_name(S,S) :- !.
 
 memoised(Module,Head,Type) :- memoised(Module,Head,Type,_).
 
-%% current_memo(-Goal,-Type,-StorageClass:oneof([persistent,volatile])) is nondet.
-%  Enumerates memoised predicates.
-current_memo(Module:Head,Type,StorageClass) :-
-   memoised(Module,Head,Type,StorageClass).
+%% memo_property(-Goal,-Prop:memo_property) is nondet.
+%  ==
+%  memo_property ---> type(typespec)
+%                   ; storage(oneof([persistent,volatile]))
+%                   ; count(natural).                   .
+%  ==
+%  Enumerates memoised and their properties.
+memo_property(Module:Head,type(Type)) :- memoised(Module,Head,Type,_).
+memo_property(Module:Head,storage(SC)) :- memoised(Module,Head,_,SC).
+memo_property(Module:Head,count(N)) :-
+   lookerup(Module,Head,_,MemoHead),
+   aggregate_all(count,MemoHead,N).
 
 type_and_mode_check(Type,Head) :-
    forall( arg(I,Type,ArgSpec), 
