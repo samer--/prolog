@@ -368,6 +368,7 @@ current_mode(memo).
 
 
 sandbox:safe_meta(memo:browse(_),[]).
+sandbox:safe_meta(memo:browse(_,_),[]).
 sandbox:safe_meta(memo:call_with_mode(browse,_),[]) :- !.
 sandbox:safe_meta(memo:call_with_mode(_,G),[G]).
 sandbox:safe_meta(memo:modally(Module:Head),[Module:ComputeHead]) :-
