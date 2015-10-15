@@ -241,11 +241,11 @@ A >> B --> call_dcg(A), call_dcg(B).
 %% maybe(P:phrase(_))// is det.
 %  Try P, if it fails, then do nothing. If it succeeds,
 %  cut choicepoints and continue.
-maybe(P)  --> call_dcg(P) -> nop; nop.
+maybe(P)  --> call_dcg(P) -> []; [].
 
 %% opt(P:phrase(_))// is nondet.
 %  P or nothing. Like maybe but does not cut if P succeeds.
-opt(P)  --> call_dcg(P); nop.
+opt(P)  --> call_dcg(P); [].
 
 %% if(G:pred,P,Q)// is det.
 %% if(G:pred,P)// is det.
@@ -254,7 +254,7 @@ opt(P)  --> call_dcg(P); nop.
 %  if(G,P) is equivalent to if(G,P,nop), i.e. does nothing
 %  if P fails.
 if(A,B,C) --> {call(A)} -> call_dcg(B); call_dcg(C). % used to have nonvar(A)
-if(A,B)   --> {call(A)} -> call_dcg(B); nop.
+if(A,B)   --> {call(A)} -> call_dcg(B); [].
 
 
 % do_then_call( +S:phrase, +P:phrase(A), X:A)// is nondet.
@@ -276,7 +276,7 @@ lift(P,X,Y) --> { call(P,X,Y) }.
 %
 %  Run phrase sequentially as many times as possible until it fails.
 %  Any choice points left by G are cut.
-exhaust(G) --> call_dcg(G) -> exhaust(G); nop.
+exhaust(G) --> call_dcg(G) -> exhaust(G); [].
 
 
 %% until( +Q:pred, +P:phrase(_))// is det.
