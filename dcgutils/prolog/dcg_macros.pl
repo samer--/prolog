@@ -43,7 +43,6 @@
 :- op(900,fy,<\>).
 :- op(900,xfy,\#).
 
-:- use_module(library(dcg_core)).
 :- use_module(library(apply_macros)).
 
 mk_call(C,XX,Call) :- var(C), !, mk_call(call(C),XX,Call).
@@ -79,7 +78,8 @@ expand_seqmap_with_prefix(Sep0, Callable0, SeqmapArgs, Goal) :-
 	prolog_load_context(module, Module),
 	(   current_predicate(Module:AuxName/AuxArity)
 	->  true
-	;   rep(N,[[]],BaseLists,[]),
+	;   length(BaseLists,N),
+       maplist(=([]),BaseLists),
 	    length(Anon, Argc),
 	    build_term(AuxName, BaseLists, Anon, S0, S0, BaseClause),
 
