@@ -196,7 +196,8 @@ with(S,G) --> {call_dcg(G,S,_)}.
 %  Run phrase P starting with current state but discarding
 %  its final state and preserving the current state, so
 %  that S1=S2.
-iso(G)    --> get(S), {call_dcg(G,S,_)}.
+iso(G,S,S) :- call_dcg(G,S,_).
+% iso(G)    --> get(S), {call_dcg(G,S,_)}.
 
 %% once(G:phrase(_))// is semidet.
 %  Call DCG phrase G succeeding at most once.

@@ -78,7 +78,7 @@ dcgshell(Interp,Id,S1,S2) :- !,
 
 shell_prompt(Id,Interp,Goal,Bindings) :-
 	context_module(Mod),
-	format(atom(NA),'~p: ~p (~W) >> ',[Mod,Interp,Id,[portray(true),quoted(true),max_depth(6)]]),
+	format(atom(NA),'~p: ~p (~W) >> ',[Mod,Interp,Id,[portray(true),quoted(true),max_depth(3)]]),
 	read_history(h,'!h',[trace,end_of_file],NA, Goal, Bindings).
 
 dcgshell_x(fail,_,_,_,_,_) :- !, fail.
