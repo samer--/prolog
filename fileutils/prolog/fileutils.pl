@@ -258,8 +258,12 @@ find_files(like(Spec),AbsFile) :-
    absolute_file_name(File,AbsFile). 
 
 
-%% file_under(+Root:path(dir), +Pattern:pattern, -File:path(file)) is nondet.
-%  implementation common to file_under/4 and find_files/2.
+%% file_under(+Root:path(dir), +Pattern:pattern, -File:path(file))// is nondet.
+%  DCG rule common to file_under/4 and find_files/2.
+%  Finds file names matching Pattern in or under Root and matches DCG
+%  final argument pair with difference list containing the directory names
+%  along the path from the the Root to the file.
+:- public file_under//3.
 file_under(Root,Pattern,File) --> {file_in(Root,Pattern,File)}.
 file_under(Root,Pattern,File) --> 
 	{  atom_concat(Root,'/*',DirPatt),
