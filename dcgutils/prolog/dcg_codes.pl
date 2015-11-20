@@ -19,6 +19,7 @@
 :- module(dcg_codes, [
 		writedcg/1
    ,  phrase_string/2
+   ,  phrase_atom/2
 
    % Types
    ,  ctype//1
@@ -64,6 +65,7 @@ be used to generate sequences, not parse them.
 :- meta_predicate 
 		writedcg(2)
    ,  phrase_string(//,-)
+   ,  phrase_atom(//,-)
 	,	brace(//,?,?)
 	,	paren(//,?,?)
 	,	sqbr(//,?,?)
@@ -92,6 +94,16 @@ phrase_string(Phrase,String) :-
    (  var(String)
    -> phrase(Phrase,Codes), string_codes(String,Codes)
    ;  string_codes(String,Codes), phrase(Phrase,Codes)
+   ).
+
+%% phrase_atom(+P:phrase,-A:atom) is nondet.
+%% phrase_atom(+P:phrase,+A:atom) is nondet.
+%
+%  Use list-of-codes DCG phrase P to parse or generate a atom A.
+phrase_atom(Phrase,Atom) :-
+   (  var(Atom)
+   -> phrase(Phrase,Codes), atom_codes(Atom,Codes)
+   ;  atom_codes(Atom,Codes), phrase(Phrase,Codes)
    ).
 
 %% ctype(Type)// is nondet.
