@@ -25,9 +25,11 @@
 		with_input_from_file/3, % +File, +Goal, +Opts
 		with_input_from/2,      % +Source, +Goal
 
+      directory_entry/2,      % +Dir, -File
       expand_pattern/2,       % +Pattern, -File
       find_files/2,           % +FindSpec, -File
       file_under/4,           % +Root, +Pattern, -File, -RelPath
+      file_under_dl/5,        % +Root, +Options, -File, ?DirsHead, ?DirsTail
 
       file_extension/2,
       extension_in/2,
@@ -224,6 +226,34 @@ file_under(DirSpec,Pattern,File,RelPath) :-
 	file_under(Root,Pattern,File,RelPath,[]).
 
 
+%% file_under_dl(+Root:spec(dir),+Options:list, -File:atom, ?DirHead:list(atom), ?DirTail:list(atom)) is nondet.
+%
+%  Finds files under directory Dir, succeeding multiple times with AbsPath
+%  bound to the absolute path (as an atom), and Parts bound to a list
+%  of directory components ending with the file name. Options can include:
+%     * abs(-AbsPath:path(file))
+%     AbsPath is unified with the absolute path of each file found.
+%     * filter(+Filter:pred(+atom,+path(file)))
+%     Filter is called with the name of and absolute path of each directory
+%     found. If it fails, that directory is not recursed into.
+%
+%  NB. this interface of this predicate is unstable and may change in future.
+
+:- meta_predicate file_under_dl(+,:,-,?,?).
+file_under_dl(Spec,Opts,File,Parts,PartsT) :-
+   call_dcg( (
+      meta_options(meta_opt),
+      option_default_select(abs(AbsPath), _),
+      option_default_select(filter(DFilt),true)
+   ), Opts, _),
+   absolute_file_name(Spec,Dir),
+   file_under(Dir,DFilt,File,AbsPath,Parts,PartsT).
+
+option_default_select(O,D,O1,O2):-select_option(O,O1,O2,D).
+meta_opt(file_filter).
+meta_opt(dir_filter).
+true(_,_).
+
 %% find_files( +FindSpec:findspec, -File:path(file)) is nondet.
 %
 %  General file finding predicate. FindSpec is one of:
@@ -260,17 +290,41 @@ find_files(like(Spec),AbsFile) :-
 
 %% file_under(+Root:path(dir), +Pattern:pattern, -File:path(file))// is nondet.
 %  DCG rule common to file_under/4 and find_files/2.
-%  Finds file names matching Pattern in or under Root and matches DCG
+%  Finds file names matching Pattern in or under Root and matches 
 %  final argument pair with difference list containing the directory names
 %  along the path from the the Root to the file.
-:- public file_under//3.
-file_under(Root,Pattern,File) --> {file_in(Root,Pattern,File)}.
-file_under(Root,Pattern,File) --> 
-	{  atom_concat(Root,'/*',DirPatt),
-      expand_directory(DirPatt,Dir),
-      file_base_name(Dir,DirName)
-   }, [DirName],
-	file_under(Dir,Pattern,File).
+%  File is an absolute path to the file in question.
+:- public file_under/5.
+file_under(Root,Pattern,File,P,P) :- 
+   file_in(Root,Pattern,File).
+file_under(Root,Pattern,File,[DirName|P1],P2)  :- 
+   % directory_file_path(Root,'*',DirPatt),
+   % expand_directory(DirPatt,Dir),
+   % file_base_name(Dir,DirName),
+	% file_under(Dir,Pattern,File,P1,P2).
+   directory_entry(Root,DirName),
+   directory_file_path(Root,DirName,Dir),
+   exists_directory(Dir),
+   file_under(Dir,Pattern,File,P1,P2).
+
+
+%% file_under(+Root:path(dir), +Filter, -Name:atom, -Path:path(file))// is nondet.
+%  Alternative implementation of file_under, with arbitrary filter
+%  predicate on directories. Name is the is the name
+%  component of the path to the file. Path is the path, of which Root is
+%  always a prefix.
+:- meta_predicate file_under(+,2,-,-,?,?).
+file_under(Root,Filter,Name,Path,P1,P2) :-
+   directory_entry(Root,Item),
+   directory_file_path(Root,Item,ItemPath),
+   file_under_x(Filter,Item,ItemPath,Name,Path,P1,P2).
+
+file_under_x(_,Item,ItemPath,Item,ItemPath,P1,P1) :-
+   exists_file(ItemPath).
+file_under_x(Filter,Item,ItemPath,Name,Path,[Item|P1],P2) :-
+   exists_directory(ItemPath), 
+   call(Filter,Item,ItemPath),
+   file_under(ItemPath,Filter,Name,Path,P1,P2).
 
 
 %% file_in(+Dir:path(dir), +Pattern:pattern, -File:path(file)) is nondet.
@@ -278,7 +332,7 @@ file_under(Root,Pattern,File) -->
 %  Directory must be an atom containing an expanded path (no wildcards)
 %  but can be relative or absolute.
 file_in(Directory,Pattern,File) :-
-	atomic_list_concat([Directory,Pattern],'/',FullPattern),
+   directory_file_path(Directory,Pattern,FullPattern),
    expand_file(FullPattern,File).
 
 %% expand_absolute_directory( +Spec:spec(pattern), -Dir:path(dir)) is nondet.
@@ -304,6 +358,14 @@ expand_pattern(Pattern,File) :-
    access_file(File,read).
 
 
+%% directory_entry(+Dir:path(dir), -Entry:atom) is nondet.
+%  Is true when Entry is a file or directory in the directory
+%  Dir, not including the special entries '.' and '..'.
+directory_entry(Dir,Entry) :-
+   directory_files(Dir,Entries),
+   member(Entry,Entries),
+   Entry\='.', Entry\='..'.
+
 %% file_extension(+File:path, -Ext:atom) is nondet.
 %% file_extension(+File:path, +Ext:atom) is semidet.
 %
@@ -324,18 +386,6 @@ file_extension(Path,Ext) :-
    succ(BDot,Dot),                % look after dot
    sub_atom(Path,Dot,_,0,Ext),     % Ext=extension exluding dot
    \+sub_atom(Ext,_,_,_,'/').      % Ext cannot contain /
-
-% --- Alternative implementation using a grammar ---
-% file_extension(Path,Ext) :-
-%    atom_codes(Path,PathCodes),
-%    filename(ExtCodes,PathCodes,[]),
-%    atom_codes(Ext,ExtCodes).
-% filename(Ext) --> seqmap(namechar,_), "/", !, filename(Ext).
-% filename(Ext) --> seqmap(namechar,[_|_]), ".", seqmap(namechar,Ext).
-% namechar(C) --> [C], {[C]\="/"}.
-% seqmap(_,[]) --> [].
-% seqmap(G,[X|Xs]) --> call(G,X), seqmap(G,Xs).
-% --------------------------------------------------
 
 
 %% extension_in(+File:path, +Extensions:list(atom)) is semidet.
@@ -373,20 +423,6 @@ with_temp_dir(Dir,Goal) :-
    setup_call_cleanup(
       make_directory(Dir), Goal,
       delete_directory_and_contents(Dir)).
-
-% delete_directory_recursive(Dir) :-
-%    directory_files(Dir,Files),
-%    maplist(delete(Dir),Files),
-%    debug(fileutils(temp),"Deleting directory '~w'...",[Dir]),
-%    delete_directory(Dir).
-
-% delete(_,'.') :- !.
-% delete(_,'..') :- !.
-% delete(Dir,File) :-
-%    debug(fileutils(temp),"Deleting file '~w'...",[Dir/File]),
-%    atomics_to_string([Dir,"/",File],Path),
-%    delete_file(Path).
-
 
 :- if(current_prolog_flag(unix,true)).
 
