@@ -8,6 +8,8 @@
 	,	cue//2
 	,	run_cued//2
 	,	run_cued//3
+	,	run_cued/2
+	,	run_cued/3
 	,	sleep_till/1
 	]).
 
@@ -23,6 +25,7 @@ chaging the DCG state.
 */
 
 :- meta_predicate run_cued(+,//,+,-), run_cued(+,+,//,+,-).
+:- meta_predicate run_cued(+,//), run_cued(+,+,//).
 
 :- use_module(library(utils)).
 :- use_module(library(dcg_core)).
@@ -80,10 +83,14 @@ lag(L)    --> now(T0), get(T), {L is T-T0}.
 
 %% run_cued( +DT:nonneg, +Q:nonneg, +Cmd:phrase((time,S)), ?S1:S, ?S2:S) is nondet.
 %% run_cued( +DT:nonneg, +Cmd:phrase((time,S)), ?S1:S, ?S2:S) is nondet.
+%% run_cued( +DT:nonneg, +Q:nonneg, +Cmd:phrase(time)) is nondet.
+%% run_cued( +DT:nonneg, +Cmd:phrase(time)) is nondet.
 %
 %  Run command Cmd in DT seconds. Cmd must operate in (time,S) DCG and is called
 %  with the current real time plus DT seconds. If Q is supplied, the time
 %  passed to Cmd is quantised upwards in units of Q seconds.
 run_cued(DT,Cmd) --> run_left((\< cue(DT), call_dcg(Cmd)),_,_).
 run_cued(DT,Q,Cmd) --> run_left((\< cue(DT,Q), call_dcg(Cmd)),_,_).
+run_cued(DT,Cmd) :- call_dcg((cue(DT), call_dcg(Cmd)),_,_).
+run_cued(DT,Q,Cmd) :- call_dcg((cue(DT,Q), call_dcg(Cmd)),_,_).
 
