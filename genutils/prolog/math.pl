@@ -8,10 +8,12 @@
 	,	recip/2
 	,	stoch/3
 	,	to_float/2
+   ,  max/3
 	]).
 
 :- use_module(library(apply_macros)).
 
+max(X,Y,Z)   :- Z is max(X,Y).
 divby(X,Y,Z) :- Z is Y/X.
 sub(X,Y,Z)   :- Z is Y-X.
 add(X,Y,Z)   :- Z is Y+X.
