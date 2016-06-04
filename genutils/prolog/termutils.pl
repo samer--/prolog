@@ -25,6 +25,8 @@
    ,  msg/1
    ,  heading/2
    ,  ask/3
+   ,  get_key/2
+   ,  userchk/1
    ]).
       
 :- meta_predicate with_status_line(0).
@@ -47,15 +49,57 @@ with_status_line(Goal) :-
 
 msg(F) :- msg(F,[]).
 msg(F,A) :- format(user_output,F,A), nl.
+
 ask(F,A,Ch) :- 
    format(user_output,F,A), flush_output(user_output), 
    get_single_char(C), put_char(user_output,C), 
    char_code(Ch,C), nl.
+
 heading(F,A) :- 
    with_output_to(user_output, (ansi_format([bold],F,A), nl,nl)).
+
 status(F,A) :- 
 	format(string(Msg),F,A), 
 	flag(line_len,MaxLen,MaxLen),
 	string_length(Msg,Len),
 	(Len>MaxLen -> sub_string(Msg,0,MaxLen,_,Msg1); Msg=Msg1),
 	write(user_output,Msg1), put_cap(ce), put_cap(cr).
+
+
+%% get_key( +Valid:list(char), -C:char) is det.
+%
+%  Get and validate a key press from the user. The character
+%  must be one of the ones listed in Valid, otherwise, an
+%  error message is printed and the user prompted again.
+get_key(Valid,C) :-
+	read_char_echo(D), nl,
+	(	member(D,Valid) -> C=D
+	;	D='\n' -> get_key(Valid,C) % this improves interaction with acme
+	;	format('Unknown command "~q"; valid keys are ~q.\n', [D,Valid]),
+		write('Command? '),
+		get_key(Valid,C)).
+
+
+%% prompt_for_key( +Msg:atom, +Keys:list(char), -Key:char) is semidet.
+%
+%  Prompt user for a keypress. Prompt message is Msg, and valid keys are
+%  listed in Keys. 
+prompt_for_key(Msg,Keys,Key) :- format('~p ~q? ',[Msg,Keys]), get_key(Keys,Key).
+
+
+%% read_char_echo( -C:atom) is det.
+%
+%  Read a single character from the current input,
+%  echo it to the output.
+read_char_echo(C) :-
+	get_single_char(Code), 
+	put_code(Code), flush_output,
+	char_code(C,Code). 
+
+
+%% userchk(T) is semidet.
+%
+%  Write T and ask this user if it is ok. User presses y or n.
+%  userchk succeeds if if the keypress was y and fails if it was n.
+userchk(T) :- prompt_for_key(T,[y,n],y).
+
