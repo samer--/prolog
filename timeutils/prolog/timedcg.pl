@@ -27,7 +27,6 @@ chaging the DCG state.
 :- meta_predicate run_cued(+,//,+,-), run_cued(+,+,//,+,-).
 :- meta_predicate run_cued(+,//), run_cued(+,+,//).
 
-:- use_module(library(utils)).
 :- use_module(library(dcg_core)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
