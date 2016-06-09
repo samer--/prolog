@@ -149,7 +149,7 @@ remove_var(V,[X|Xs],[X|Ys]) :- remove_var(V,Xs,Ys).
 
 :- predicate_options(with_output_to_file/3,3,
       [  mode(oneof([write,append]))
-      ,  pass_to(open/4,4)
+      ,  pass_to(system:open/4,4) % !!! explicit module to work-around bug in predicate options system (2016-06)
       ]).
 
 with_output_to_file(File,Goal) :- with_output_to_file(File,Goal,[]).
