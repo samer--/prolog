@@ -148,6 +148,7 @@
 
 :- use_module(library(persistency)).
 :- use_module(library(typedef)).
+:- use_module(library(hostname)).
 :- use_module(library(settings)).
 :- use_module(library(sandbox)).
 
@@ -170,19 +171,6 @@
 
 :- setting(confirmation_style, list(ground), [bold,fg(red)], "Confirmation message style options.").
 :- setting(confirmation_threshold, integer, 1, "Maximum entries for silent clear_all deletion.").
-
-
-user:term_expansion(init_hostname,hostname(H)) :-
-   (  getenv('HOSTNAME',H) -> true
-   ;  setup_call_cleanup(open(pipe(hostname),read,S),
-                         read_line_to_codes(S,Codes),
-                         close(S)), 
-      atom_codes(H,Codes)
-   ),
-   format("% memo: setting hostname to '~w'.\n",[H]).
-
-:- dynamic hostname/1.
-init_hostname.
 
 
 %% memo_attach(:Spec:filespec, +Options:list) is det.
