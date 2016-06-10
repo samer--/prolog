@@ -94,8 +94,7 @@ dcgshell_x(X^Goal,Bindings,Interp,Id,S1,S2) :- !,
 
 dcgshell_x(Goal,Bindings,Interp,Id,S0,S2) :- !,
 	catch( 
-		(	rl_write_history('.swipl_history'), 
-			current_prolog_flag(prompt_alternatives_on,PromptOn),
+		(	current_prolog_flag(prompt_alternatives_on,PromptOn),
 			call(Interp,Goal,S0,S1), 
 			include(dcg_shell:bound,Bindings,BoundBindings),
 			(	BoundBindings=[] 
