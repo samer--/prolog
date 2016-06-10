@@ -77,7 +77,7 @@ confirm_halt :-
 %        If supplied, the history is saved every Interval seconds. Otherwise, the history
 %        is only saved when Prolog exits (using at_halt/1).
 persistent_history :-
-   perisistent_history('.swipl_history',[interval(60)]).
+   persistent_history('.swipl_history',[interval(60)]).
 
 persistent_history(H,Opts) :- 
 	(	persistent_history_file(H) -> true
