@@ -23,7 +23,7 @@ user:term_expansion(hostname(_),hostname(H)) :-
                          close(S)), 
       atom_codes(H,Codes)
    ),
-   print_message(informational, got_hostname(H)).
+   print_message(information, got_hostname(H)).
 
 prolog:message(got_hostname(H)) --> ['Registering hostname "~w"'-[H]].
 

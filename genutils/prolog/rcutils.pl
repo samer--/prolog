@@ -75,10 +75,23 @@ confirm_halt :-
 %     *  interval(+Interval:number)
 %        If supplied, the history is saved every Interval seconds. Otherwise, the history
 %        is only saved when Prolog exits (using at_halt/1).
+% 
+% For example, the author finds it useful to add the following to his ~/.swiplrc:
+% ==
+% :- use_module(library(hostname)).
+% persistent_history :-
+%    hostname(Hostname),
+%    atom_concat('.swipl_history.',Hostname,HistFile),
+%    persistent_history(HistFile,[interval(60)]).
+% ==
+% This means that any program can call persistent_history/0 to get a host specific
+% history file, which is useful when a directory is shared or synchronised across
+% several machines.
+
 persistent_history(H,Opts) :- 
 	(	persistent_history_file(H) -> true
 	;	persistent_history_file(H1) -> throw(persistent_history_mismatch(H1,H))
-	;	debug(history,'Will use persistent history in "~s".',[H]),
+	;	print_message(information, rcutils:history_using_file(H)),
 		prolog_history(disable),
 		(exists_file(H) -> rl_read_history(H); true),
 		assert(persistent_history_file(H)),
@@ -87,7 +100,7 @@ persistent_history(H,Opts) :-
 		history_event('Start: ~s',[Command]),
 		at_halt(history_event('Halt',[])),
       (  option(interval(Interval),Opts)
-      -> debug(history,'Will save history automatically every ~w seconds.',[Interval]),
+      -> print_message(information, rcutils:history_save_interval(Interval)), 
          periodic_save_history(Interval)
       ;  rl_write_history(H)
       )
@@ -110,3 +123,5 @@ periodic_save_history(Interval) :-
    rl_write_history(H),
    alarm(Interval,periodic_save_history(Interval),_,[remove(true)]).
 
+prolog:message(rcutils:history_using_file(H))    --> ['Using persistent history file: "~s"'-[H]].
+prolog:message(rcutils:history_save_interval(I)) --> ['Will save history every ~w seconds.'-[I]].
