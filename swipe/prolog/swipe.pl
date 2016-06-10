@@ -271,7 +271,7 @@ with_pipe_output(S,Pipe,Goal) :-
    debug(swipe,'reading from pipeline: ~s',[Cmd]),
    with_stream(S, open(pipe(Cmd),read,S), Goal).
 
-%% with_pipe_input(S:stream, Pipe:(0>>$Y), G:callable) is det.
+%% with_pipe_input(S:stream, Pipe:($Y >> 0), G:callable) is det.
 %  
 %  Starts the given pipeline and calls goal G, with the standard input to
 %  the pipeline connected to stream S. The type of Pipe reflects the requirement
