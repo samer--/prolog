@@ -18,7 +18,6 @@
 
 :- module(rcutils, 
       [  persistent_history/2
-      ,  persistent_history/0
       ,  confirm_on_halt/0
       ]).
 
@@ -43,6 +42,7 @@
 
 user:file_search_path(home,Home) :- expand_file_name('~',[Home]).
 
+:- use_module(library(hostname)).
 
 %% confirm_on_halt is det.
 %  Installs confirm_halt/0 as a hook to be called before exitting Prolog. 
@@ -63,7 +63,6 @@ confirm_halt :-
 
 :- dynamic persistent_history_file/1.
 
-%% persistent_history is det.
 %% persistent_history(+File:text, +Opts:options) is det.
 %
 %  This disables SWIs built-in persistent command line history mechanism and replaces
@@ -76,9 +75,6 @@ confirm_halt :-
 %     *  interval(+Interval:number)
 %        If supplied, the history is saved every Interval seconds. Otherwise, the history
 %        is only saved when Prolog exits (using at_halt/1).
-persistent_history :-
-   persistent_history('.swipl_history',[interval(60)]).
-
 persistent_history(H,Opts) :- 
 	(	persistent_history_file(H) -> true
 	;	persistent_history_file(H1) -> throw(persistent_history_mismatch(H1,H))
