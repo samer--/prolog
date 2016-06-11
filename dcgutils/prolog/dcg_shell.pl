@@ -84,7 +84,7 @@ shell_prompt(Id,Interp,Goal,Bindings) :-
 dcgshell_x(fail,_,_,_,_,_) :- !, fail.
 dcgshell_x(halt,_,_,_,S,S) :- !, nl.
 dcgshell_x(end_of_file,_,_,_,S,S) :- !, nl.
-dcgshell_x(module(Mod),_,Interp,Id,S1,S2) :- !, Mod:dcgshell(Interp,Id,S1,S2).
+dcgshell_x(module(Mod),_,Interp,Id,S1,S2) :- !, @(dcgshell(Interp,Id,S1,S2), Mod).
 dcgshell_x(interp(Int2),_,Int1,Id,S1,S2) :- !, 
 	format('Changing interpreter from ~w to ~w.\n',[Int1,Int2]),
 	dcgshell(Int2,Id,S1,S2).
