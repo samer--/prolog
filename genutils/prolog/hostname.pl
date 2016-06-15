@@ -18,7 +18,7 @@
 
 user:term_expansion(hostname(_),hostname(H)) :-
    (  getenv('HOSTNAME',H) -> true
-   ;  setup_call_cleanup(open(pipe(hostname),read,S),
+   ;  setup_call_cleanup(open(pipe('hostname -s'),read,S),
                          read_line_to_codes(S,Codes),
                          close(S)), 
       atom_codes(H,Codes)
