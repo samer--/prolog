@@ -29,6 +29,7 @@
 	,	repeat//0
    ,  fail//0
    ,  (\+)//1
+   ,  forall//2
    ,  freeze//2
 
    % combinators
@@ -48,6 +49,7 @@
 	,	until//2
 	,	exhaust//1
 	,	rep//2
+	,	rep_with_sep//3
    ,  rep_nocopy//2
 	,	iterate//3
 	,	parmap//2, parmap//3, parmap//4, parmap//5, parmap//6
@@ -117,11 +119,13 @@ arguments.
 	,	once(//,?,?)
 	,	repeat(?,?)
 	,	\+(//,?,?)
+   ,  forall(//,//,?,?)
    ,  freeze(-,//,?,?)
 	,	>>(//,//,?,?)
    ,  //(//,//,?,?)
 
 	,	rep(?,//,?,?)
+	,	rep_with_sep(//,?,//,?,?)
 	,	rep_nocopy(+,//,?,?)
 	,	exhaust(//,?,?)
 	,	with(?,//,?,?)
@@ -214,6 +218,11 @@ fail(_,_) :- fail.
 %% \+(G:phrase(_)) is semidet.
 %  Succeeds if G fails..
 \+(G,A,B) :- \+call_dcg(G,A,B).
+
+%% forall(P:phrase(A), Q:phrase(A)) is semidet.
+%  True if Q can succeed after all possible successes of P.
+%  Leaves state unchanged.
+forall(P,Q) --> \+ (call_dcg(P), \+call_dcg(Q)).
 
 %% freeze(@V:var,+G:phrase(A),?S1:A,?S2:A) is nondet.
 %  Suspends the application of DCG goal G to S1 and S2 until variable V is instantiated.
@@ -318,6 +327,18 @@ rep(N,G,S1,S2) :-
 	->	rep_var(N,G,S1,S2)
 	;	rep_nonvar(N,G,S1,S2)
 	).
+
+%% rep_with_sep( +Q:phrase(A), +N:natural, +P:phrase(A))// is nondet.
+%% rep_with_sep( +Q:phrase(A), -N:natural, +P:phrase(A))// is nondet.
+%
+%  As rep//2, but repeats are interspersed with Q. N must be 1 or greater.
+
+rep_with_sep(Q,N,G) --> 
+   {copy_term(G,G1)},
+   (  {var(N)} 
+   -> call_dcg(G1), rep_var(M,Q>>G), {succ(M,N)}
+   ;  call_dcg(G1), {succ(M,N)}, rep_nonvar(M,Q>>G)
+   ).
 
 rep_var(0,_,S,S).
 rep_var(N,G,S1,S3) :- 
