@@ -21,6 +21,7 @@
 	,	int/1				% test or enumerate integers
 	,	take/3, takec/3, take_while/3
 	,	drop/3, dropc/3, drop_while/3
+   ,  split_at/4
 	,  rep/3          % make a list of repeats of the same term
 	,  cons/3         % list constructror
 	,	decons/3       % list deconstructor
@@ -147,6 +148,16 @@ drop_while(_,[],[]).
 %  and return them in Out.
 take_while(P,[X|T],O) :- call(P,X) -> O=[X|V], take_while(P,T,V); O=[].
 take_while(_,[],[]).
+
+
+%% split_at(+N:natural, +In:list(A), -Prefix:list(A), -Suffix:list(A)) is det.
+%
+%  True when Prefix is the length-N prefix of Items and Suffix is the list of
+%  remaining items. Also works in other modes, like append.
+split_at(N,Pref,Rest,List) :-
+	length(Pref,N),
+	append(Pref,Rest,List).
+
 
 %% zip( +X:list(A), +Y:list(B), -Z:list(pair(A,B))) is det.
 %% zip( -X:list(A), -Y:list(B), +Z:list(pair(A,B))) is det.
