@@ -22,6 +22,7 @@
 	,	take/3, takec/3, take_while/3
 	,	drop/3, dropc/3, drop_while/3
    ,  split_at/4
+   ,  same_length/2
 	,  rep/3          % make a list of repeats of the same term
 	,  cons/3         % list constructror
 	,	decons/3       % list deconstructor
@@ -158,6 +159,12 @@ split_at(N,Pref,Rest,List) :-
 	length(Pref,N),
 	append(Pref,Rest,List).
 
+
+%% same_length(+L1:list(_), +L2:list(_)) is det.
+%% same_length(-L1:list(_), -L2:list(_)) is nondet.
+%  True when L1 and L2 are lists of the same length.
+same_length([],[]).
+same_length([_|X],[_|Y]) :- same_length(X,Y).
 
 %% zip( +X:list(A), +Y:list(B), -Z:list(pair(A,B))) is det.
 %% zip( -X:list(A), -Y:list(B), +Z:list(pair(A,B))) is det.
