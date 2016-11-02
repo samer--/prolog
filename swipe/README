@@ -7,9 +7,18 @@ correctly
 ---+++ Simple usage
 
 ==
-swipe:def(grep(Pattern), sh($T>>$T,"grep ~s",[@Pattern])).
-swipe:def(sort, sh($T>>$T,"sort")).
+:- use_module(library(swipe)).
 
+% define grep as a command taking a stream of T to a stream of T.
+% Argument specified with @/1, so will be escaped properly for bash.
+swipe:def(grep(Pattern), sh($T >> $T,"grep ~s",[@Pattern])).
+
+% define sort with type stream of T to stream of T
+swipe:def(sort, sh($T >> $T,"sort")).
+
+% pipe contents from file spec =|library('swipe.pl')|= (ie using
+% file search path mechanism) as type =|pl|= into grep and sort,
+% with output to stdout.
 :- run(library('swipe.pl')^pl :> grep(module) >> sort).
 ==
 
