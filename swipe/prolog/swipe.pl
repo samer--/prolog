@@ -136,7 +136,6 @@
 
    @tbd
    * Use of parenthesis for grouping might not work in some cases
-   * Connecting stdin and stdout of pipeline with Prolog streams
    * Decide on best quoting/escaping mechanism
 */
 
