@@ -20,9 +20,10 @@
 		(\<)//1
 	,	(\>)//1
    ,  (<\>)//2
+	,	(\#)//2
 	,	run_left//3
 	,	run_right//3
-	,	(\#)//2
+   ,  transduce/3
 
 	,  op(900,fy,\<)
 	,	op(900,fy,\>)
@@ -49,6 +50,7 @@
 :- meta_predicate 
 		run_left(//,?,?,?,?)
 	,	run_right(//,?,?,?,?)
+   ,  transduce(//,?,?)
 	,	\<(//,?,?)
 	,	\>(//,?,?)
 	,	<\>(//,//,?,?)
@@ -97,24 +99,14 @@ run_right(P,S1,S2,T1,T2) :- call_dcg(P,T1-S1,T2-S2).
 %  Nth argument of type A.
 \#(N, P, S1, S2) :- with_nth_arg(N,P,S1,S2).
 
+%% transduce(+T:phrase(pair(list(A),list(B))), ?L1:list(A), ?L2:list(B)) is nondet.
+%  Run a transducer between two lists of elements of type A and B respectively.
+%  Transducer is a DCG goal working on a state which is a pair of lists. It can use
+%  the facilities in this module to match sequences of elements in either list.
+transduce(Trans, In, Out) :- arbno(Trans, In-Out, []-[]).
 
-%% pushl(S:A,S1:B,S2:pair(A,B)) is det.
-%  Create a paired state by putting S on the left and the
-%  old state on the right.
-pushl(S,S0,S-S0).
-
-%% pushr(S:A,S1:B,S2:pair(B,A)) is det.
-%  Create a paired state by putting S on the right and the
-%  old state on the left.
-pushr(S,S0,S0-S).
-
-%% popl(S:A,S1:pair(A,B),S2:B) is det.
-%  Unpair state by removing left state and unifying it with S.
-popl(S,S-S0,S0).
-
-%% popr(S:A,S1:pair(B,A),S2:B) is det.
-%  Unpair state by removing right state and unifying it with S.
-popr(S,S0-S,S0).
+% local copy, same as arbno in snobol.pl
+arbno(P) --> []; call_dcg(P), arbno(P).
 
 
 % --- internal utilities ----
