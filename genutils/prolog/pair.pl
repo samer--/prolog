@@ -1,4 +1,4 @@
-:- module(pairs,
+:- module(pair,
           [ ffst/3, ffst//3
           , fsnd/3, fsnd//3
           , pair/3, fst/2, snd/2
