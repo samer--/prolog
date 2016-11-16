@@ -61,9 +61,9 @@ expand_ival(flat(I),  a(D,A)) :- A #< 0, !, A1 #= A+1, expand_ival(I,a(D,A1)).
 expand_ival(sharp(I), a(D,A)) :- A #> 0, !, A1 #= A-1, expand_ival(I,a(D,A1)).
 
 decode_chord(Props, chord(Root, Bass, SortedIvals)) :-
-   phrase(( map_select(phrase, kind, KindIvals),
-            map_select(decode_pitch('root-step','root-alter'), root, Root),
-            map_select_default(decode_pitch('bass-step','bass-alter'), bass, Root, Bass)
+   phrase(( map_select_key_value(phrase, kind, KindIvals),
+            map_select_key_value(decode_pitch('root-step','root-alter'), root, Root),
+            map_select_key_default_value(decode_pitch('bass-step','bass-alter'), bass, Root, Bass)
           ), Props, Props1),
    findall(D, member(degree-D, Props1), Degrees),
    foldl(edit_intervals(KindIvals), Degrees, KindIvals, Ivals),
@@ -72,7 +72,7 @@ decode_chord(Props, chord(Root, Bass, SortedIvals)) :-
 edit_intervals(KindIvals, DegreeProps, Is1, Is2) :-
    phrase(( select('degree-type'-Type),
             select('degree-value'-Deg),
-            select_default('degree-alter', 0, Alter)
+            select_key_default_value('degree-alter', 0, Alter)
           ), DegreeProps, []), 
    apply_ival_mod(Type, Deg, Alter, KindIvals, Is1, Is2).
 
@@ -83,8 +83,8 @@ apply_ival_mod(subtract, D, A, K) --> {member(a(D,A0), K), A1 is A0 + A}, select
 apply_ival_mod(alter,    D, A, K) --> {member(a(D,A0), K), A1 is A0 + A}, select(a(D,A0)), cons(a(D,A1)).
 
 decode_pitch(StepKey, AlterKey, Props, a(Nominal, Alter)) :-
-   map_select((=), StepKey, Nominal, Props, _),
-   select_default(AlterKey, 0, Alter, Props, _). 
+   map_select_key_value((=), StepKey, Nominal, Props, _),
+   select_key_default_value(AlterKey, 0, Alter, Props, _). 
 
 % alter_pitch(0, Nom, Nom).
 % alter_pitch(N, Nom, sharp(P)) :- N>0, M is N-1, alter_pitch(M,Nom,P).

@@ -193,7 +193,7 @@ decode_measures(Score, PartId, Dur) -->
    run_left(foldl(transduce_measure(Div), Measures), 0, Dur).
 
 transduce_measure(Div, MeasureItems, T1-[ span(T1-T2)-bar| L1], T2-L2) :-
-   insist(arbno(musicxml:measure_item(Div), T1-(MeasureItems-L1), T2-([]-L2))).
+   insist(arbno(measure_item(Div), T1-(MeasureItems-L1), T2-([]-L2))).
 
 measure_item(Div) -->
    trans(Start, End) <\> (simultaneous_notes(Propss) <\> [ span(Start-End)-slice(Tokens) ]),
