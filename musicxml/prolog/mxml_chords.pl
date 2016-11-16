@@ -8,10 +8,10 @@
 
 :- use_module(library(clpfd)).
 :- use_module(library(listutils), [cons/3]).
-:- use_module(library(pair), [ map_select_key_value/5
-                             , map_select_key_default_value/6
-                             , select_key_default_value/5
-                             ]).
+:- use_module(library(data/pair), [ map_select_key_value/5
+                                  , map_select_key_default_value/6
+                                  , select_key_default_value/5
+                                  ]).
 
 % MusicXML chord kinds, as DCG rules for spitting out intervals.
 @N --> [a(N,0)].
