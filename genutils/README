@@ -1,5 +1,4 @@
-This package provides general utilities. Currently, there is not much here,
-just two modules: listutils and termutils.
+This package provides general utilities.
 
 ---++++ listutils
 
@@ -16,4 +15,7 @@ just two modules: listutils and termutils.
 		a shorter line is printed after a longer one, the remaining characters
 		are erased.
 
+---++++ pairs
+
+	Tools for working with X-Y terms.
 

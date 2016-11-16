@@ -6,7 +6,10 @@
 	as published by the Free Software Foundation; either version 2
 	of the License, or (at your option) any later version.
 
+
 	This program is distributed in the hope that it will be useful,
+
+
 	but WITHOUT ANY WARRANTY; without even the implied warranty of
 	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 	GNU Lesser General Public License for more details.
@@ -21,6 +24,7 @@
 	,	int/1				% test or enumerate integers
 	,	take/3, takec/3, take_while/3
 	,	drop/3, dropc/3, drop_while/3
+   ,  map_filter/3
    ,  split_at/4
    ,  same_length/2
 	,  rep/3          % make a list of repeats of the same term
@@ -35,6 +39,7 @@
 :- meta_predicate
 		drop_while(1,?,?)
 	,	take_while(1,?,?)
+   ,  map_filter(2,+,-)
 	.
 
 %% natural(+N) is semidet.
@@ -175,4 +180,9 @@ same_length([_|X],[_|Y]) :- same_length(X,Y).
 zip([],[],[]).
 zip([X|XX],[Y|YY],[Z|ZZ]) :- Z=X-Y, zip(XX,YY,ZZ).
 
+%% map_filter(+P:pred(+A,-B), +L1:list(A), -L2:list(B)) is det.
+%  Like maplist/3, but filtering out those elements of L2 for which P fails.
+map_filter(_, [], []).
+map_filter(P, [X|Xs], [Y|Ys]) :- call(P,X,Y), !, map_filter(P, Xs, Ys).
+map_filter(P, [_|Xs], Ys) :- map_filter(P, Xs, Ys).
 
