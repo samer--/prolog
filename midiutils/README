@@ -1,0 +1,4 @@
+This package provides MIDI related functionality that is not dependent on any foreign libraries.
+
+---++++ Simple usage
+
