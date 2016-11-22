@@ -11,21 +11,22 @@ for example =|piano, epiano, guitar, sax|= etc. These can be discovered using gm
 %  True when I is a recognised instrument with General MIDI programme number P and 
 %  bank most and least significant bytes MSB and LSB.
 gm( Instr) :- gm(Instr,_,_,_).
-gm( Instr, P0, 121, LSB) :- primo(Instr,P1,LSB), succ(P0,P1).
-gm( Instr, P0, 120, LSB) :- seco(Instr,P1,LSB), succ(P0,P1).
+gm( Instr, P0, 0, LSB) :- primo(Instr,P1,LSB), succ(P0,P1).
+gm( kit/Type/1, P0, 0, 120) :- seco(Type,P1), succ(P0,P1).
+gm( kit/Type/2, P0, 1, 0) :- seco(Type,P1), succ(P0,P1).
 
-primo( piano/1,  1, 0).
+primo( piano/1,  1, 0). % acoustic grand
 primo( piano/2,  1, 8).
 primo( piano/3,  1, 16).
 
-primo( piano/4,  2, 0).
+primo( piano/4,  2, 0). % bright acoustic grand
 primo( piano/5,  2, 8).
 
-primo( piano/6,  3, 0).
+primo( piano/6,  3, 0). % electric grand
 primo( piano/7,  3, 8).
 
-primo( honkytonk/1,  4, 0).
-primo( honkytonk/2,  4, 8).
+primo( piano/8,  4, 0). % honky-tonk
+primo( piano/9,  4, 8).
 
 primo( epiano/1,    5, 0).
 primo( epiano/2,    5, 8).
@@ -39,7 +40,7 @@ primo( harpsichord/1,  7, 0).
 primo( harpsichord/2,  7, 8).
 primo( harpsichord/3,  7, 16).
 primo( harpsichord/4,  7, 24).
-primo( clavichord,     8, 0).
+primo( clavichord,     8, 0). % or clavinet
 primo( celesta,        9, 0).
 
 primo( glockenspiel,	10, 0).
@@ -101,10 +102,10 @@ primo( bass/synth4,   40, 0).
 primo( bass/synth5,   40, 8).
 primo( bass/rubber,   40, 16).
 
-primo(violin, 41, 0).
-primo(viola, 42, 0).
-primo(cello, 43, 0).
-primo(contrabass, 44, 0).
+primo( violin, 41, 0).
+primo( viola, 42, 0).
+primo( cello, 43, 0).
+primo( contrabass, 44, 0).
 primo( strings/tremolo,     45, 0).
 primo( strings/pizzicato,     46, 0).
 
@@ -150,24 +151,63 @@ primo( square/2,    81, 1).
 primo( sine,        81, 8).
 primo( saw/1,       82, 0).
 primo( saw/2,       82, 1).
+primo( lead/calliope, 83, 0).
+primo( lead/chiff,    84, 0).
+primo( lead/charang,  85, 0).
+primo( lead/voice,    86, 0).
+primo( lead/fifths,   87, 0).
+primo( lead/w_bass,   88, 0).
+
+primo( pad/new_age,  89, 0).
+primo( pad/warm,     90, 0).
+primo( pad/polysynth,91, 0).
+primo( pad/choir,    92, 0).
+primo( pad/bowed,    93, 0).
+primo( pad/metallic, 94, 0).
+primo( pad/halo,     95, 0).
+primo( pad/sweep,    96, 0).
+
+primo( fx/rain,       97, 0).
+primo( fx/soundtrack, 98, 0).
+primo( fx/crystal,    99, 0).
+primo( fx/atmosphere, 100, 0).
+primo( fx/brightness, 101, 0).
+primo( fx/goblins,    102, 0).
+primo( fx/echoes,     103, 0).
+primo( fx/sci_fi,     104, 0).
 
 primo( sitar/1,     105, 0).
 primo( sitar/2,     105, 1).
 primo( banjo,       106, 0).
 primo( shamisen,    107, 0).
 primo( koto,        108, 0).
+primo( kalimba,     109, 0).
+primo( bagpipe,     110, 0).
+primo( fiddle,      111, 0).
+primo( shanai,      112, 0).
 
 
+primo( tinkle_bell,   113, 0).
+primo( agogo,   114, 0).
+primo( steel_drums,   115, 0).
+primo( woodblock,   116, 0).
 primo( taiko,   117, 0).
+primo( melodic_tom,   118, 0).
+primo( synth_drum,   119, 0).
+primo( reverse_cymbal,   120, 0).
 
-seco( kit/jazz,     33, 0).
-seco( kit/brush,    41, 0).
-seco( kit/standard,  1, 0).
-seco( kit/room,      9, 0).
-seco( kit/power,    17, 0).
-seco( kit/elec,     25, 0).
-seco( kit/tr808,    26, 0).
-seco( kit/orch, 	  49, 0).
+% drum kits
+seco( standard,  1).
+seco( standard2, 2).
+seco( room,      9).
+seco( power,    17).
+seco( elec,     25).
+seco( tr808,    26).
+seco( dance,    27).
+seco( jazz,     33).
+seco( brush,    41).
+seco( orch, 	 49).
+seco( sfx, 	    57).
 
 
 %% perc(-NN:byte, -Name:atom) is nondet.

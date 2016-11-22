@@ -10,11 +10,13 @@
 						 , tempo//1
 						 , keysig//2
 						 , timesig//1
+                   , instr//2
                    ]).
 
 :- use_module(library(clpfd)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_core), [get//1, set//1]).
+:- use_module(library(genmidi), [gm/4]).
 
 midi(Msg,Arg1,Arg2) --> get(T) <\> [msg(T,M,Arg1,Arg2)], {M #= Msg}.
 meta(Msg,Bytes)     --> get(T) <\> [meta(T,M,N,Bytes)], {M #= Msg, length(Bytes,N)}.
@@ -49,6 +51,10 @@ prog(Ch,Prog,MSB,LSB) -->
 	midi(176+Ch,0,MSB),
 	midi(176+Ch,32,LSB),
 	prog(Ch,Prog).
+
+instr(Ch,Instr) -->
+   {gm(Instr,Prog,MSB,LSB)},
+   prog(Ch,Prog,MSB,LSB).
 
 pan(Ch,Pan) --> midi(176+Ch,10,Pan).
 
