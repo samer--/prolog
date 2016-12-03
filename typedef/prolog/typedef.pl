@@ -111,13 +111,17 @@ current_type(Type) :-
 current_type_constructor(Type, Constructor) :-
     user_type_constructor(Type, Constructor).
 
-user:term_expansion(:- type(Type == Syn), [C1,C2]) :-
+user:term_expansion(:- type(Decl), Clauses) :-
    wants_typedef,
+   (  expand_type_declaration(Decl, Clauses) -> true
+   ;  throw(error(bad_type_declaration(Decl), (type)/1))
+   ).
+
+expand_type_declaration(Type == Syn, [C1,C2]) :-
    check_not_defined(Type),
    C1 = typedef:user_type_syn(Type,Syn),
    C2 = (error:has_type(Type, Value) :- error:has_type(Syn, Value)).
-user:term_expansion(:- type(Type ---> Defs), Clauses) :-
-   wants_typedef,
+expand_type_declaration((Type ---> Defs), Clauses) :-
    check_not_defined(Type),
    type_def(Type,Defs,Clauses,[]).
 
