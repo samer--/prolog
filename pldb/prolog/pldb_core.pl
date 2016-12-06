@@ -25,7 +25,7 @@
 	,	db_current_table/3
 	,	db_transaction/2
 
-	,	db_create_table/4
+	,	db_create_table/3
    ,  db_drop_table/2
 	,	db_update/3
 	,	db_delete/3
@@ -34,7 +34,6 @@
 	,	db_select/2
 	,	db_select/3
 
-	,	op(700,xfx,~)
 	,	op(990,xfx,:=)
 	]).
 
@@ -95,7 +94,6 @@ tester ---> (tester,tester)
           ; =<(value)
           ; <(value)
           ; >(value)
-          ; ~(regexp)
           ; like(atom)
           ; in(list(value))
           .
@@ -123,6 +121,8 @@ sql_statement ---> atom(atom)
 :- use_module(library(snobol)).
 :- use_module(library(apply_macros)).
 :- use_module(library(quasi_quotations)).
+:- use_module(library(dcg/sql)).
+:- use_module(library(pldb_facts)).
 
 :- quasi_quotation_syntax(sql).
 :- dynamic db_state/3.
@@ -184,9 +184,9 @@ put_state(K1,K2,V) :-
    ).
 
 dbxs(Con,String) :- dbh_query_affected(Con,String,_).
-dbx(Con,Phrase) :- phrase_string(Phrase,String), !, dbh_query_affected(Con,String,_).
-dbx_row(Con,Phrase,Row) :- phrase_string(Phrase,String), !, dbh_query_row(Con,String,Row).
-dbx_affected(Con,Phrase,N) :- phrase_string(Phrase,String), !, dbh_query_affected(Con,String,N).
+dbx(Con,Phrase) :- sql_generate(Phrase,String), !, dbh_query_affected(Con,String,_).
+dbx_row(Con,Phrase,Row) :- sql_generate(Phrase,String), !, dbh_query_row(Con,String,Row).
+dbx_affected(Con,Phrase,N) :- sql_generate(Phrase,String), !, dbh_query_affected(Con,String,N).
 
 % ================= CONVENIENCE WRAPPERS FOR SQL STATEMENTS ==============
 
@@ -218,6 +218,7 @@ db_create_table(Con,Table,Columns) :-
    maplist(column_spec_to_table_element,Columns,Elements),
    dbx(Con,statement(create_table(Table,Elements,nothing))).
 
+% convert simple column spec to full table element spec
 column_spec_to_table_element(Name:Type,column(Name,Type,nothing,[],nothing)).
 
 db_drop_table(Con,Table) :-
@@ -233,8 +234,11 @@ db_drop_table(Con,Table) :-
 % to the first N columns of the table. 
 
 db_insert(Con,Head) :-
-	analyse_head(Con,Head,Table,Args,Cols), % !!! exclude oids!
-	dbx(Con, sql(insert(Table,Args,Cols))).
+	analyse_head(Con,Head,Table,Args,Cols),
+   maplist(insert_val,Cols,Args,Names,Vals),
+	dbx(Con, statement(insert(Table,query(just(Names),values([row(Vals)]))))).
+
+insert_val(Name:Type, Arg, Name, Val) :- typed_val(Type,Arg,Val).
 
 % -------------------- SELECT -------------------------------- 
 
@@ -251,10 +255,10 @@ db_insert(Con,Head) :-
 %  ==
 
 db_select(Head) :- db_select(_,Head).
-db_select(Con,Head) :- db_select(Con,Head,[]).
+db_select(Con,Head) :- db_select(Con,Head,nothing).
 db_select(Con,Head,OrderBy) :-
-	phrase_string( compose_select(Con,Head,OrderBy,Arglst), SQL),
-	dbh_query_row(Con,SQL,Row), Row=..[row|Vals],
+	dbx_row( Con, compose_select(Con,Head,OrderBy,Arglst), Row),
+   Row=..[row|Vals],
 	maplist(decode,Vals,Arglst).
 
 decode(Y,X:T) :- type_decode(T,Y,X).
@@ -265,15 +269,10 @@ decode(Y,X:T) :- type_decode(T,Y,X).
 %% compose_select( +Con, +Head, +Ord:ordering, -Args:list(result))// is det.
 compose_select(Con,Head,Ord,Results) -->
 	{	analyse_head(Con,Head,Tab,Args,Columns),
-		build_select(Args,Columns,SelArgs,Where,Results)
+		build_select(Args,Columns,SelArgs,Where,Results),
+	   maplist(build_ord(Columns),OrderList,OLS)
 	},
-	sql(select(Tab,SelArgs,Where)),
-	order_by(Ord,Columns).
-
-order_by([],_) --> !, [].
-order_by(OrderList,Columns) -->
-	{ maplist(build_ord(Columns),OrderList,OLS) },
-	order_by(OLS).
+	statement(ordered_select( select(nothing,SelArgs,just([Tab]),just(Where),nothing,nothing),Ord)).
 
 build_ord(Columns,asc(K),ord(Name,asc)) :- nth1(K,Columns,Name:_).
 build_ord(Columns,desc(K),ord(Name,desc)) :- nth1(K,Columns,Name:_).
@@ -302,14 +301,14 @@ sel_out(V,V) :- V\=null(_), \+ground(V).
 %  Update rows of a table (not in a transaction).
 db_update(Con,Head,N) :-
 	analyse_head(Con,Head,Tab,Actions,Cols),
-	seqmap(upd,Actions,Cols,(Set,Where),([],[])),
-   phrase_string(sql(update(Tab,Set,Where)),String), !,
-   dbh_query_affected(Con,String,N).
+	seqmap(upd,Actions,Cols,Set-Where,[]-[]),
+   and_list(Where, Cond),
+   dbx_affected(Con,statement(update(Tab,Set,Cond)),N).
 
 %% upd( +X:updater, +Col:column_spec)// is det.
 % works on paired state DCG, (Sets,Wheres) 
 upd(X,_)      --> {var(X)},!.
-upd(P->V,N:T) --> \> match(P,N:T), \< out((N=V):T).
+upd(P->V,N:T) --> !, \> match(P,N:T), {typed_val(T,V,X)}, \< out(N=X).
 upd(P,N:T)    --> \> match(P,N:T).
 
 
@@ -322,50 +321,52 @@ db_delete(Con,Head) :- db_delete(Con,Head,_).
 db_delete(Con,Head,N) :-
 	analyse_head(Con,Head,Tab,Action,Cols),
 	seqmap(match,Action,Cols,Where,[]),
-	phrase_string( sql(delete(Tab,Where)), SQL), 
-	dbh_query_affected(Con,SQL,N), !.
+   and_list(Where, Cond),
+	dbx_affected( Con, statement(delete(Tab,Cond)), N). 
+
+and_list([X|XX],and(X,YY)) :- and_list(XX,YY).
+and_list([X],X).
 
 
 % --------- Generation of matching conditions -----------
 
 %% match( +X:selector, +Col:column_spec)// is det.
 match(V,     _)   --> {var(V)}, !.
-match(V:=C,  N:T) --> !, {must_be(var,V),mk_cond(N:T,C,C1)}, out(C1).
+match(V:=C,  N:T) --> !, {must_be(var,V),mk_cond(col(T,N),C,C1)}, out(C1).
 % match(V,     N:T) --> ( {ground(V);V=null(_)} -> out((N:T)=V)
 %                       ; {phrase_string(term_pattern(V),Pattern)}, out(like(N,Pattern):T)
 %                       ).
 
 %% mk_cond( +Name:column_name, +C1:tester, -C2:condition) is det.
 % Translate unary algebra of conditions on column into boolean expression.
-mk_cond(S, (C1,C2), (C11,C21)) :- !, mk_cond(S,C1,C11), mk_cond(S,C2,C21).
-mk_cond(S, (C1;C2), (C11;C21)) :- !, mk_cond(S,C1,C11), mk_cond(S,C2,C21).
-mk_cond(S, \+(C),  \+(C1))    :- !, mk_cond(S,C,C1).
-mk_cond(S, =(C),   S=C) :- !.
-mk_cond(S, \=(C),  S\=C) :- !.
-mk_cond(S, <(C),   S<C) :- !.
-mk_cond(S, >(C),   S>C) :- !.
-mk_cond(S, =<(C),  S=<C) :- !.
-mk_cond(S, >=(C),  S>=C) :- !.
-mk_cond(S, null,   S=null(_)) :- !.
-mk_cond(S, like(C),like(S,C)) :- !.
-mk_cond(S, in(C),  in(S,C)) :- !.
-mk_cond(S, ~(C),   S~C) :- !.
+mk_cond(S, (C1,C2), and(C11,C21)) :- mk_cond(S,C1,C11), mk_cond(S,C2,C21).
+mk_cond(S, (C1;C2), or(C11,C21)) :- mk_cond(S,C1,C11), mk_cond(S,C2,C21).
+mk_cond(S, \+(C),  not(C1))    :- mk_cond(S,C,C1).
+mk_cond(S, =(X),   cmp(=,S,Y)) :- typed_val(_,X,Y).
+mk_cond(S, \=(X),  cmp('<>',S,Y)) :- typed_val(_,X,Y).
+mk_cond(S, <(X),   cmp(<,S,Y)) :- typed_val(_,X,Y).
+mk_cond(S, >(X),   cmp(>,S,Y)) :- typed_val(_,X,Y).
+mk_cond(S, =<(X),  cmp((<=),S,Y)) :- typed_val(_,X,Y).
+mk_cond(S, >=(X),  cmp((>=),S,Y)) :- typed_val(_,X,Y).
+mk_cond(S, null,   null(S) is true) :- typed_val(_,X,Y).
+mk_cond(S, like(X),like(S,Y) is true) :- typed_val(_,X,Y).
+mk_cond(S, in(X),  in(S,Y) is true) :- typed_val(_,X,Y).
 
 % ================== Support predicates =========================
 
 %% analyse_head( +Con, +Head:head(A), -Table:table_name, -Actions:list(A), -Cols:list(column_spec)) is det.
 %  Decompose a Head term into table name, list of per-column arguments, and
 %  a matching list of column names and types.
-analyse_head(Con,proj(Projection,Actions),Table,Actions,QCols) :- !,
+analyse_head(Con,proj(Projection,Actions),Table,Actions,ProjColumns) :- !,
 	Projection = Table^ProjNames,
 	table_columns(Con,Table,TabCols),
 	maplist(name_colspec(TabCols),ProjNames,ProjColumns),
-	query_columns(Actions,ProjColumns,QCols).
+   same_length(Actions,ProjColumns).
 
-analyse_head(Con,Head,Table,Actions,QCols) :-
+analyse_head(Con,Head,Table,Actions,Cols) :-
 	Head =.. [Table|Actions],
 	table_columns(Con,Table,Cols),
-	query_columns(Actions,Cols,QCols).
+   same_length(Actions,Cols).
 
 name_colspec(TabCols,Name,Name:Type) :- 
    memberchk(Name:Type,TabCols).
@@ -377,13 +378,7 @@ table_columns(Con,Tab,Typelist) :-
    db_current_table(Con,Tab,Typelist),
 	put_state(table(Tab),Con,Typelist).
 
-%% query_columns( +A:list(action), +Cols:list(column_spec), -Cols1:list(column_spec)) is det.
-%
-%  Matches the elements of A with the first N Cols. If there is an element
-%  of A left over, it is matched with oid:oid.
-query_columns([_|AX],[C1|CX],[C1|DX]) :- !, query_columns(AX,CX,DX).
-query_columns([],_,[]) :- !.
-query_columns(_,_,_) :- throw(error(pldb:columns_mismatch)).
+same_length(L1,L2) :- length(L1,N), length(L2,N).
 
 % ======================== Quasi-quatation ============================
 
@@ -406,127 +401,20 @@ append_dl([X|XX],Tail,[X|LL]) :- append_dl(XX,Tail,LL).
 qq_vars(Vars,_=Var) :- member(V,Vars), V==Var, !.
 
 % ------------------------ DCG rules ----------------------------------------
-
-%% sql(Term:sql_command)// is det.
-%
-%  Top DCG phrase for SQL language. Term language is:
-%  ==
-%  sql_command ---> 
-%                 ; select( table_name, list(column_name), where_spec)
-%                 ; update( table_name, assignment, where_spec)
-%                 ; delete( table_name, where_spec).
-%
-%  where_spec  ---> condition.
-%  condition   ---> (condition;condition)
-%                 ; (condition,condition)
-%                 ; and(list(condition))
-%                 ; or(list(condition))
-%                 ; \+condition
-%                 ; like(column_name,pattern)
-%                 ; column_name = expression
-%                 ; true.
-%
-%  table_name  ---> atom.
-%  column_name ---> atom.
-%  expression  ---> dcgu_phrase.
-%  ==
-%
-%  The definition of expression means that any valid DCG phrase exported from dcg_core
-%  or dcg_codes can be used.
-%
-% update( +Tab:table_name, +Set:list(set_spec), +Where:list(cond))// is det.
-% select( +Table:table_name, +Sel:list(column_name), +Where:list(typed_condition), +Ord:list(order_spec))// is det.
-
-sql(@Ident) --> expr(_,@Ident).
-sql(Ident:=Expr) --> identifier(Ident), "=", expr(_,Expr).
-sql(\Phrase) --> phrase(Phrase).
-
-sql(insert(Table,Args,Cols)) --> 
-	{ maplist(snd,Cols,Types) },
-	"INSERT INTO ", identifier(Table), 
-	" VALUES", paren(seqmap_with_sep(comma,expr,Types,Args)).
-
-sql(delete(Tab,Where)) --> "DELETE FROM ", identifier(Tab), where(Where).
-		
-sql(update(Tab,Set,Where)) -->
-	"UPDATE ", identifier(Tab), 
-	" SET ", seqmap_with_sep(comma,assign,Set),
-	where(Where).
-
-sql(select(Tab,Selection,Where)) -->
-	"SELECT ", seqmap_with_sep(comma,wr,Selection),
-	" FROM ", identifier(Tab), where(Where).
-
-snd(_:Y,Y).
-
-where([]) --> [].
-where(L) --> " WHERE ", expr(boolean,and(L)).
-
-assign(S:T) --> assign(S,T).
-assign(M=V,T) --> identifier(M), "=", expr(T,V).
-
-order_by([]) --> [].
-order_by(Y) --> " ORDER BY ", seqmap_with_sep(comma,order,Y).
-order(ord(N,T))--> identifier(N), direction(T).
-
-direction(asc) --> " ASC".
-direction(desc) --> " DESC".
-
-group_by([]) --> [].
-group_by(Y) --> " GROUP BY ", seqmap_with_sep(comma,identifier,Y).
-
-
-% -- Quoting and escaping ----------------
-
-quote(A) --> {phrase(A,Codes)}, "'", esc(run_left(esc_sql),Codes), "'".
-
-% escaping strings for SQL quoted literal (generate or parse)
-esc_sql -->  "'" <\> "''".
-esc_sql -->  [X] <\> [X], {X\=0''}.
-
-% --- Conditions and expressions ------------------------------
-
-and --> " AND ".
-or  --> " OR ".
-
-pexpr(T,C) --> paren(expr(T,C)).  % parenthesised expression
-
-%% expr( +T:type, +C:condition)// is det.
-%  Typed expression.
-expr(boolean,(A,B)) --> !, pexpr(boolean,A), and, pexpr(boolean,B).
-expr(boolean,(A;B)) --> !, pexpr(boolean,A), or, pexpr(boolean,B).
-expr(boolean,\+(C)) --> !, " not ", pexpr(boolean,C).
-expr(boolean,or(L))  --> seqmap_with_sep(or,pexpr(boolean),L).
-expr(boolean,and(L)) --> seqmap_with_sep(and,pexpr(boolean),L).
-
-expr(boolean,A=null(_)) --> !, expr(_,A), " is null".
-expr(boolean,in(A,B))   --> !, expr(T,A), " in ", paren(seqmap_with_sep(",", expr(T),B)).
-expr(boolean,like(A,B)) --> !, expr(text,A), " like ", expr(text,B).
-expr(boolean,A~B)       --> !, expr(text,A), "~", expr(text,B).
-
-expr(boolean,(A=B))  --> !, expr(T,A), "=", expr(T,B).
-expr(boolean,(A\=B)) --> !, expr(T,A), "<>", expr(T,B).
-expr(boolean,(A=<B)) --> !, expr(T,A), "=<", expr(T,B).
-expr(boolean,(A>=B)) --> !, expr(T,A), ">=", expr(T,B).
-expr(boolean,(A<B))  --> !, expr(T,A), "<", expr(T,B).
-expr(boolean,(A>B))  --> !, expr(T,A), ">", expr(T,B).
-
-expr(T,N:T)     --> expr(T,N).
-expr(_,null(_)) --> !, "null".
-expr(_,@Ident)  --> !, identifier(Ident).
-expr(_,\Phrase) --> !, phrase(Phrase).
-expr(T,V)       --> freeze(T,typed_value(T,V)).
+% expr(T,V)       --> freeze(T,typed_value(T,V)).
 
 typed_value(T,V) --> {number(V), type_class(T,floating)},!, fmt('~16g',[V]).
 typed_value(T,V) --> {number(V), type_class(T,numeric)},!, at(V).
 typed_value(T,V) --> {atomic(V), type_class(T,textual)},!, quote(at(V)).
-typed_value(T,B) --> {T=boolean, !, bool_bool(B,BB)}, boolean(BB).
+typed_value(T,B) --> {T=boolean, !, bool_bool(B,BB)}, at(BB). % !!! FIXME
 
-identifier(A^B) --> !, at(A), ".", identifier(B).
-identifier(A)   --> at(A).
+typed_val(T,X,-Y) :- type_class(T,numeric), number(X), X<0, !, typed_val(T,X,Y).
+typed_val(_,null(_),null) :- !. 
+typed_val(T,X,unsigned(Num)) :- type_class(T,numeric), !, numeric_val(T,X,Num).
+typed_val(T,X,string(char,Codes)) :- type_class(T,textual), !, string_codes(X,Codes).
 
-boolean(t) --> "true".
-boolean(f) --> "false".
+numeric_val(T,X,int(X)) :- type_class(T,integral), !.
+numeric_val(T,X,token(numeric,n,dcg_basics:float(X))) :- type_class(T,floating), !.
 
 type_decode(_,null(_),null(_)) :- !.
 type_decode(_,'$null$',null(_)) :- !.
@@ -548,15 +436,14 @@ type_class(float4,   floating).
 type_class(float8,   floating).
 type_class(duration, floating).
 
-type_class(integer,  numeric).
-type_class(int2,     numeric).
-type_class(int4,     numeric).
-type_class(int8,     numeric).
-type_class(float4,   numeric).
-type_class(float8,   numeric).
-type_class(duration, numeric). 
+type_class(integer,  integral).
+type_class(int2,     integral).
+type_class(int4,     integral).
+type_class(int8,     integral).
+
 type_class(decimal(_,_), numeric).
-type_class(oid,      numeric).
+type_class(T, numeric) :- type_class(T, integral).
+type_class(T, numeric) :- type_class(T, floating).
 
 prolog:message(error(pldb:Term)) --> db_message(Term).
 prolog:message(pldb:Term) --> db_message(Term).
