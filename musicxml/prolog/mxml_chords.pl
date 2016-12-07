@@ -14,37 +14,43 @@
                                   ]).
 
 % MusicXML chord kinds, as DCG rules for spitting out intervals.
-@N --> [a(N,0)].
-\N --> [a(N,-1)].
-+N --> [a(N,+1)].
-other      --> [].
-major      --> @1, @3, @5.
-minor      --> @1, \3, @5.
-diminished --> @1, \3, \5.
-augmented  --> @1, @3, +(5).
-'suspended-second' --> @1, @2, @5.
-'suspended-fourth' --> @1, @4, @5.
-'power'            --> @1, @5.
+:- op(200,fx,#).
+:- op(200,fx,&).
 
-dominant        --> major, \7.
-'major-seventh' --> major, @7.
-'minor-seventh' --> minor, \7.
-'augmented-seventh'  --> augmented, \7.
-'diminished-seventh' --> diminished, [a(7,-2)].
-'half-diminished'    --> diminished, \7.
-'major-minor'    --> minor, @7.
-'major-sixth'    --> major, @6.
-'minor-sixth'    --> minor, @6.
-'dominant-ninth' --> dominant, @9.
-'augmented-ninth'--> 'augmented-seventh', @9.
-'major-ninth'    --> 'major-seventh', @9.
-'minor-ninth'    --> 'minor-seventh', @9.
-'dominant-11th'  --> 'dominant-ninth', @11.
-'major-11th'     --> 'major-ninth', @11. 
-'minor-11th'     --> 'minor-ninth', @11.
-'dominant-13th'  --> 'dominant-11th', @13.
-'major-13th'     --> 'major-11th', @13.
-'minor-13th'     --> 'minor-11th', @13.
+\N --> [a(N,0)].
+&N --> [a(N,-1)].
+#N --> [a(N,+1)].
+
+% shorthand names for sequences of intervals
++other      --> [].
++major      --> \1, \3, \5.
++minor      --> \1, &3, \5.
++diminished --> \1, &3, &5.
++augmented  --> \1, \3, #5.
++'suspended-second' --> \1, \2, \5.
++'suspended-fourth' --> \1, \4, \5.
++'power'            --> \1, \5.
+
++dominant        --> +major, &7.
++'major-seventh' --> +major, \7.
++'minor-seventh' --> +minor, &7.
++'augmented-seventh'  --> +augmented, &7.
++'diminished-seventh' --> +diminished, [a(7,-2)].
++'half-diminished'    --> +diminished, &7.
++'major-minor'    --> +minor, \7.
++'major-sixth'    --> +major, \6.
++'minor-sixth'    --> +minor, \6.
++'dominant-ninth' --> +dominant, \9.
++'augmented-ninth'--> +'augmented-seventh', \9.
++'major-ninth'    --> +'major-seventh', \9.
++'minor-ninth'    --> +'minor-seventh', \9.
++'dominant-11th'  --> +'dominant-ninth', \11.
++'major-11th'     --> +'major-ninth', \11. 
++'minor-11th'     --> +'minor-ninth', \11.
++'dominant-13th'  --> +'dominant-11th', \13.
++'major-13th'     --> +'major-11th', \13.
++'minor-13th'     --> +'minor-11th', \13.
+
 % 'Neapolitan' -->
 % 'Italian' -->
 % 'French' -->
@@ -54,14 +60,16 @@ dominant        --> major, \7.
 
 triad(T) :- member(T, [major, minor, diminished, augmented, 'suspended-second', 'suspended-fourth', 'power']).
 ivals_triad_exts(Ivals, Triad, Exts) :-
-   triad(Triad), phrase(Triad, Ivals, Exts).
+   triad(Triad), +(Triad, Ivals, Exts).
 
 expand_ival(I, a(I,0)) :- atomic(I).
 expand_ival(flat(I),  a(D,A)) :- A #< 0, !, A1 #= A+1, expand_ival(I,a(D,A1)).
 expand_ival(sharp(I), a(D,A)) :- A #> 0, !, A1 #= A-1, expand_ival(I,a(D,A1)).
 
+decode_kind(Kind, KindIvals) :- phrase(+Kind, KindIvals).
+
 decode_chord(Props, chord(Root, Bass, SortedIvals)) :-
-   phrase(( map_select_key_value(phrase, kind, KindIvals),
+   phrase(( map_select_key_value(decode_kind, kind, KindIvals),
             map_select_key_value(decode_pitch('root-step','root-alter'), root, Root),
             map_select_key_default_value(decode_pitch('bass-step','bass-alter'), bass, Root, Bass)
           ), Props, Props1),
