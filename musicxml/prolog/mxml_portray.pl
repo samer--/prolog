@@ -1,5 +1,8 @@
 :- module(mxml_portray, []).
 /** <module> Provides pretty portrayal of notes and chords
+
+   Chords are portrayed as Root Triad [Extensions] [/Bass].
+   Alterables (ie things that can have sharps and flats) get nice Unicode sharps and flats.
 */
 
 :- use_module(library(listutils), [rep/3]).

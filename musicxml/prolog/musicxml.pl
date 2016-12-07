@@ -48,8 +48,9 @@ tied(A) == pair(ties, A).
 :- use_module(library(zlib), [gzopen/3, zopen/3]).
 :- use_module(library(sgml), [load_xml/3]).
 :- use_module(library(insist)).
-:- use_module(library(dcg_core), [get//1, trans//2, seqmap//2]).
+:- use_module(library(dcg_core), [get//1, trans//2, seqmap//2, seqmap//3]).
 :- use_module(library(dcg_pair)). % includes transduce/3
+:- use_module(library(dcg_macros)).
 :- use_module(library(snobol), [arbno//1]).
 :- use_module(library(math), [add/3]).
 :- use_module(library(listutils), [cons/3, map_filter/3]).
@@ -127,7 +128,8 @@ score_part_measures(Score, PartId, Measures) :-
 decode_record(Elements) -->
    \< [element(El, Ats, Content)],
    ( {member(El, Elements)}, \> [El-Val], {decode1(El, Ats, Content, Val)}
-   ; {maplist(dif(El), Elements)}
+   ; { maplist(dif(El), Elements),
+      debug(musixml,"WARNING: Not processing element ~w",[El]) }
    ).
 
 decode1(El, Ats, Content, Val) :- insist(decodex(El, Ats, Content, Val)).
@@ -179,7 +181,7 @@ event_chord_change(point(T)-change(C), T-C).
 event_chord_change(point(T)-end, T-end).
 event_slice(span(T)-slice(S), T-S).
 
-extend_durations([T-D | Cs], Es) :- foldl(ext, Cs, Es, T-D, _).
+extend_durations([T-D | Cs], Es) :- seqmap(ext, Cs, Es, T-D, _).
 ext(T2-D2, (T1-T2)-D1, T1-D1, T2-D2).
 
 
@@ -190,7 +192,7 @@ score_part_events(Score, PartId, Events) :-
 decode_measures(Score, PartId, Dur) -->
    { score_part_measures(Score, PartId, Measures),
      score_part_prop(Score, PartId, divisions(Div)) },
-   run_left(foldl(transduce_measure(Div), Measures), 0, Dur).
+   run_left(seqmap(transduce_measure(Div), Measures), 0, Dur).
 
 transduce_measure(Div, MeasureItems, T1-[ span(T1-T2)-bar| L1], T2-L2) :-
    insist(arbno(measure_item(Div), T1-(MeasureItems-L1), T2-([]-L2))).
