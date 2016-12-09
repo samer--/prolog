@@ -118,11 +118,11 @@ user:term_expansion(:- type(Decl), Clauses) :-
    ).
 
 expand_type_declaration(Type == Syn, [C1,C2]) :-
-   check_not_defined(Type),
+   % check_not_defined(Type),
    C1 = typedef:user_type_syn(Type,Syn),
    C2 = (error:has_type(Type, Value) :- error:has_type(Syn, Value)).
 expand_type_declaration((Type ---> Defs), Clauses) :-
-   check_not_defined(Type),
+   % check_not_defined(Type),
    type_def(Type,Defs,Clauses,[]).
 
 type_def(Type,Defs) -->
