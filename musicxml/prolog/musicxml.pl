@@ -106,6 +106,9 @@ score_part_prop(S, PartId, Prop) :-
 
 attribs_prop(Attribs, divisions(Div)) :- xpath(Attribs, divisions(number), Div).
 attribs_prop(Attribs, fifths(Fifths)) :- xpath(Attribs, key/fifths(number), Fifths).
+attribs_prop(Attribs, transpose(Dia,Chrom)) :- 
+   xpath(Attribs, transpose/chromatic(number), Chrom),
+   xpath(Attribs, transpose/diatonic(number), Dia).
 
 part_prop(Part, n_measures(NMeasures)) :-
    findall(M, part_numbered_measure(Part, M), NumberedMeasures),

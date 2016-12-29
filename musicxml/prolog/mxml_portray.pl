@@ -6,11 +6,10 @@
 */
 
 :- use_module(library(listutils), [rep/3]).
-:- use_module(library(mxml_chords), [ ivals_triad_exts/3 ]).
+:- use_module(library(mxml_chords), [ triad/1, ivals/3 ]).
 
-user:portray(flat(X)) :- sign(flat,S), format('~w~p',[S,X]).
-user:portray(sharp(X)) :- sign(sharp,S), format('~w~p',[S,X]).
 user:portray(a(N,A)) :- 
+   integer(A), atomic(N),
    accidentals(A,Chars,Sep), 
    (  number(N) 
    -> format('~s~w~w', [Chars,Sep,N])
@@ -18,7 +17,7 @@ user:portray(a(N,A)) :-
    ).
 
 user:portray(chord(R,B,Is)) :-
-   ivals_triad_exts(Is, Triad, Exts),
+   ivals(Triad, Is, Exts), triad(Triad), !,
    format('~p ~w', [R,Triad]),
    maplist(space_print, Exts),
    ( R=B -> true
