@@ -79,8 +79,8 @@ tree_canonical(node(D,CX1),node(D,CX3)) :-
 
 
 print_node(NA,T,T2) :-
-	with_output_to(atom(AA),print(node(NA))), atom_length(AA,L),
-	with_output_to(atom(SA),tab(L)), atom_concat(T,SA,T2),
+	with_output_to(string(AA),print(node(NA))), string_length(AA,L),
+	with_output_to(string(SA),tab(L)), string_concat(T,SA,T2),
 	write(AA). 
 
 %% print_tree( +T:tree(A)) is det.
