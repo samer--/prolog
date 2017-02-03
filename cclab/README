@@ -12,16 +12,22 @@ There are some experimental libraries in the prolog directory:
 	lambda1 - Lightweight lambdas
 	lambda2 - Lightweight lambdas, different operator precedences
 
-There are two subdirectories:
+There are three subdirectories:
 
+	ccmisc - Initial experiments with combining statefulness and nondetermism effects
 	cclazy - Memoisation, nondeterminism and probabilistic choice reified as lazy search trees
 	cctab  - More Prolog oriented tabling experiments, using Prolog nondetermism directly
 	
 
 ## Running tests
 
+From the shell prompt:
+
 	```
-	swipl -g 'consult(library(ccmisc/state_nondet2))'
+	$ swipl -g 'consult(library(ccmisc/state_nondet2))'
+	$ swipl -g 'consult(library(cctab/test_memo))'
+	$ swipl -g 'consult(library(cctab/test_prob))'
+	$ swipl -g 'consult(library(cctab/cctab))'
 	```
 
 ## Implementation notes
