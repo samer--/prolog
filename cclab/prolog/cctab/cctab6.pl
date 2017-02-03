@@ -55,12 +55,13 @@ cont_tab(susp(Head, Cont), Ans) :-
       run_tab(producer(Variant, \Y^Head, K, Ans), Ans)
    ).
 
-producer(Variant, Generate, KP, Ans) :-
+producer(Variant, Generate, _, Ans) :-
    call(Generate, Y1),
    upd(add_soln(Variant, Y1, active(Ks))),
-   (K=KP; member(K,Ks)), 
+   member(K,Ks), 
    call(K,Y1,Ans).
-producer(Variant, _, _, Ans) :-
+producer(Variant, _, KP, Ans) :-
+   debug(cctab, 'Table complete: ~p',[Variant]),
    upd(complete_table(Variant, Solns)),
    rb_in(YY, _, Solns), Y=YY,
    call(KP,Y,Ans).

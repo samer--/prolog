@@ -27,3 +27,5 @@ pathr1 --> edge, pathr1; edge.
 % for testing handling of input and output variables in continuations.
 path_a(Y) :- pathl(a,X), Y=a(X).
 path1_a(Y) :- pathl1(a,X), Y=a(X).
+
+:- initialization debug(cctab).
