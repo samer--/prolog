@@ -1,0 +1,78 @@
+:- module(ccmemo, [run_ltree/2, choose/2, guard/1, memo_nondet/3, memo_nondet/2]).
+
+:- use_module(library(typedef)).
+:- use_module(library(delimcc), [pr_reset/3, pr_shift/2]).
+:- use_module(library(ccstate), [ref_new/2, ref_get/2, ref_app/2, ref_upd/3]).
+:- use_module(library(lambda1)).
+
+% nondeterminism as lazy search tree with recursive memoisation 
+
+:- type tree(A) ---> leaf(A); node(list(tree(A))).
+:- type ltree(A) ---> leaf(A); lnode(pred(list(ltree(A)))).
+:- type ltree(L,A) ---> leaf(A); lnode(L,pred(list(ltree(A)))). % with labelled nodes
+
+:- meta_predicate memo_nondet(2,-), memo_nondet(2,-,-).
+memo_nondet(P,Q) :- memo_nondet(P,Q,_).
+memo_nondet(P, ccmemo:memf(P,R), ccmemo:memdump(R)) :-
+   rb_empty(T),
+   ref_new(T,R).
+
+memdump(R,Memo) :-
+   ref_get(R,T),
+   rb_visit(T,Pairs),
+   maplist(\ (K-entry(Vals,_))^(K-Vals)^true, Pairs,Memo).
+
+memf(P,R,X,Y) :- pr_shift(nondet, mem(P,R,X,Y)).
+choose(Xs,X) :- pr_shift(nondet, choose(Xs,X)).
+
+:- meta_predicate guard(0).
+guard(P) :- call(P) -> true; pr_shift(nondet, fail).
+
+%% run_ltree(+P:pred(A), -T:ltree(A)) is det.
+%  NB means nondet:prompt(ltree(A)).
+:- meta_predicate run_ltree(1,-).
+run_ltree(P,Result) :- pr_reset(nondet, to_ltree(P), Result).
+
+to_ltree(P,leaf(X)) :- call(P,X).
+
+% choose(Xs:list(B),X:B): handler(ltree(A)).
+choose(Xs,X,K,lnode(choice(Xs),ccmemo:maplist(expand1(\X^K),Xs))).
+fail(_,lnode(fail,=([]))).
+
+%% expand1(+K:pred(+B,-ltree(A)), +X:B, -Y:ltree(A)) is det.
+expand1(Kx,X,Y) :- pr_reset(nondet, call(Kx,X), Y).
+cons_expand1(Kx,X,S,[Y|S]) :- expand1(Kx,X,Y).
+
+%% mem(+P:pred(+B,-C), +R:ref(memo(B,C)), +X:B, @Y:C, +K:pred(-ltree(A)), -T:ltree(A)) is det.
+mem(P,R,X,Y,K,Tree) :-
+   YK = \Y^K,
+   ref_upd(R,Tab,Tab1),
+   (  tab_upd(X, entry(Ys,Conts), entry(Ys,[YK|Conts]), Tab, Tab1)
+   -> Tree = lnode(cons(X,Ys),ccmemo:fold_set(cons_expand1(YK),Ys))
+   ;  empty_set(Empty),
+      rb_insert_new(Tab, X, entry(Empty,[YK]), Tab1),
+      call(P,X,YNew),
+      ref_app(R, tab_upd(X, entry(Ys,Conts), entry(Ys2,Conts))),
+      (  member_set(YNew, Ys) -> Ys2=Ys, Tree=lnode(dup(X,YNew),=([]))
+      ;  add_to_set(YNew,Ys,Ys2), Tree=lnode(prod(X,YNew),ccmemo:send_to_conts(YNew,Conts))
+      )
+   ).
+
+%% send_to_conts(+Y:C, +Ks:list(pair(C,pred(-ltree(A)))), -Ts:list(ltree(A))) is det.
+send_to_conts(Y,Conts,Ts) :- maplist(send_to_cont(Y),Conts,Ts).
+send_to_cont(Y,Ky,T) :- pr_reset(nondet, call(Ky,Y), T).
+
+tab_upd(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
+
+empty_set([]).
+member_set(Y,Ys) :- member(Y,Ys).
+add_to_set(Y,Ys1,[Y|Ys1]).
+fold_set(_,[]) --> [].
+fold_set(P,[X|Xs]) :- call(P,X), fold_set(P,Xs).
+
+% for printing annotated search trees
+user:portray(choice(Xs)) :- write('?'), write(Xs).
+user:portray(cons(X,Ys)) :- write('C':X>Ys).
+user:portray(dup(X,Y)) :- write('D':X>Y).
+user:portray(prod(X,Y)) :- write('P':X>Y).
+

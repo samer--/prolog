@@ -1,0 +1,31 @@
+# cclab - A temporary pack for playing with delimited continuations
+
+This package explores a few ways of working with SWI Prolog's delimited continuations
+(reset/1 and shift/1) and some applications, including tabling.
+
+There are some experimental libraries in the prolog directory:
+
+	delimcc - 3 alternative interfaces to shift and reset
+	ccstate - Backtrackable state as a control effect reified as DCG goal.
+	          Hygienic nonbacktrackable state using nb_setval and nb_getval.
+	cclistm - Nondeterminism reified as a list (like Haskell List monad)
+	lambda1 - Lightweight lambdas
+	lambda2 - Lightweight lambdas, different operator precedences
+
+There are two subdirectories:
+
+	cclazy - Memoisation, nondeterminism and probabilistic choice reified as lazy search trees
+	cctab  - More Prolog oriented tabling experiments, using Prolog nondetermism directly
+	
+
+## Implementation notes
+
+### Copying continuations 
+
+In order to run a continuation multiple times, or do other maniplulations,
+it is often necessary to copy a continuation along with any variables with which
+it interfaces with other parts of the program. In many cases, the pattern of
+copying and calling is nicely captured by the semantics of lambda terms.
+This is why I've included a couple of experimental minimal lambda libraries
+here. They are closely modelled on Ulrich Neurmerkel's lambda library, but with
+a little less checking and a different representation of free variables.
