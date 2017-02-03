@@ -60,9 +60,10 @@ producer(Variant, Generate, KP, Ans) :-
    upd(add_soln(Variant, Y1, active(Ks))),
    (K=KP; member(K,Ks)), 
    call(K,Y1,Ans).
-producer(Variant, _, _, _) :- 
-   debug(cctab, 'Table complete: ~p',[Variant]),
-   upd(complete_table(Variant, _)).
+producer(Variant, _, _, Ans) :-
+   upd(complete_table(Variant, Solns)),
+   rb_in(YY, _, Solns), Y=YY,
+   call(KP,Y,Ans).
 
 complete_table(Variant, Solns, Tabs1, Tabs2) :-
    rb_update(Tabs1, Variant, tab(Solns, _), tab(Solns, complete), Tabs2).
@@ -78,6 +79,6 @@ run_tabled(Goal, FinalTables) :-
    term_variables(Goal, Ans),
    run_nb_state(run_tab(Goal, Ans), Tables, FinalTables).
 
-
 :- include(tabled).
 :- initialisation module(cctab).
+
