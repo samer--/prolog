@@ -1,5 +1,5 @@
 :- use_module(library(data/store)).
-:- use_module(delimcc).
+:- use_module(library(delimcc)).
 
 % ------- stateful computation reified as DCG ----------
 

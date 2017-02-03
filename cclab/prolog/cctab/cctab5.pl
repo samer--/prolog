@@ -80,4 +80,4 @@ run_tabled(Goal, FinalTables) :-
 
 
 :- consult(tabled).
-:- initialisation module(cctab).
+:- initialization module(cctab).

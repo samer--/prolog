@@ -18,6 +18,12 @@ There are two subdirectories:
 	cctab  - More Prolog oriented tabling experiments, using Prolog nondetermism directly
 	
 
+## Running tests
+
+	```
+	swipl -g 'consult(library(ccmisc/state_nondet2))'
+	```
+
 ## Implementation notes
 
 ### Copying continuations 
@@ -29,3 +35,4 @@ copying and calling is nicely captured by the semantics of lambda terms.
 This is why I've included a couple of experimental minimal lambda libraries
 here. They are closely modelled on Ulrich Neurmerkel's lambda library, but with
 a little less checking and a different representation of free variables.
+
