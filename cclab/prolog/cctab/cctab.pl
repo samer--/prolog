@@ -83,5 +83,5 @@ fold_set(_,[]) --> [].
 fold_set(P,[X|Xs]) :- call(P,X), fold_set(P,Xs).
 
 
-:- include(tabled).
+:- consult(tabled).
 :- initialisation module(cctab).

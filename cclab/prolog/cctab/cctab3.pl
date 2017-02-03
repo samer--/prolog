@@ -63,5 +63,5 @@ run_tabled(Goal, FinalTables) :-
    run_nb_state(pr_reset(tab, \Ans^Goal, Ans), Tables, FinalTables).
 
 
-:- include(tabled).
+:- consult(tabled).
 :- initialization module(cctab).

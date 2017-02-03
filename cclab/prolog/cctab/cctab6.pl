@@ -79,6 +79,6 @@ run_tabled(Goal, FinalTables) :-
    term_variables(Goal, Ans),
    run_nb_state(run_tab(Goal, Ans), Tables, FinalTables).
 
-:- include(tabled).
+:- consult(tabled).
 :- initialisation module(cctab).
 
