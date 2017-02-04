@@ -1,5 +1,17 @@
 :- module(ccmemo, [run_ltree/2, choose/2, guard/1, memo_nondet/3, memo_nondet/2]).
 
+/** <module> Nondeterminism as a lazy search tree with recursive memoisation
+
+This module uses delimited continuations to provided nondeterminism as a
+control effect along with memoisation of recursive, nondeterministic
+binary relations. The effect is reified as a lazy search tree.
+
+Use run_ltree/2 to run a unary predicate in a context that supports
+choose/2 for nondetermism and memo_nondet/{2,3} for creating memoised versions
+of a binary predicate. The whole of this must be run inside ccstate:run_ref/1,
+a context that provides mutable references as a control effect.
+*/
+
 :- use_module(library(typedef)).
 :- use_module(library(delimcc), [pr_reset/3, pr_shift/2]).
 :- use_module(library(ccstate), [ref_new/2, ref_get/2, ref_app/2, ref_upd/3]).
