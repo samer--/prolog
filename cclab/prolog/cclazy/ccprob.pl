@@ -1,5 +1,18 @@
 :- module(ccprob, [run_prob/2, dist/2, fail_/0, memo_prob/3]).
 
+/** <module> Probabilistic choice as a lazy search tree with recursive memoisation
+
+This module uses delimited continuations to provided probabilistic choice as a
+control effect along with memoisation of recursive, probabilistic generators.
+The effect is reified as a lazy search tree with weighted branches.
+
+Use run_lwtree/2 to run a unary predicate in a context that supports
+dist/2 for probabilistic choice and memo_prob/{2,3} for creating memoised versions
+of a probabilistic generators. The whole of this must be run inside ccstate:run_ref/1,
+a context that provides mutable references as a control effect. You can use
+treeutils.pl to visualise the search tree.
+*/
+
 :- use_module(library(clpr)).
 :- use_module(library(typedef)).
 :- use_module(library(math), [mul/3]).

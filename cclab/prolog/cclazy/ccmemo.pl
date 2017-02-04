@@ -9,7 +9,8 @@ binary relations. The effect is reified as a lazy search tree.
 Use run_ltree/2 to run a unary predicate in a context that supports
 choose/2 for nondetermism and memo_nondet/{2,3} for creating memoised versions
 of a binary predicate. The whole of this must be run inside ccstate:run_ref/1,
-a context that provides mutable references as a control effect.
+a context that provides mutable references as a control effect. Use treeutils.pl
+to visualise the tree.
 */
 
 :- use_module(library(typedef)).
