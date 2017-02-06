@@ -45,13 +45,21 @@ test(Z) :-
    choose([Y-x, Y-y, Y-z],Z1),
    choose([Z1-u, Z1-v, Z1-w],Z).
 
-hmm(0,_,[]).
-hmm(N,Y,[X|Xs]) :-
+markov(0,_,[]).
+markov(N,Y,[X|Xs]) :-
    succ(M,N),
    trans(Y,X),
-   hmm(M,X,Xs).
+   markov(M,X,Xs).
 
-trans(_,X) :- choose([a,b,c],X).
+hmm(_,0-_,[]).
+hmm(HMM,N-Y,[X|Xs]) :-
+   succ(M,N),
+   trans(Y,Z),
+   obs(Z,X),
+   call(HMM,M-Z,Xs).
+
+trans(_,X) :- choose([a,b],X).
+obs(_,X) :- choose([x,y,z],X).
 
 link(a,X) :- choose([b,c],X).
 link(b,d).
@@ -131,3 +139,5 @@ test_left_grammar(In,Dump,Tail) :-
 findall1(X,G,Xs) :- run_nb_state(call_and_store_all(X,G), T-T, Xs-[]).
 call_and_store_all(X,G) :- call(G), upd(c(X)), fail; true.
 c(X, H-[X|T], H-T).
+
+user:portray(F) :- float(F), !, format('~2g',[F]).

@@ -11,11 +11,11 @@ the result to the outside context.
 One consequences of this is that state changes (ie updates to the memo tables)
 need to be protected from backtracking, in some sort of non-backtrackable state
 keeper. Rather than going straight for unfettered use of the recorded database
-or nb_setval/nb_getval, I've tried to 'sanitise' the non-backtrackable state as
+or `nb_setval`/`nb_getval`, I've tried to 'sanitise' the non-backtrackable state as
 a control effect implemented using delimited continuation, such that the statefulness
 is confined to a limited context and looks pure and declarative from the outside.
-This is done using run_nb_state/3, which provides access to the initial and final
-states, and uses nb_setval etc under the covers.
+This is done using `run_nb_state/3`, which provides access to the initial and final
+states, and uses `nb_setval` etc under the covers.
 
 The various implementations here vary along several dimensions, for example, the
 data structure used to store found solutions for a tabled goal, the form in which
@@ -28,7 +28,7 @@ cctab  - Solutions as a list of predicate heads
 cctab2 - Solutions are lists of bound variables in rbtree, 
 			build generator and producer continuation as lambdas
 			producer continuation called first 
-cctab3 - use pr_reset/3 and unary predicates/lambdas, 
+cctab3 - use `pr_reset/3` and unary predicates/lambdas, 
 			solutions are list of bound variables, 
 			generator and continuations as lambdas
 cctab5 - cctab2 + mark completion in table,
