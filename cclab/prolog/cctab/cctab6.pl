@@ -47,7 +47,7 @@ cont_tab(susp(Head, Cont), Ans) :-
       -> Status2=active([K|Ks]), set(Tabs2)
       ;  Status2=complete
       ),
-      rb_in(YY, _, Solns), Y=YY,
+      rb_in(Y, _, Solns),
       run_tab(Cont, Ans) 
    ;  rb_empty(Solns), 
       rb_insert_new(Tabs1, Variant, tab(Solns,active([])), Tabs2),
@@ -63,7 +63,7 @@ producer(Variant, Generate, _, Ans) :-
 producer(Variant, _, KP, Ans) :-
    debug(cctab, 'Table complete: ~p',[Variant]),
    upd(complete_table(Variant, Solns)),
-   rb_in(YY, _, Solns), Y=YY,
+   rb_in(Y, _, Solns),
    call(KP,Y,Ans).
 
 complete_table(Variant, Solns, Tabs1, Tabs2) :-
