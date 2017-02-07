@@ -41,7 +41,7 @@ producer(Variant, Generate, KP, Ans) :-
    rb_insert_new(Solns1, Y1, t, Solns2), 
    set(Tabs2),
    Status=active(Ks), 
-   member(K,[K|Ks]), 
+   member(K,[KP|Ks]), 
    call(K,Y1,Ans).
 producer(Variant, _, _, _) :-
    get(Tabs1), rb_update(Tabs1, Variant, tab(Solns, _), tab(Solns, complete), Tabs2),
