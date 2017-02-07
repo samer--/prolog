@@ -53,30 +53,25 @@ to_ltree(P,leaf(X)) :- call(P,X).
 choose(Xs,X,K,lnode(choice(Xs),ccmemo:maplist(expand1(\X^K),Xs))).
 fail(_,lnode(fail,=([]))).
 
-%% expand1(+K:pred(+B,-ltree(A)), +X:B, -Y:ltree(A)) is det.
-expand1(Kx,X,Y) :- pr_reset(nondet, call(Kx,X), Y).
-cons_expand1(Kx,X,S,[Y|S]) :- expand1(Kx,X,Y).
-
 %% mem(+P:pred(+B,-C), +R:ref(memo(B,C)), +X:B, @Y:C, +K:pred(-ltree(A)), -T:ltree(A)) is det.
 mem(P,R,X,Y,K,Tree) :-
    YK = \Y^K,
    ref_upd(R,Tab,Tab1),
    (  tab_upd(X, entry(Ys,Conts), entry(Ys,[YK|Conts]), Tab, Tab1)
    -> Tree = lnode(cons(X,Ys), ccmemo:rb_fold(cons_expand1(YK),Ys,[]))
-   ;  rb_empty(Empty),
-      rb_insert_new(Tab, X, entry(Empty,[YK]), Tab1),
+   ;  rb_empty(EmptySet),
+      rb_insert_new(Tab, X, entry(EmptySet,[YK]), Tab1),
       call(P,X,YNew),
       ref_app(R, tab_upd(X, entry(Ys,Conts), entry(Ys2,Conts))),
       (  rb_insert_new(Ys,YNew,t,Ys2) 
-      -> Tree=lnode(prod(X,YNew),ccmemo:send_to_conts(YNew,Conts))
+      -> Tree=lnode(prod(X,YNew),ccmemo:maplist(send_to_cont(YNew),Conts))
       ;  Tree=lnode(dup(X,YNew),=([])), Ys2=Ys
       )
    ).
 
-%% send_to_conts(+Y:C, +Ks:list(pair(C,pred(-ltree(A)))), -Ts:list(ltree(A))) is det.
-send_to_conts(Y,Conts,Ts) :- maplist(send_to_cont(Y),Conts,Ts).
+cons_expand1(Kx,X-_,S,[Y|S]) :- expand1(Kx,X,Y).
+expand1(Kx,X,Y) :- pr_reset(nondet, call(Kx,X), Y).
 send_to_cont(Y,Ky,T) :- pr_reset(nondet, call(Ky,Y), T).
-
 tab_upd(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
 
 % for printing annotated search trees
