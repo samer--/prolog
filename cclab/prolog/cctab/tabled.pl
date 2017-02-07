@@ -1,3 +1,10 @@
+:- module(tabled, [fib/2, pathl//0, pathr//0]).
+
+/** <module> Test predicates for tabling
+   NB. this module expects call_tabled/1 to be imported into user.
+*/
+
+:- use_module(ccmacros).
 
 :- cctable fib/2.
 
@@ -28,4 +35,4 @@ pathr1 --> edge, pathr1; edge.
 path_a(Y) :- pathl(a,X), Y=a(X).
 path1_a(Y) :- pathl1(a,X), Y=a(X).
 
-:- initialization debug(cctab).
+:- initialization debug(cctab), module(tabled).
