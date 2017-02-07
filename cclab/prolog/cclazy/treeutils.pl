@@ -42,7 +42,7 @@ user:portray(node(L:n)) :- print(L).
 user:portray(node(L:f)) :- print(L), print(node(f)).
 
 user:portray(node(n)).
-user:portray(node(f)) :- write('><').
+user:portray(node(f)) :- write('|').
 user:portray(node(l(X:P))) :- format('~p:~3g',[X,P]).
 user:portray(node(l(X))) :- print(X).
 
