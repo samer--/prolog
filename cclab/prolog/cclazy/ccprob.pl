@@ -81,6 +81,6 @@ tab_upd(K,V1,V2,T1,T2)        :- rb_update(T1,K,V1,V2,T2).
 
 % for printing annotated search trees
 user:portray(dist(Xs))   :- write('?'), maplist(\\F-X`X:S`format(string(S),'~2g',[F]), Xs, Ss), write(Ss).
-user:portray(cons(X,Ys)) :- print('C':X>Ys).
+user:portray(cons(X,Ys)) :- rb_visit(Ys,Dist), print('C':X>Dist).
 user:portray(dup(X,Y))   :- write('D':X>Y).
 user:portray(prod(X,Y))  :- write('P':X>Y).
