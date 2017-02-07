@@ -1,4 +1,4 @@
-:- module(cctab, [run_tabled/1, call_tabled/1]).
+:- module(cctab, [run_tabled/1, cctabled/1]).
 
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, upd/1, set/1, get/1]).
@@ -9,8 +9,8 @@ head_to_variant(Head, Variant) :-
    copy_term_nat(Head, Variant),
    numbervars(Variant, 0, _).
 
-:- meta_predicate call_tabled(0).
-call_tabled(Head) :- p_shift(tab, Head).
+:- meta_predicate cctabled(0).
+cctabled(Head) :- p_shift(tab, Head).
 
 run_tab(Goal, Ans) :-
    p_reset(tab, Goal, Status),
@@ -40,7 +40,8 @@ producer(Variant, Generate, KP, Ans) :-
    member(K,[KP|Ks]), 
    call(K,Y1,Ans).
 producer(Variant, _, _, _) :- 
-   upd(complete_table(Variant, _)).
+   upd(complete_table(Variant, _)),
+   fail.
 
 complete_table(Variant, Solns, Tabs1, Tabs2) :-
    rb_update(Tabs1, Variant, tab(Solns, _), tab(Solns, complete), Tabs2).

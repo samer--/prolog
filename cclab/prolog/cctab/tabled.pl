@@ -1,10 +1,10 @@
 :- module(tabled, [fib/2, pathl//0, pathr//0]).
 
 /** <module> Test predicates for tabling
-   NB. this module expects call_tabled/1 to be imported into user.
+   NB. this module expects cctabled/1 to be imported into user.
 */
 
-:- use_module(ccmacros).
+:- use_module(library(ccmacros)).
 
 :- cctable fib/2.
 
