@@ -64,7 +64,6 @@ producer(Variant, Generate, KP, Ans) :-
    (Status=active(Ks), member(K,Ks); K=KP), 
    call(K,Y1,Ans).
 producer(Variant, _, _, _) :-
-   debug(cctab, 'Table complete: ~p',[Variant]),
    get(Tabs1), rb_update(Tabs1, Variant, tab(Solns, _), tab(Solns, complete), Tabs2),
    set(Tabs2), fail.
 

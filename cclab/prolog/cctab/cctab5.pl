@@ -61,7 +61,6 @@ producer(Variant, Generate, KP, Ans) :-
    (K=KP; member(K,Ks)), 
    call(K,Y1,Ans).
 producer(Variant, _, _, _) :- 
-   debug(cctab, 'Table complete: ~p',[Variant]),
    upd(complete_table(Variant, _)).
 
 complete_table(Variant, Solns, Tabs1, Tabs2) :-
