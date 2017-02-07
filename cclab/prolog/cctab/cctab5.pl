@@ -37,7 +37,7 @@ cont_tab(susp(Head, Cont), Ans) :-
 producer(Variant, Generate, KP, Ans) :-
    call(Generate, Y1),
    upd(add_soln(Variant, Y1, active(Ks))),
-   (K=KP; member(K,Ks)), 
+   member(K,[KP|Ks]), 
    call(K,Y1,Ans).
 producer(Variant, _, _, _) :- 
    upd(complete_table(Variant, _)).

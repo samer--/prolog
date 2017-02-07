@@ -37,7 +37,7 @@ producer(Variant, Generate, KP, Ans) :-
    rb_update(Tabs1, Variant, tab(Solns1, Ks), tab(Solns2, Ks), Tabs2),
    rb_insert_new(Solns1, Y1, t, Solns2), 
    set(Tabs2),
-   (K=KP; member(K,Ks)), 
+   member(K,[KP|Ks])), 
    call(K,Y1,Ans).
 
 :- meta_predicate run_tabled(0), run_tabled(0,-).
