@@ -8,6 +8,8 @@
 :- use_module(ccprob,   [memo_prob/3, fail_/0, dist/2, run_prob/2]).
 :- use_module(treeutils).
 
+:- set_prolog_flag(back_quotes, symbol_char).
+
 % -------------- calling stateful nondeterminism ------
 
 run_lwtree_ref(Generate, Explore) :-
@@ -28,7 +30,8 @@ generate_explore(Generate, Explore) :-
 %    call(Gen, Subtrees),
 %    foldl(df, Subtrees, L1, L2).
 
-:- module(test_prob).
+:- initialization module(test_prob), 
+                  set_prolog_flag(back_quotes, symbol_char).
 
 % ---- test programs -----
 choose(Xs,X) :-
