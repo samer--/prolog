@@ -60,11 +60,11 @@ mem(P,R,X,Y,K,Tree) :-
    (  tab_upd(X, entry(Ys,Conts), entry(Ys,[YK|Conts]), Tab, Tab1)
    -> Tree = lnode(cons(X,Ys), ccmemo:rb_fold(cons_expand1(YK),Ys,[]))
    ;  rb_empty(EmptySet),
-      rb_insert_new(Tab, X, entry(EmptySet,[YK]), Tab1),
+      rb_insert_new(Tab, X, entry(EmptySet,[]), Tab1),
       call(P,X,YNew),
       ref_app(R, tab_upd(X, entry(Ys,Conts), entry(Ys2,Conts))),
       (  rb_insert_new(Ys,YNew,t,Ys2) 
-      -> Tree=lnode(prod(X,YNew),ccmemo:maplist(send_to_cont(YNew),Conts))
+      -> Tree=lnode(prod(X,YNew),ccmemo:maplist(send_to_cont(YNew),[YK|Conts]))
       ;  Tree=lnode(dup(X,YNew),=([])), Ys2=Ys
       )
    ).
