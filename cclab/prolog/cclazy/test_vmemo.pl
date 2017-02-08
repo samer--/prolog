@@ -1,5 +1,11 @@
 :- module(test_vmemo, []).
 
+/** <module> Test variant memoisation with explanation graphs
+   Eg try this:
+   ==
+   ?- explore_ltree(pathl(a,K), print_and_dump).
+   ==
+*/
 :- use_module(library(tabling)).
 :- use_module(library(math)).
 :- use_module(library(ccstate),  [run_state/3]).
