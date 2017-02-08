@@ -5,7 +5,7 @@
 
 get(S) :- p_shift(state,get(S)).
 set(S) :- p_shift(state,set(S)).
-upd(P) :- p_shift(state,P).
+app(P) :- p_shift(state,P).
 
 %% run_state(+P:pred, +S1:S, -S2:S) is det.
 run_state(Goal) -->
@@ -22,10 +22,10 @@ run_ref(Goal) :-
    store_new(S),
    run_state(Goal, S, _).
 
-ref_new(X,R) :- upd(store_add(X,R)).
-ref_get(R,X) :- upd(store_get(R,X)).
-ref_set(R,X) :- upd(store_set(R,X)).
-ref_upd(R,X) :- upd(store_apply(R,X)).
+ref_new(X,R) :- app(store_add(X,R)).
+ref_get(R,X) :- app(store_get(R,X)).
+ref_set(R,X) :- app(store_set(R,X)).
+ref_upd(R,X) :- app(store_apply(R,X)).
 
 memo(P,mem_call(P,R),mem_dump(R)) :- 
    empty_assoc(T),
@@ -89,7 +89,7 @@ test_nondet(X) :-
 
 test_both(X/Y) :-
    choose([a,b,c,d],X),
-   upd(succ),
+   app(succ),
    get(Y).
 
 test_store(r(X,Y,Z,W)-Tab) :-

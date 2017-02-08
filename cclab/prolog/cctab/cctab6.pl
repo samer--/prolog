@@ -1,7 +1,7 @@
 :- module(cctab, [run_tabled/1, cctabled/1]).
 
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
-:- use_module(library(ccstate), [run_nb_state/3, upd/1, set/1, get/1]).
+:- use_module(library(ccstate), [run_nb_state/3, app/1, set/1, get/1]).
 :- use_module(library(lambda1)).
 :- use_module(tabled, []).
 
@@ -37,11 +37,11 @@ cont_tab(susp(Head, Cont), Ans) :-
 
 producer(Variant, Generate, _, Ans) :-
    call(Generate, Y1),
-   upd(add_soln(Variant, Y1, active(Ks))),
+   app(add_soln(Variant, Y1, active(Ks))),
    member(K,Ks), 
    call(K,Y1,Ans).
 producer(Variant, _, KP, Ans) :-
-   upd(complete_table(Variant, Solns)),
+   app(complete_table(Variant, Solns)),
    rb_in(Y, _, Solns),
    call(KP,Y,Ans).
 

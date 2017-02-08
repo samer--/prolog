@@ -1,6 +1,7 @@
 :- module(ccstate, [ run_state//1, run_state//2
                    , run_nb_state//1
-                   , set/1, get/1, upd/1, upd/2
+                   , set/1, get/1, app/1, upd/2
+                   , app/2
                    , run_ref/1
                    , ref_new/2
                    , ref_get/2
@@ -30,7 +31,9 @@
 :- use_module(library(delimcc)).
 
 % ------- stateful computation reified as DCG ----------
-:- meta_predicate run_state(0,+,-), run_nb_state(0,+,-), upd(2).
+:- meta_predicate run_state(0,+,-), run_state(+,0,+,-), 
+                  run_nb_state(0,+,-), 
+                  app(2), app(+,2).
 
 %% run_state(+Pr:prompt(pred(S,S)), +P:pred, +S1:S, -S2:S) is det.
 %% run_state(+P:pred, +S1:S, -S2:S) is det.
@@ -75,8 +78,10 @@ cont_nb_state(susp(P,Cont), Prompt, Key) :-
 % stateful operators
 get(S) :- p_shift(state,get(S)).
 set(S) :- p_shift(state,set(S)).
-upd(P) :- p_shift(state,P).
+app(P) :- p_shift(state,P).
 upd(S1,S2) :- p_shift(state,trans(S1,S2)).
+
+app(Pr,P) :- p_shift(Pr,P).
 
 get(S,S,S).
 set(S,_,S).

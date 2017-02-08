@@ -18,7 +18,7 @@ treeutils.pl to visualise the search tree.
 :- use_module(library(typedef)).
 :- use_module(library(math), [mul/3]).
 :- use_module(library(delimcc), [pr_reset/3, pr_shift/2]).
-:- use_module(library(ccstate), [get/1, set/1, run_state/3, upd/1, upd/2, ref_new/2, ref_get/2, ref_app/2, ref_upd/3]).
+:- use_module(library(ccstate), [get/1, set/1, run_state/3, upd/2, ref_new/2, ref_get/2, ref_app/2, ref_upd/3]).
 :- use_module(library(lambda2)).
 
 :- set_prolog_flag(back_quotes, symbol_char).

@@ -2,7 +2,7 @@
 
 :- use_module(library(tabling)).
 :- use_module(library(data/pair), [pair/3]).
-:- use_module(library(ccstate),  [run_nb_state/3, upd/1, run_ref/1, run_env/1, env_new/2, env_app/2, env_upd/3, env_get/2]).
+:- use_module(library(ccstate),  [run_nb_state/3, app/1, run_ref/1, run_env/1, env_new/2, env_app/2, env_upd/3, env_get/2]).
 :- use_module(library(ccdetmem), [memo/3]).
 :- use_module(library(lambda2)).
 :- use_module(ccprob,   [memo_prob/3, fail_/0, dist/2, run_prob/2]).
@@ -140,7 +140,7 @@ test_left_grammar(In,Dump,Tail) :-
    call(S,In,Tail).
 
 findall1(X,G,Xs) :- run_nb_state(call_and_store_all(X,G), T-T, Xs-[]).
-call_and_store_all(X,G) :- call(G), upd(c(X)), fail; true.
+call_and_store_all(X,G) :- call(G), app(c(X)), fail; true.
 c(X, H-[X|T], H-T).
 
 user:portray(F) :- float(F), !, format('~2g',[F]).
