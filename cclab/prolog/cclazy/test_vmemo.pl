@@ -2,11 +2,12 @@
 
 :- use_module(library(tabling)).
 :- use_module(library(math)).
-:- use_module(library(ccstate),  [run_state/3, upd/2]).
+:- use_module(library(ccstate),  [run_state/3]).
 :- use_module(library(lambda1)).
-:- use_module(ccvmemo, [guard/1, choose/2, run_ltree/2, cctabled/1]).
+:- use_module(ccvmemo, [guard/1, choose/2, run_ltree/2, cctabled/1, get_tables/1]).
 :- use_module(library(ccmacros)).
 :- use_module(treeutils).
+
 
 % -------------- calling stateful nondeterminism ------
 
@@ -18,13 +19,18 @@ generate_explore(Goal, Explore) :-
    run_ltree(Goal, Tree),
    call(Explore, Tree).
 
+print_and_dump(T) :-
+   print_ltree(T),
+   get_tables(Ts),
+   maplist(print_variant,Ts).
+
+print_variant(Var-Solns) :- pprintln('',Var), maplist(print_soln,Solns).
+print_soln(Y-Expls)      :- pprintln('  ',Y), maplist(pprintln('    '),Expls).
+pprintln(Pref,X) :- write(Pref), print(X), nl.
 
 :- module(test_vmemo).
 
 % ---- test programs -----
-
-test0(r(X)) :- choose([1,2,3],X).
-
 test(Z) :-
    choose([1,2,3],X),
    choose([a(X),b(X),c(X)],Y),
@@ -45,6 +51,11 @@ link(k,l).
 link(l,X) :- choose([],X).
 link(m,X) :- choose([],X).
 
+link(N,M) :- 
+   number(N), 
+   guard(between(-5,5,N)),
+   choose([-1,1],D),
+   M is N+D.
 
 link(w,X) :- choose([x,y],X).
 link(x,z).
@@ -90,14 +101,3 @@ fib_inc(Fib,N,X) :-
 test_fib(Fib,Goal) :-
    make_fib(Fib),
    call(Goal).
-
-% test_path(l,D,Start, End) :- test_path(pathl(P), P, D, Start, End).
-% test_path(r,D,Start, End) :- test_path(pathr(P), P, D, Start, End).
-% test_path(Inc,Complete,Dump, Start, End) :- 
-%    memo_nondet(Inc,Complete,Dump), 
-%    call(Complete, Start, End).
-
-% test_left_grammar(In,Dump,Tail) :-
-%    memo_nondet(sent(S), S, Dump),
-%    call(S,In,Tail).
-
