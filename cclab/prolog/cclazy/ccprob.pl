@@ -58,7 +58,7 @@ fail(_,lwnode(fail,=([]))).
 mem(P,R,P0,X,P1,Y,K,Tree) :-
    PYK = (\\P1-Y`K),
    ref_upd(R,Tab,Tab1),
-   (  tab_upd(X, entry(PP,Ys,Conts), entry(PP,Ys,[PC-PYK|Conts]), Tab, Tab1)
+   (  rb_update(Tab, X, entry(PP,Ys,Conts), entry(PP,Ys,[PC-PYK|Conts]), Tab1)
    -> {PC = P0/PP}, 
       Tree = lwnode(cons(X,Ys),ccprob:rb_fold(cons_expand1(PYK),Ys,[]))
    ;  rb_empty(EmptyDist),
@@ -67,7 +67,7 @@ mem(P,R,P0,X,P1,Y,K,Tree) :-
       ref_app(R, tab_upd(X, entry(_,Ys,Conts), entry(P0,Ys2,Conts))),
       {PY = Prob/P0},
       (  rb_insert_new(Ys,YNew,PY,Ys2)
-      -> Tree=lwnode(prod(X,YNew),ccprob:maplist(send_to_cont(PY,YNew),[1-PYK|Conts]))
+      -> Tree=lwnode(prod(X,YNew),ccprob:maplist(send_to_cont(PY-YNew),[1-PYK|Conts]))
       ;  {NewP = OldP+PY}, 
          rb_update(Ys,YNew,OldP,NewP,Ys2), 
          Tree=lnode(dup(X,YNew),=([]))
@@ -76,7 +76,7 @@ mem(P,R,P0,X,P1,Y,K,Tree) :-
 
 cons_expand1(Kx,X-W,S,[WY|S]) :- expand1(Kx,W-X,WY).
 expand1(Kpx,W-X,W-Y)          :- pr_reset(prob, call(Kpx,W-X), Y).
-send_to_cont(PY,Y,P0-Ky,P0-T) :- pr_reset(prob, call(Ky,PY-Y), T).
+send_to_cont(PY,P0-Ky,P0-T)   :- pr_reset(prob, call(Ky,PY), T).
 tab_upd(K,V1,V2,T1,T2)        :- rb_update(T1,K,V1,V2,T2).
 
 % for printing annotated search trees
