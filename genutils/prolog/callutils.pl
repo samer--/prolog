@@ -3,7 +3,9 @@
 							, (*:)//3
 							, constf//3
 							, pairf//3
+                     , mr/5
 							, op(600,yfx,*:)
+                     , flip/4
 					    	]).
 
 /** <module> High-order utility predicates
@@ -16,7 +18,13 @@ lambda free composition of predicates.
                 , *(4,4,?,?,?,?)
                 , constf(3,?,?,?,?)
                 , pairf(3,3,?,?,?)
+                , mr(2,3,?,?,?)
+                , flip(2,?,?)
                 .
+
+%% flip(+P:pred(A,B), X:B, Y:A) is det.
+%  Call binary predicate P with arguments flipped.
+flip(P,X,Y) :- call(P,Y,X).
 
 %% *(+P:pred(B,C,S,S), +Q:pred(A,B,S,S), X:A, Z:C, S1:S, S2:S) is det.
 %  Pure and stateful predicate composition, order may look weird but
@@ -37,4 +45,7 @@ pairf(F,G,X-Y) --> call(F,X), call(G,Y).
 %  Call F on X ignoring argument Y.
 constf(F,_,X) --> call(F,X).
 
+%% mr(+Mapper:pred(A,B), +Reducer:pred(B,S,S), X:A, S1:S, S2:S) is det.
+%  Meet Mr. mr. A map reducer for use with any folding predicate. 
+mr(M,R,X,S1,S2) :- call(M,X,Y), call(R,Y,S1,S2).
 
