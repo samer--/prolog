@@ -1,6 +1,8 @@
-:- module(treeutils, [convert_tree/2, print_ltree/1, print_and_dump/3]).
+:- module(treeutils, [tree_yield/3, convert_tree/2, maptree/3, print_tree/1, print_ltree/1, print_and_dump/3]).
 
-:- use_module(library(data/tree), [print_tree/1]).
+:- use_module(library(callutils), [mr/5]).
+:- use_module(library(data/tree), [print_tree/1, maptree/3]).
+:- use_module(library(data/pair), [snd/2]).
 
 print_and_dump(D,Memo,T) :- print_ltree(T), call(D,Memo).
 
@@ -37,6 +39,12 @@ label_node([_|_],n).
 label_node([],L,L:f).
 label_node([_|_],L,L:n).
 
+tree_yield(leaf(X)) --> [X].
+tree_yield(node(Subtrees)) --> foldl(tree_yield, Subtrees).
+tree_yield(lnode(Gen)) --> {call(Gen, Subtrees)}, foldl(tree_yield, Subtrees).
+tree_yield(lnode(_,Gen)) --> {call(Gen, Subtrees)}, foldl(tree_yield, Subtrees).
+tree_yield(lwnode(_,Gen)) --> {call(Gen, Dist)}, foldl(mr(snd,tree_yield), Dist).
+
 user:portray(node(W-L)) :- format('(~3g)─~p',[W,node(L)]).
 user:portray(node(L:n)) :- print(L).
 user:portray(node(L:f)) :- print(L), print(node(f)).
@@ -44,5 +52,5 @@ user:portray(node(L:f)) :- print(L), print(node(f)).
 user:portray(node(n)).
 user:portray(node(f)) :- write('|').
 user:portray(node(l(X:P))) :- format('~p:~3g',[X,P]).
-user:portray(node(l(X))) :- print(X).
+user:portray(node(l(X))) :- write('<'), print(X).
 
