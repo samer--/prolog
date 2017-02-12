@@ -30,6 +30,8 @@
 :- use_module(library(data/env)).
 :- use_module(library(delimcc)).
 
+:- set_prolog_flag(generate_debug_info, false).
+
 % ------- stateful computation reified as DCG ----------
 :- meta_predicate run_state(0,+,-), run_state(+,0,+,-), 
                   run_nb_state(0,+,-), 

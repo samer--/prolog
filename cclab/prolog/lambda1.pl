@@ -24,6 +24,8 @@ Sample lambda: =| Free/[X,Y]<-foo(X,Y,Free), \[X^Y]<-succ(Y,X) |=.
 :- meta_predicate \(0), \(1,?), \(2,?,?), \(3,?,?,?), \(4,?,?,?,?), \(5,?,?,?,?,?), \(6,?,?,?,?,?,?).
 :- meta_predicate ^(?,0,?), ^(?,1,?,?), ^(?,2,?,?,?), ^(?,3,?,?,?,?), ^(?,4,?,?,?,?,?), ^(?,5,?,?,?,?,?,?).
 
+:- set_prolog_flag(generate_debug_info, false).
+
 \(Lambda) :- copy_lambda(Lambda,Copy), call(Copy).
 \(Lambda,A1) :- copy_lambda(Lambda,Copy), call(Copy,A1).
 \(Lambda,A1,A2) :- copy_lambda(Lambda,Copy), call(Copy,A1,A2).

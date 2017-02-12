@@ -33,6 +33,8 @@ and Functional Programming, pages 99–107, 2004.
 :- use_module(library(typedef)).
 :- use_module(library(lambda1)).
 
+:- set_prolog_flag(generate_debug_info, false).
+
 :- type cont(A) ---> done; susp(A,pred).
 
 :- meta_predicate reset(0,-).
