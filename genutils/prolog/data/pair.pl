@@ -6,6 +6,7 @@
           , select_key_default_value/5
           , map_select_key_value/5
           , map_select_key_default_value/6
+          , goal_expansion/2
 			 ]).
 
 :- meta_predicate fsnd(2,?,?), 
@@ -61,3 +62,8 @@ select_key_value(K, X, L1, L2) :- select(K-X, L1, L2).
 select_key_default_value(K, Default, X, L1, L2) :-
    map_select_key_default_value((=), K, Default, X, L1, L2).
   
+goal_expansion(fsnd(P,P1,P2), (P1=X-Y1, P2=X-Y2, call(P,Y1,Y2))). 
+goal_expansion(ffst(P,P1,P2), (P1=X1-Y, P2=X2-Y, call(P,X1,X2))). 
+goal_expansion(fst(P,X), P=X-_).
+goal_expansion(snd(P,Y), P=_-Y).
+goal_expansion(pair(X,Y,P), P=X-Y).
