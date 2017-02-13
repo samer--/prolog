@@ -8,7 +8,7 @@
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, set/1, get/1, app/2, run_state/4]).
 :- use_module(library(lambda2)).
-:- use_module(tabled, []).
+:- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
 
