@@ -33,6 +33,11 @@ cctab3 - use `pr_reset/3` and unary predicates/lambdas,
 			generator and continuations as lambdas
 cctab5 - cctab2 + mark completion in table,
 			consumers of complete table don't register continuations
-			use table updater predicates, 
+			use table updater predicates. 
+         [BROKEN!]
 cctab6 - cctab5 + collect all before sending to producer continuation
-
+         [BROKEN! (see cctab5)]
+cctab7 - cctab2 + probabilistic explanation graph. This is basically the inference
+         part of PRISM (ie the generalisation of the inside-outside, forwards backwards, 
+         sum-product and message-passing algorithms for probabilistic inference)
+         in about 60 lines of code.
