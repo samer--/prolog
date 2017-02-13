@@ -1,5 +1,14 @@
-:- module(cctab, [run_tabled/1, cctabled/1]).
+:- module(cctab, [run_tabled/1, run_tabled/2, cctabled/1, sanitise/2]).
 
+/* <module> Tabling, answers not delivered to producer continuation until completion
+   NB - this doesn't work for co-recursive predicates! See cctab5.pl for a full
+   description of the problem.
+*/
+
+:- use_module(library(rbtrees)).
+:- use_module(library(dcg_core), [out//1]).
+:- use_module(library(data/pair), [fst/2, fsnd/3]).
+:- use_module(library(callutils), [mr/5]).
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, app/1, set/1, get/1]).
 :- use_module(library(lambda1)).
@@ -58,4 +67,8 @@ run_tabled(Goal, FinalTables) :-
    rb_empty(Tables),
    term_variables(Goal, Ans),
    run_nb_state(run_tab(Goal, Ans), Tables, FinalTables).
+
+sanitise(Tabs1, Tabs2) :- rb_fold(mr(fsnd(clean_tab), out), Tabs1, Tabs2, []).
+clean_tab(tab(Solns,Status), Stat-Solns1) :- functor(Status,Stat,_), rb_fold(mr(fst,out), Solns, Solns1, []).
+
 
