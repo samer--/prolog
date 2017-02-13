@@ -36,3 +36,13 @@ path_a(Y) :- pathl(a,X), Y=a(X).
 path1_a(Y) :- pathl1(a,X), Y=a(X).
 
 :- initialization debug(cctab), module(tabled).
+
+:- cctable sent//0, sent1//1.
+sent --> {dist([0.5-b,0.25-l,0.25-r], A)}, sent1(A).
+sent1(b) --> {dist([0.6-cool,0.4-wicked], W)}, [W].
+sent1(l) --> sent, [not].
+sent1(r) --> [really], sent.
+
+print_table(Var-Solns) :-
+   nl, writeln(Var),
+   maplist(writeln, Solns).
