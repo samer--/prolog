@@ -12,6 +12,7 @@
 :- use_module(ccvprob, [ leaf_prob/4, guard/1, dist/2, fail_/0, run_ltree/2, cctabled/1, get_tables/2]).
 :- use_module(library(ccmacros)).
 :- use_module(library(lambda1)).
+:- use_module(library(tabling)).
 :- use_module(treeutils).
 
 
@@ -93,18 +94,24 @@ link(v,_) :- fail_.
 
 id --> [].
 
-:- cctabled sent//0.
+:- cctable sent//0.
 
 % left and right recursive grammar
 sent --> {choose([b,l,r],A)}, sentx(A).
 sentx(b) --> word.
-sentx(r) --> sent, out(not).
-sentx(l) --> out(really), sent.
+sentx(l) --> sent, out(not).
+sentx(r) --> out(really), sent.
 
 word --> {choose([cool,wicked],W)}, out(W).
 
 out(_,[],_) :- !, guard(false).
-out(W,[X|T],T) :- guard(W=X).
+out(W,[X|T1],T2) :- guard(T1=T2), guard(W=X).
+
+:- table sent1//0.
+sent1 --> sentx1(_).
+sentx1(b) --> [cool]; [wicked].
+sentx1(l) --> sent1, [not].
+sentx1(r) --> [really], sent1.
 
 % incomplete recursive form
 
