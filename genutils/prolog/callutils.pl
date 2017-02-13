@@ -5,7 +5,7 @@
 							, pairf//3
                      , mr/5
 							, op(600,yfx,*:)
-                     , flip/4
+                     , flip/3
 					    	]).
 
 /** <module> High-order utility predicates
