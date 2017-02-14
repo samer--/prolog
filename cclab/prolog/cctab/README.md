@@ -41,3 +41,8 @@ cctab7 - cctab2 + probabilistic explanation graph. This is basically the inferen
          part of PRISM (ie the generalisation of the inside-outside, forwards backwards, 
          sum-product and message-passing algorithms for probabilistic inference)
          in about 60 lines of code.
+cctab8 - cctab2 modified to switch into tabling mode (context delimited by 'tab' prompt)
+         on calling outermost tabled predicate (the 'leader'). Tables are marked 'complete' 
+         on leaving tabling mode and subsequent lookups on complete tables need no delimited 
+         context. This more or less implements the functionality of Desouter et al's
+         library.

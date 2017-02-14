@@ -38,7 +38,7 @@ path1_a(Y) :- pathl1(a,X), Y=a(X).
 :- initialization debug(cctab), module(tabled).
 
 :- cctable sent//0, sent1//1.
-sent --> {member(A, [b,l,r], A)}, sent1(A).
+sent --> {member(A, [b,l,r])}, sent1(A).
 sent1(b) --> {member(W,[cool,wicked])}, [W].
 sent1(l) --> sent, [not].
 sent1(r) --> [really], sent.
