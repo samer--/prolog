@@ -1,4 +1,4 @@
-:- module(cctab, [run_tabled/1, run_nb_state//1, cctabled/1]).
+:- module(cctab, [run_tabled/1, cctabled/1]).
 
 /** <module> Auto-prompt tabling with table completion
 
