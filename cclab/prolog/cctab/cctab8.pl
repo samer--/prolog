@@ -28,11 +28,8 @@ cctabled(Head) :-
    ;  (  rb_lookup('$tabling?', true,Tabs1)
       -> p_shift(tab, prod(Variant, Y, Tabs1, Head)) % active producer
       ;  (  rb_insert(Tabs1, '$tabling?', true, Tabs2),
-            % NB. next line short circuits run_tab( immediate shift as producer then fail)
             cont_tab(susp(prod(Variant, Y, Tabs2, Head), fail), Y) 
-         ;  % reach here when active tabling is finished, so
-            % mark all tables as complete and regurgitate answers.
-            get(Tabs3),
+         ;  get(Tabs3),
             rb_map(Tabs3, cctab:completion_map, Tabs4),
             set(Tabs4),
             rb_lookup(Variant, tab(Solns,_), Tabs4),
