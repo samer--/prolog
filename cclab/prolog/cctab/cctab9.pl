@@ -25,18 +25,23 @@ cctabled(Head) :-
    -> (  Status=complete -> rb_in(Y, _, Solns)
       ;  p_shift(tab, cons(Variant, Y, Tabs1)) % active consumer
       ) 
-   ;  (  rb_lookup('$tabling?', true,Tabs1)
-      -> p_shift(tab, prod(Variant, Y, Tabs1, Head)) % active producer
-      ;  (  rb_insert(Tabs1, '$tabling?', true, Tabs2),
-            cont_tab(susp(prod(Variant, Y, Tabs2, Head), fail), Y) 
-         ;  get(Tabs2), rb_map(Tabs2, cctab:completion_map, Tabs3),
-            set(Tabs3), rb_lookup(Variant, tab(Solns,_), Tabs3),
+   ;  rb_empty(Empty), % initialise producer
+      rb_insert_new(Tabs1, Variant, tab(Empty,[]), Tabs2),
+      (  rb_lookup('$tabling?', true,Tabs2)
+      -> set(Tabs2), p_shift(tab, prod(Variant, Y, Head)) % prompt already there
+      ;  rb_insert(Tabs2, '$tabling?', true, Tabs3), set(Tabs3),
+         (  run_tab(producer(Variant, \Y^Head, \Y^Y^fail, Y), Y) % delimit top producer 
+         ;  completed_table(Variant, Solns), % top producer is failure driven
             rb_in(Y, _, Solns)
          )
       )
    ).
 
-completion_map(true,false). % Applies to '$$$' key only
+completed_tables(Variant, Solns) :-
+   get(Tabs1), rb_map(Tabs1, cctab:completion_map, Tabs2),
+   set(Tabs2), rb_lookup(Variant, tab(Solns,_), Tabs2).
+
+completion_map(true,false) : -!. % Applies to '$tabling?' key only
 completion_map(tab(Solns,_), tab(Solns,complete)).
 
 run_tab(Goal, Ans) :-
@@ -49,10 +54,7 @@ cont_tab(susp(cons(Var,Y,Tabs1), Cont), Ans) :-
    set(Tabs2), 
    rb_in(Y, _, Solns),
    run_tab(Cont, Ans).
-cont_tab(susp(prod(Var,Y,Tabs1,Head), Cont), Ans) :-
-   rb_empty(Solns), 
-   rb_insert_new(Tabs1, Var, tab(Solns,[]), Tabs2),
-   set(Tabs2),
+cont_tab(susp(prod(Var,Y,Head), Cont), Ans) :-
    run_tab(producer(Var, \Y^Head, \Y^Ans^Cont, Ans), Ans).
 
 producer(Variant, Generate, KP, Ans) :-
