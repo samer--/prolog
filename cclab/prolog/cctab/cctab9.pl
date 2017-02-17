@@ -6,6 +6,8 @@
    on calling outermost tabled predicate (the 'leader'). Tables are marked 'complete' 
    on leaving tabling mode and subsequent lookups on complete tables need no delimited 
    context. This more or less implements the functionality of Desouter et al's library.
+
+   Variation on  cctab8 - more stuff in cctabled/1, less in shift-handler
 */
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, set/1, get/1]).

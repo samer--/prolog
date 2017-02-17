@@ -46,3 +46,20 @@ cctab8 - cctab2 modified to switch into tabling mode (context delimited by 'tab'
          on leaving tabling mode and subsequent lookups on complete tables need no delimited 
          context. This more or less implements the functionality of Desouter et al's
          library.
+cctab9 - Variation on  cctab8 - more stuff in cctabled/1, less in shift-handler.
+
+ccptab1 - Based on cctab7 (tabled probabilistic prolog) but giving up on production time
+          probability labelling and instead going by goal terms, then doing a more
+          thorough post processing of the tables to remove redundant variant solutions.
+          After that, inside and outside probabilities can be computed more effiently.
+
+
+
+Multiple variant tables containing duplicate solutions.
+Not using subsuming variants.
+Not using subsumed variants to initialise subsuming variant table
+
+Will each duplicate solution end up with the same explanations?
+Sharing solutions between variants?
+Look at subsumption lattice
+What about variables in answers?

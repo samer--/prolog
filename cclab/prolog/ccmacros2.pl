@@ -26,7 +26,8 @@ expand_cctab(Name//Arity) --> !,
 expand_cctab(Name/Arity) --> 
    { functor(Head, Name, Arity), head_worker(Head, Worker)},
    [ (:- discontiguous('$cctabled'/1))
-   , '$cctabled'(Head), (Head :- cctabled(Worker))
+   , '$cctabled'(Head)
+   , (Head :- cctabled(Head,Worker))
    ]. 
 
 prolog:rename_predicate(M:Head, M:Worker) :-
