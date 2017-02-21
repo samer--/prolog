@@ -17,46 +17,61 @@ sent1(b) --> {dist([0.6-cool,0.4-wicked], W)}, [W].
 sent1(l) --> sent, [not].
 sent1(r) --> [really], sent.
 
-% user:goal_expansion(~>(S,Alts,L1,L2), call_dcg(Goals,L1,L2)) :- expand_alts(S,Alts,Goals).
-user:goal_expansion(~>(S,Alts,L1,L2), Goals) :- 
-   expand_alts(S,Alts,DCGGoals),
-   dcg_translate_rule((h --> DCGGoals), (h(L1,L2) :- Goals)).
+user:term_expansion(Lab | Body, Clause) :-
+   prolog_load_context(module,Module),
+   Lab =.. Args,   append(Args, [Module:Lab], Args1),
+   Head =.. Args1, dcg_translate_rule(Head --> Body, Clause).
 
-expand_alts(S, (B; Bs), (G; Goals)) :- !, expand_alt(S,B,G), expand_alts(S,Bs,Goals).
-expand_alts(S, B, G) :- expand_alt(S,B,G).
-expand_alt(S, P -> Goals, ({event((S->Goals), P)}, Goals)).
+% sample terminal directly from switch
+:- meta_predicate +(3,?,?).
++Lab --> [T], {T := Lab}.
+
+user:goal_expansion(~>(S,Alts,L1,L2), Goals) :- 
+   expand_alts(I,Alts,0,DCGGoals),
+   dcg_translate_rule((h --> {I:=S}, DCGGoals), (h(L1,L2) :- Goals)).
+
+expand_alts(K, (B; Bs), I, (G; Goals)) :- !, succ(I,J), expand_alt(K,B,J,G), expand_alts(K,Bs,J,Goals).
+expand_alts(K, B, I, G) :- succ(I,J), expand_alt(K,B,J,G).
+expand_alt(K, Goals, J, ({J=K}, !, Goals)).
 
 :- cctable s//0, np//0, vp//0, pp//0, nom//0.
 
+np  | iota(4).
+vp  | iota(5).
+nom | iota(2).
+
 s --> np, vp.
 
-np --> np ~> 0.4 -> d, nom
-           ; 0.3 -> pn
-           ; 0.1 -> np, pp
-           ; 0.2 -> pro.
+np --> np ~> +d, nom
+           ; +pn
+           ; np, pp
+           ; +pro.
 
-vp --> vp ~> 0.3 -> iv
-           ; 0.3 -> tv, np
-           ; 0.1 -> dv, np, np
-           ; 0.2 -> vp, pp
-           ; 0.1 -> mv, s.
+vp --> vp ~> +iv
+           ; +tv, np
+           ; +dv, np, np
+           ; vp, pp
+           ; +mv, s.
 
-nom --> nom ~> 0.7 -> n
-             ; 0.3 -> adj, nom.
+nom --> nom ~> +n
+             ; +adj, nom.
 
-pp --> p, np.
+pp --> +p, np.
 
-adj --> preterm(adj,[hot,cold,thin,fat,disgusting,lovely]).
-pro --> preterm(pro,['I','you']).
-pn --> preterm(pn,[alice, bob, cuthbert, delia, edna]).
-d -->  preterm(d,[the,a,every,no,some,my]).
-mv --> preterm(mv,[knew,thought,believed,said]).
-dv --> preterm(mv,[gave,made,baked]).
-tv --> preterm(tv,[saw, ate, hated, baked, liked, walked, ran, loved, caught]).
-iv --> preterm(iv,[lived, worked]).
-n  --> preterm(n,[dog,telescope,man,cat,mat,cake,box,floor,face,pie,moose,pyjamas,park]).
-p  --> preterm(p,[with,on,under,in,without,by]).
+% preterminal switch declarations
+adj | [hot,cold,thin,fat,disgusting,lovely].
+pro | ['I','you'].
+pn  | [alice, bob, cuthbert, delia, edna].
+d   | [the,a,every,no,some,my].
+mv  | [knew,thought,believed,said].
+dv  | [gave,made,baked].
+tv  | [saw, ate, hated, baked, liked, walked, ran, loved, caught].
+iv  | [lived, worked].
+n   | [dog,telescope,man,cat,mat,cake,box,floor,face,pie,moose,pyjamas,park].
+p   | [with,on,under,in,without,by].
+v   | vals(dv), vals(tv), vals(iv).
 
-preterm(Lab,Ts) --> [T], {member(T,Ts), length(Ts,N), P is 1/N, event(Lab->T, P)}.
+iota(0) --> [].
+iota(N) --> {succ(M,N)}, [N], iota(M).
 
 user:portray(X) :- float(X), !, format('~5g',[X]).
