@@ -9,6 +9,7 @@
    and (`)/2 to separate arguments and body, eg =| \\F|X`Y`p(X,Y,F) |=.
    Operator precedences are low enough not to interfere with operator terms in the
    arguments or free variables sections.
+   Sadly, the position of the '|' operator spoils the nice typing.
 */
 
 :- set_prolog_flag(back_quotes, symbol_char).

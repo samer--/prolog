@@ -5,6 +5,7 @@
 */
 
 :- use_module(library(ccmacros2)).
+:- use_module(library(dcg_core), [rep//2]).
 
 :- initialization debug(cctab), module(ptabled).
 
@@ -24,11 +25,11 @@ user:term_expansion(Lab | Body, Clause) :-
 
 % sample terminal directly from switch
 :- meta_predicate +(3,?,?).
-+Lab --> [T], {T := Lab}.
++Lab --> [T], {Lab := T}.
 
 user:goal_expansion(~>(S,Alts,L1,L2), Goals) :- 
    expand_alts(I,Alts,0,DCGGoals),
-   dcg_translate_rule((h --> {I:=S}, DCGGoals), (h(L1,L2) :- Goals)).
+   dcg_translate_rule((h --> {S:=I}, DCGGoals), (h(L1,L2) :- Goals)).
 
 expand_alts(K, (B; Bs), I, (G; Goals)) :- !, succ(I,J), expand_alt(K,B,J,G), expand_alts(K,Bs,J,Goals).
 expand_alts(K, B, I, G) :- succ(I,J), expand_alt(K,B,J,G).
@@ -69,9 +70,12 @@ tv  | [saw, ate, hated, baked, liked, walked, ran, loved, caught].
 iv  | [lived, worked].
 n   | [dog,telescope,man,cat,mat,cake,box,floor,face,pie,moose,pyjamas,park].
 p   | [with,on,under,in,without,by].
-v   | vals(dv), vals(tv), vals(iv).
 
-iota(0) --> [].
-iota(N) --> {succ(M,N)}, [N], iota(M).
+die | iota(4).
+:- cctable three_dice/1.
+three_dice(X) :- length(Xs,3), maplist(:=(die), Xs), sumlist(Xs,X).
+
+iota(0,L,L).
+iota(N,L3,L1) :- succ(M,N), iota(M,L3,[N|L1]).
 
 user:portray(X) :- float(X), !, format('~5g',[X]).
