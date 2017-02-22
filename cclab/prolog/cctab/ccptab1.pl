@@ -109,7 +109,7 @@ pmap(X,Y,M1,M2) :- rb_insert_new(M1,X,Y,M2), !.
 pmap(X,Y,M,M) :- rb_lookup(X,Y,M).
 
 pmap_sw(Map,SW) :- rb_in(SW->_,_,Map).
-sw_info(Lookup,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(call(Lookup,SW),Vals,Info).
+collate_sw(Lookup,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(call(Lookup,SW),Vals,Info).
 
 % inside and viterbi probs
 graph_inside(G, P, PGraph)    :- graph_pgraph(add,G,PGraph,M), pmap_params(M,P).
@@ -118,7 +118,7 @@ graph_pgraph(Agg, G, PG, Map) :- rb_empty(E), foldl(p_soln(Agg), G, PG, E, Map).
 
 pmap_params(Map, Params) :-
    setof(SW, pmap_sw(Map,SW), SWs), 
-   maplist(sw_info(pmap_sw_val_prob(Map)),SWs,Params).
+   maplist(collate_sw(pmap_sw_val_prob(Map)),SWs,Params).
 
 p_soln(Agg, Goal-Expls, soln(Goal, Pin, Expls1)) -->
    pmap(Goal,Pin),
@@ -141,7 +141,15 @@ graph_stats(Graph,Goal,Params,LogProb,Eta) :-
    freeze(Pin, LogProb is log(Pin)),
    rb_empty(Empty), pmap(Goal,1/Pin-Pin,Empty, Out1),
    foldl(q_alpha, InvGraph, Out1, Out2),
-   maplist(sw_info(pmap_sw_val_eta(Out2))*fst, Params, Eta).
+   maplist(sw_counts(Out2), Params, Eta).
+   % maplist(collate_sw(pmap_sw_val_eta(Out2))*fst, Params, Eta).
+
+sw_counts(Outs, SW-Probs, SW-Counts) :-
+   call(SW,_,Vals,[]),
+   maplist(pmap_sw_val_eta(Outs,SW), Vals, Probs, Counts).
+
+pmap_sw_val_eta(Map,SW,Val,Beta,Eta) :- rb_lookup(SW->Val, Alpha-_, Map), !, mul(Alpha,Beta,Eta).
+pmap_sw_val_eta(_,_,_,_,0). 
 
 invert_graph(IGraph, InvGraph) :- 
    foldl(soln_edges,IGraph,QCs,[]), 
