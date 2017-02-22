@@ -1,8 +1,8 @@
 :- module(cctab, [ run_tabled/3, cctabled/2, dist/2, (:=)/2
                  , tables_graph/2, graph_params/3 
-                 , graph_viterbi/3, graph_inside/3, graph_stats/5 
+                 , graph_viterbi/3, graph_inside/3, graph_stats/4 
                  , pgraph_tree/4, print_tree/1
-                 , em/5, emap/6
+                 , em_ml/3, em_map/4, em_vb/4, iterate/4
                  ]).
 /** <module> Continuation based probabilistic inference.
  TODO: handle more complex top goal by finding all explanations for it.
@@ -10,14 +10,15 @@
 :- use_module(library(rbtrees)).
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
-:- use_module(library(dcg_pair)).
-:- use_module(library(math),     [stoch/3]).
 :- use_module(library(dcg_core), [out//1]).
 :- use_module(library(dcg_progress)).
+:- use_module(library(dcg_pair)).
 :- use_module(library(callutils), [mr/5, (*)/4]).
 :- use_module(library(listutils), [rep/3]).
+:- use_module(library(math),      [stoch/3]).
+:- use_module(library(plrand),    [mean_log_dirichlet/2]).
 :- use_module(library(data/pair), [pair/3, snd/2, fst/2, fsnd/3]).
-:- use_module(library(data/tree), []).
+:- use_module(library(data/tree), [print_tree/2]).
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, set/1, get/1, app/2, run_state/4]).
 :- use_module(library(lambda2)).
@@ -30,7 +31,7 @@
 :- type factor ---> module:head ; ground-number ; prim(A)->A.
 :- type cont   == pred(+values, -values).
 :- type values == list(ground).
-:- type graph  == list(pair(goal, list(list(factor)))). % could be map(goal,list(_))
+:- type graph  == list(pair(goal, list(list(factor)))).
 
 true(_).
 head_to_variant(Head, Variant) :-
@@ -135,11 +136,12 @@ p_factor(@P, const-P) --> \> mul(P).
 % For VB: instead of P (=Pr(RV=X_i)), use exp(psi(Alpha_i) - psi(sum_i Alpha_i))
 
 % --------- outside probabilities, ESS ----------------
-:- meta_predicate graph_stats(+,0,?,-,-).
-graph_stats(Graph,Goal,Params,LogProb,Eta) :-
+:- meta_predicate graph_stats(+,0,?,-).
+graph_stats(Graph,Goal,Params,Opts) :-
+   maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Out2)]),
    graph_inside(Graph, Params, InsideG),
-   memberchk(soln(Goal,Pin,_),InsideG),
-   freeze(Pin, LogProb is log(Pin)),
+   memberchk(soln(Goal,Pin,_),InsideG), log(Pin,LP),
+   % freeze(Pin, (LP is log(Pin), print_term(InsideG,[]), nl)),
    foldl(soln_edges,InsideG,QCs,[]), 
    keysort(QCs,SortedQCs),
    group_pairs_by_key(SortedQCs, InvGraph),
@@ -147,31 +149,46 @@ graph_stats(Graph,Goal,Params,LogProb,Eta) :-
    foldl(q_alpha, InvGraph, Out1, Out2),
    maplist(pmap_sw_collate(Out2,=(0))*fst, Params, Eta).
 
+opt(Opts, Opt) :- option(Opt, Opts, _).
 soln_edges(soln(P,_,Expls)) --> foldl(expl_edges(P),Expls).
 expl_edges(P,Expl-Pe)       --> foldl(factor_edge(Pe,P),Expl).
-factor_edge(Pe,P,Q-BetaQ)   --> [Q-qc(Pe/BetaQ,P)].
+factor_edge(Pe,P,Q-BetaQ)   --> [Q-qc(Pe/BetaQ,P)]. %, {when(ground(BetaQ), format('beta(~w) = ~w\n',[Q,BetaQ]))}.
 
 q_alpha(Q-QCs) --> pmap(Q, AlphaQ), run_right(foldl(qc_alpha, QCs), 0, AlphaQ).
 qc_alpha(qc(Pc,P)) --> {mul(AlphaP, Pc, AlphaQC)}, pmap(P, AlphaP) <\> add(AlphaQC).
 
-:- meta_predicate em(+,0,-,+,-), emap(+,+,0,-,+,-).
-em(Graph, Goal, LPs) --> em(maplist(sw_ml), Graph, Goal, LPs).
-emap(Prior, Graph, Goal, LPs) --> em(maplist(sw_map,Prior), Graph, Goal, LPs).
+estep(Graph, Goal, P1, Eta, LP) :-
+   graph_stats(Graph, Goal, P1, [log_prob(LP), grad(Grad)]), 
+   maplist(eta, Grad, P1, Eta).
+eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta). 
 
-em(MStep, Graph, Goal, LPs) -->
-   {graph_stats(Graph, Goal, P1, LP, Eta), call(MStep, Eta, P1, P2)},
-   seqmap_with_progress(1,unify3(t(P1,P2,LP)), LPs).
+:- meta_predicate em_ml(+,0,-), em_map(+,+,0,-), em_vb(+,+,0,-).
 
+em_ml(Graph, Goal, t(P1,P2,LP)) :-
+   estep(Graph, Goal, P1, Eta, LP),
+   maplist(fsnd(stoch), Eta, P2).
+
+em_map(Prior, Graph, Goal, t(P1,P2,LP)) :-
+   estep(Graph, Goal, P1, Eta, LP),
+   maplist(posterior_mode, Prior, Eta, P2).
+
+posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :- 
+   maplist(add,Prior,Eta,Posterior),
+   mode_dirichlet(Posterior,Probs2).
+
+mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
+
+em_vb(Prior, Graph, Goal, t(A1,A2,LP)) :-
+   maplist(psi,A1,P1),
+   estep(Graph, Goal, P1, Eta, LP),
+   maplist(posterior, Prior, Eta, A2).
+
+psi(SW-A, SW-P) :- when(ground(A), (mean_log_dirichlet(A,H), maplist(exp,H,P))).
+posterior(SW-Prior,SW-Eta,SW-Posterior) :- maplist(add,Eta,Prior,Posterior).
+
+:- meta_predicate iterate(1,?,+,-).
+iterate(Setup, LPs) --> {call(Setup, Triple)}, seqmap_with_progress(1,unify3(Triple), LPs).
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
-
-sw_ml(SW-Alphas,SW-Probs1,SW-Probs2) :- 
-   maplist(mul,Alphas,Probs1,Counts),
-   stoch(Counts,Probs2).
-
-sw_map(SW-Prior,SW-Alphas,SW-Probs1,SW-Probs2) :- 
-   maplist(mul,Alphas,Probs1,Counts),
-   maplist(add,Counts,Prior,Posterior),
-   stoch(Posterior,Probs2).
 
 % ---------- explanation tree with log probability ------
 :- meta_predicate pgraph_tree(+,0,-,-).
@@ -186,7 +203,7 @@ subexpl_tree(G, (M:Subgoal)-_, Subtree-LogProb) :- !, pgraph_tree(G, M:Subgoal, 
 subexpl_tree(_, L-Pin, L-LP) :- LP is log(Pin).
 
 % ---- tree conversion and printing ----
-print_tree(T) :- tree_to_tree(T,T1), tree:print_tree(T1).
+print_tree(T) :- tree_to_tree(T,T1), write('  '), print_tree('  ', T1), nl.
 
 tree_to_tree(@P, node(p(P),[])).
 tree_to_tree((_:SW)->Val, node(t(SW->Val),[])).
@@ -204,4 +221,6 @@ max(X,Y,Z) :- when(ground(X-Y),Z is max(X,Y)).
 add(X,Y,Z) :- when(ground(X-Y),Z is X+Y). %{Z=X+Y}.
 mul(X,Y,Z) :- when(ground(X-Y),Z is X*Y). %{Z=X*Y}.
 stoch(X,Y) :- when(ground(X), stoch(X,Y,_)).
+log(X,Y) :- when(ground(X), Y is log(X)).
+exp(X,Y) :- Y is exp(X). % not lazy
 
