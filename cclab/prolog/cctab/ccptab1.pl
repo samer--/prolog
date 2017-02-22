@@ -139,17 +139,9 @@ graph_stats(Graph,Goal,Params,LogProb,Eta) :-
    invert_graph(InsideG, InvGraph),
    memberchk(soln(Goal,Pin,_),InsideG),
    freeze(Pin, LogProb is log(Pin)),
-   rb_empty(Empty), pmap(Goal,1/Pin-Pin,Empty, Out1),
+   rb_empty(Empty), pmap(Goal,1/Pin,Empty, Out1),
    foldl(q_alpha, InvGraph, Out1, Out2),
-   maplist(sw_counts(Out2), Params, Eta).
-   % maplist(collate_sw(pmap_sw_val_eta(Out2))*fst, Params, Eta).
-
-sw_counts(Outs, SW-Probs, SW-Counts) :-
-   call(SW,_,Vals,[]),
-   maplist(pmap_sw_val_eta(Outs,SW), Vals, Probs, Counts).
-
-pmap_sw_val_eta(Map,SW,Val,Beta,Eta) :- rb_lookup(SW->Val, Alpha-_, Map), !, mul(Alpha,Beta,Eta).
-pmap_sw_val_eta(_,_,_,_,0). 
+   maplist(collate_sw(pmap_sw_val_alpha(Out2))*fst, Params, Eta).
 
 invert_graph(IGraph, InvGraph) :- 
    foldl(soln_edges,IGraph,QCs,[]), 
@@ -157,20 +149,24 @@ invert_graph(IGraph, InvGraph) :-
    group_pairs_by_key(SortedQCs, InvGraph).
 
 soln_edges(soln(P,_,Expls)) --> foldl(expl_edges(P),Expls).
-expl_edges(P,Expl-Pe)       --> foldl(factor_edge(qc(Pe,P)),Expl).
-factor_edge(QC,QBetaQ)      --> [QBetaQ-QC].
+expl_edges(P,Expl-Pe)       --> foldl(factor_edge(Pe,P),Expl).
+factor_edge(Pe,P,Q-BetaQ)   --> [Q-qc(Pe/BetaQ,P)].
 
-q_alpha((Q-BetaQ)-QCs) --> pmap(Q, AlphaQ-BetaQ), run_right(foldl(qc_alpha(BetaQ), QCs), 0, AlphaQ).
-qc_alpha(BetaQ, qc(Pe,P)) --> {mul(AlphaP, Pe/BetaQ, AlphaQC)}, pmap(P, AlphaP-_) <\> add(AlphaQC).
+q_alpha(Q-QCs) --> pmap(Q, AlphaQ), run_right(foldl(qc_alpha, QCs), 0, AlphaQ).
+qc_alpha(qc(Pc,P)) --> {mul(AlphaP, Pc, AlphaQC)}, pmap(P, AlphaP) <\> add(AlphaQC).
 
-pmap_sw_val_eta(Map,SW,Val,Eta) :- rb_lookup(SW->Val, Alpha-Beta, Map), !, mul(Alpha,Beta,Eta).
-pmap_sw_val_eta(_,_,_,0). 
+pmap_sw_val_alpha(Map,SW,Val,Alpha) :- rb_lookup(SW->Val, Alpha, Map), !.
+pmap_sw_val_alpha(_,_,_,0). 
 
 :- meta_predicate em(+,0,-,+,-).
 em(Graph, Goal, LPs, P0, P2) :-
-   graph_stats(Graph, Goal, P, LP, Stats),
-   maplist(fsnd(stoch),Stats,P1),
+   graph_stats(Graph, Goal, P, LP, Eta),
+   maplist(update_sw,Eta,P,P1),
    seqmap_with_progress(1,emstep(t(P,P1,LP)),LPs,P0,P2).
+
+update_sw(SW-Alphas,SW-Probs1,SW-Probs2) :- 
+   maplist(mul,Alphas,Probs1,Counts),
+   stoch(Counts,Probs2).
 
 emstep(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
 
