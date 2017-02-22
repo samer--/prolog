@@ -6,6 +6,8 @@
                  ]).
 /** <module> Continuation based probabilistic inference.
  TODO: handle more complex top goal by finding all explanations for it.
+ Sampling execution.
+ Approximate inference.
 */
 :- use_module(library(rbtrees)).
 :- use_module(library(apply_macros)).
