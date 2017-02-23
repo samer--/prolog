@@ -1,6 +1,7 @@
 :- module(callutils, [ (*)/4
 							, (*)//4
 							, (*:)//3
+                     , const/3
 							, constf//3
 							, pairf//3
                      , mr/5
@@ -36,6 +37,10 @@ flip(P,X,Y) :- call(P,Y,X).
 %% *:(+P:pred(A,B,S,S), +G:pred(A,S), X:B, S1:S, S2:S) is det.
 % Stateful piping of generator G into function P. Calls G before P!
 *:(P,G,Y) --> call(G,X), call(P,X,Y).
+
+%% const(X:A,Y:_,Z:A) is det.
+%  Unifies X and Z - const(X) is useful as a binary predicate.
+const(X,_,X).
 
 %% pairf(+F:pred(A,S,S), +G:pred(B,S,S), X:pair(A,B), S1:S, S2:S) is det.
 %  Call F and G respectively on components of a pair.
