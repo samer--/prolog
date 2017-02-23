@@ -19,10 +19,10 @@
 :- use_module(library(listutils), [rep/3]).
 :- use_module(library(math),      [stoch/3]).
 :- use_module(library(plrand),    [mean_log_dirichlet/2]).
-:- use_module(library(data/pair), [pair/3, snd/2, fst/2, fsnd/3]).
+:- use_module(library(data/pair), [pair/3, fst/2, fsnd/3]).
 :- use_module(library(data/tree), [print_tree/2]).
-:- use_module(library(delimcc), [p_reset/3, p_shift/2]).
-:- use_module(library(ccstate), [run_nb_state/3, set/1, get/1, app/2, run_state/4]).
+:- use_module(library(delimcc),   [p_reset/3, p_shift/2]).
+:- use_module(library(ccstate),   [run_nb_state/3, set/1, get/1, app/2, run_state/4]).
 :- use_module(library(lambda2)).
 :- use_module(ptabled, []).
 
@@ -30,7 +30,7 @@
 
 :- type tables == map(variant, table).
 :- type table  ---> tab(goal, map(values, list(list(factor))), list(cont)).
-:- type factor ---> module:head ; ground-number ; prim(A)->A.
+:- type factor ---> module:head ; @number ; prim(A)->A.
 :- type cont   == pred(+values, -values).
 :- type values == list(ground).
 :- type graph  == list(pair(goal, list(list(factor)))).
@@ -90,6 +90,7 @@ run_tabled(Goal, Final, Tables) :-
                 EmptyTables, Tables).
 
 tables_graph(Tables, Graph) :-
+   % this does a consistency check that each goal has only one distinct set of explanations.
    bagof(G-Es, setof(Es, Tables^tabled_solution(Tables, G, Es), [Es]), Graph).
 
 tabled_solution(Tabs, Goal, Expls1) :-
@@ -114,8 +115,8 @@ pmap(X,Y,M1,M2) :- rb_insert_new(M1,X,Y,M2), !.
 pmap(X,Y,M,M) :- rb_lookup(X,Y,M).
 
 pmap_sw(Map,SW) :- rb_in(SW->_,_,Map).
-pmap_sw_collate(Map,Def,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_sw_val_p(Map,Def,SW),Vals,Info).
-pmap_sw_val_p(Map,Def,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
+pmap_sw_collate(Map,Def,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_sw_lookup(Map,Def,SW),Vals,Info).
+pmap_sw_lookup(Map,Def,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
 
 % inside and viterbi probs
 graph_inside(Graph, Params, PGraph)  :- graph_pgraph(add,Graph,Params,PGraph).
@@ -135,15 +136,12 @@ p_factor(M:Atom, (M:Atom)-P) --> pmap(M:Atom,P) <\> mul(P).
 p_factor(SW->Val, (SW->Val)-P) --> pmap(SW->Val, P) <\> mul(P).
 p_factor(@P, const-P) --> \> mul(P).
 
-% For VB: instead of P (=Pr(RV=X_i)), use exp(psi(Alpha_i) - psi(sum_i Alpha_i))
-
 % --------- outside probabilities, ESS ----------------
 :- meta_predicate graph_stats(+,0,?,-).
 graph_stats(Graph,Goal,Params,Opts) :-
    maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Out2)]),
    graph_inside(Graph, Params, InsideG),
    memberchk(soln(Goal,Pin,_),InsideG), log(Pin,LP),
-   % freeze(Pin, (LP is log(Pin), print_term(InsideG,[]), nl)),
    foldl(soln_edges,InsideG,QCs,[]), 
    keysort(QCs,SortedQCs),
    group_pairs_by_key(SortedQCs, InvGraph),
@@ -154,7 +152,11 @@ graph_stats(Graph,Goal,Params,Opts) :-
 opt(Opts, Opt) :- option(Opt, Opts, _).
 soln_edges(soln(P,_,Expls)) --> foldl(expl_edges(P),Expls).
 expl_edges(P,Expl-Pe)       --> foldl(factor_edge(Pe,P),Expl).
-factor_edge(Pe,P,Q-BetaQ)   --> [Q-qc(Pe/BetaQ,P)]. %, {when(ground(BetaQ), format('beta(~w) = ~w\n',[Q,BetaQ]))}.
+factor_edge(Pe,P,Q-BetaQ)   --> {when(ground(BetaQ), div_or_zero(Pe,BetaQ,Pc))}, [Q-qc(Pc,P)].
+
+% this sort of wrong, but ok, because BetaQ=0 implies that any non-zero Alpha will
+% eventually be multiplied by a zero switch probability to get a zero expected count.
+div_or_zero(X,Y,Z) :- Y=:=0 -> Z=0; when(ground(X), Z is X/Y).
 
 q_alpha(Q-QCs) --> pmap(Q, AlphaQ), run_right(foldl(qc_alpha, QCs), 0, AlphaQ).
 qc_alpha(qc(Pc,P)) --> {mul(AlphaP, Pc, AlphaQC)}, pmap(P, AlphaP) <\> add(AlphaQC).
