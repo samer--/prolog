@@ -99,7 +99,7 @@ run_tabled(Goal, St, Tables) :-
 goal_graph(M:Goal, Graph) :- 
    time(run_with_tables(run_tab(findall(E,run_expl(M:Goal,E),Es), Es), Tables)),
    time(tables_graph(Tables, Graph0)),
-   time(prune1(M:'$top$', [(M:'$top$')-Es|Graph0], Graph)).
+   time(prune_graph(M:'$top$', [(M:'$top$')-Es|Graph0], Graph)).
 
 tables_graph(Tables, Graph) :-
    % this does a consistency check that each goal has only one distinct set of explanations.
@@ -113,33 +113,24 @@ tabled_solution(Tabs, Goal, Expls1) :-
    sort(Expls,Expls1).
 
 % --- graph pruning to remove unused goals ---
-prune3(Top, G1, G2) :-
-   list_to_rbtree(G1,GT),
-   run_with_tables(run_tab_expl(findall(S,trc(subgoal(GT),Top,S),Ss), _), _),
-   maplist(rb_get(GT),Ss,G2).
-
-rb_get(T,X,X-Y) :- rb_lookup(X,Y,T).
-subgoal(G, S1, S2) :- rb_lookup(S1,Es,G), member(E,Es), member(S2,E), S2=_:_.
-trc(P, S1, S3) :- S1=S3; cctabled(trc(P,S1,S2), trc(P,S1,S2)), call(P,S2,S1).
-
-prune1(Top, GL1, GL2) :-
+prune_graph(Top, GL1, GL2) :-
    list_to_rbtree(GL1,G1), 
-   rb_empty(E), traverse_df(G1,Top,E,G2),
+   rb_empty(E), children(G1,Top,E,G2),
    rb_visit(G2,GL2).
 
-traverse_df(_,_->_) --> !, [].
-traverse_df(G,Top) --> 
+children(_,_->_) --> !.
+children(G,Top) --> 
    {rb_lookup(Top,Expls,G)}, rb_add(Top,Expls),
-   foldl(foldl(traverse_factor(G)),Expls).
-traverse_factor(G, F) -->
-   rb_present(F) -> []; traverse_df(G,F).
+   foldl(foldl(new_children(G)),Expls).
+new_children(G, F) -->
+   rb_present(F) -> []; children(G,F).
 
 rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
 rb_present(K,T,T) :- rb_lookup(K,_,T).
 
 % --- parameters ---
 graph_params(Spec,G,Params) :- setof(L, graph_sw(G,L), SWs), maplist(sw_init(Spec),SWs,Params).
-graph_sw(G,SW) :- member(_-Es, G), member(E, Es), member(SW->_, E).
+graph_sw(G,SW) :- member(_-Es,G), member(E,Es), member(SW->_,E).
 
 sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform(Vals,Params).
 sw_init(K*Spec,SW,SW-Params) :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
