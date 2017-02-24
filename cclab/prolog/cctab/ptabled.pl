@@ -4,6 +4,7 @@
    NB. this module expects cctabled/1 to be imported into user.
 */
 
+:- use_module(library(tabling)).
 :- use_module(library(ccmacros2)).
 :- use_module(library(dcg_core), [rep//2]).
 
@@ -23,6 +24,9 @@ user:term_expansion(Lab | Body, Clause) :-
    Lab =.. Args,   append(Args, [Module:Lab], Args1),
    Head =.. Args1, dcg_translate_rule(Head --> Body, Clause).
 
+:- op(990,xfx,:==).
+Lab :== X :- call(Lab,_,Xs,[]), member(X,Xs).
+
 % sample terminal directly from switch
 :- meta_predicate +(3,?,?).
 +Lab --> [T], {Lab := T}.
@@ -33,7 +37,7 @@ user:goal_expansion(~>(S,Alts,L1,L2), Goals) :-
 
 expand_alts(K, (B; Bs), I, (G; Goals)) :- !, succ(I,J), expand_alt(K,B,J,G), expand_alts(K,Bs,J,Goals).
 expand_alts(K, B, I, G) :- succ(I,J), expand_alt(K,B,J,G).
-expand_alt(K, Goals, J, ({J=K}, !, Goals)).
+expand_alt(K, Goals, J, ({J=K} -> Goals)).
 
 :- cctable s//0, np//0, vp//0, pp//0, nom//0.
 
@@ -62,8 +66,8 @@ pp --> +p, np.
 % preterminal switch declarations
 adj | [hot,cold,thin,fat,disgusting,lovely].
 pro | ['I','you'].
-pn  | [alice, bob, cuthbert, delia, edna].
-d   | [the,a,every,no,some,my].
+pn  | [alice, bob]. %, cuthbert, delia, edna].
+d   | [the,a]. % ,every,no,some,my].
 mv  | [knew,thought,believed,said].
 dv  | [gave,made,baked].
 tv  | [saw, ate, hated, baked, liked, walked, ran, loved, caught].
@@ -72,10 +76,20 @@ n   | [dog,telescope,man,cat,mat,cake,box,floor,face,pie,moose,pyjamas,park].
 p   | [with,on,under,in,without,by].
 
 die | iota(4).
-:- cctable three_dice/1.
+:- cctable three_dice/1, two_dice/2.
 three_dice(X) :- length(Xs,3), maplist(:=(die), Xs), sumlist(Xs,X).
 
-iota(0,L,L).
+two_dice(X1,X2) :- die := X1, die := X2.
+
+% test handling of variables in answers
+:- cctable ssucc/2.
+ssucc(X, a(X)).
+test(Y,Z) :- (X=1;X=2;X=3), ssucc(A,Y), A=X, ssucc(_,Z).
+
+iota(0,L,L) :- !.
 iota(N,L3,L1) :- succ(M,N), iota(M,L3,[N|L1]).
 
 user:portray(X) :- float(X), !, format('~5g',[X]).
+user:portray(rbtree(T)) :- !,
+   rb_visit(T,TT),
+   write('<rbtree|'), print_term(TT,[]), write('>').
