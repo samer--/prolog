@@ -64,12 +64,12 @@ cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
    term_variables(Head,Y), K= (\\Y`Ans`Cont),
    get(Tabs1),
    head_to_variant(TableAs, Variant),
-   (  rb_update(Tabs1, Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs2) 
+   (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
    -> set(Tabs2),         % NB. this saves a COPY of Tabs2, ...
       rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
       run_tab(Cont, Ans)  % ... are instantiated when this continuation is run.
    ;  rb_empty(Solns), 
-      rb_insert_new(Tabs1, Variant, tab(TableAs,Solns,[]), Tabs2),
+      rb_add(Variant, tab(TableAs,Solns,[]), Tabs1, Tabs2),
       set(Tabs2),
       run_tab(producer(Variant, \\Y`Head, K, Ans), Ans)
    ).
@@ -77,11 +77,11 @@ cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
 producer(Variant, Generate, KP, Ans) :-
    run_state(expl, call(Generate, Y1), E, []),
    get(Tabs1),
-   rb_update(Tabs1, Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs2),
-   (  rb_insert_new(Solns1, Y1, [E], Solns2)
+   rb_trans(Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs1, Tabs2),
+   (  rb_add(Y1, [E], Solns1, Solns2)
    -> set(Tabs2), % see above comment about instantiation of ...
       member(K,[KP|Ks]), call(K,Y1,Ans) % ... answer variables in Y1 by K
-   ;  rb_update(Solns1, Y1, Es, [E|Es], Solns2),
+   ;  rb_trans(Y1, Es, [E|Es], Solns1, Solns2),
       set(Tabs2), fail
    ).
 
@@ -97,9 +97,9 @@ run_tabled(Goal, St, Tables) :-
                    Tables).
 
 goal_graph(M:Goal, Graph) :- 
-   time(run_with_tables(run_tab(findall(E,run_expl(M:Goal,E),Es), Es), Tables)),
-   time(tables_graph(Tables, Graph0)),
-   time(prune_graph(M:'$top$', [(M:'$top$')-Es|Graph0], Graph)).
+   run_with_tables(run_tab(findall(E,run_expl(M:Goal,E),Es), Es), Tables),
+   tables_graph(Tables, Graph0),
+   prune_graph(M:'$top$', [(M:'$top$')-Es|Graph0], Graph).
 
 tables_graph(Tables, Graph) :-
    % this does a consistency check that each goal has only one distinct set of explanations.
@@ -112,7 +112,6 @@ tabled_solution(Tabs, Goal, Expls1) :-
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
 
-% --- graph pruning to remove unused goals ---
 prune_graph(Top, GL1, GL2) :-
    list_to_rbtree(GL1,G1), 
    rb_empty(E), children(G1,Top,E,G2),
@@ -123,10 +122,7 @@ children(G,Top) -->
    {rb_lookup(Top,Expls,G)}, rb_add(Top,Expls),
    foldl(foldl(new_children(G)),Expls).
 new_children(G, F) -->
-   rb_present(F) -> []; children(G,F).
-
-rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
-rb_present(K,T,T) :- rb_lookup(K,_,T).
+   rb_get(F,_) -> []; children(G,F).
 
 % --- parameters ---
 graph_params(Spec,G,Params) :- setof(L, graph_sw(G,L), SWs), maplist(sw_init(Spec),SWs,Params).
@@ -142,12 +138,10 @@ uniform(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
 :- type p_soln ---> soln(goal, number, list(pair(list(pair(p_factor, number)), number))).
 :- type p_factor ---> const; module:head ; prim(A)->A.
 
-pmap(X,Y,M1,M2) :- rb_insert_new(M1,X,Y,M2), !.
-pmap(X,Y,M,M) :- rb_lookup(X,Y,M). % !!! use rb_in for unification?
-
+pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
 pmap_sw(Map,SW) :- rb_in(SW->_,_,Map).
-pmap_sw_collate(Map,Def,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_sw_lookup(Map,Def,SW),Vals,Info).
-pmap_sw_lookup(Map,Def,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
+pmap_sw_collate(Def,Map,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_sw_lookup(Def,Map,SW),Vals,Info).
+pmap_sw_lookup(Def,Map,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
 
 % inside and viterbi probs
 graph_inside(Graph, Params, PGraph)  :- graph_pgraph(add,Graph,Params,PGraph).
@@ -156,7 +150,7 @@ graph_pgraph(Op, Graph, Params, PGraph) :-
    rb_empty(E), 
    foldl(p_soln(Op), Graph, PGraph, E, Map), 
    setof(SW, pmap_sw(Map,SW), SWs),
-   maplist(pmap_sw_collate(Map,true),SWs,Params).
+   maplist(pmap_sw_collate(true,Map),SWs,Params).
 
 p_soln(Op, Goal-Expls, soln(Goal, Pin, Expls1)) -->
    pmap(Goal,Pin),
@@ -170,15 +164,15 @@ p_factor(@P, const-P) --> \> mul(P).
 % --------- outside probabilities, ESS ----------------
 :- meta_predicate graph_stats(+,:,?,-).
 graph_stats(Graph,Goal,Params,Opts) :-
-   maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Out2)]),
+   maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
    memberchk(soln(Goal,Pin,_),InsideG), log(Pin,LP), % !!! lookup in inside map instead?
    foldl(soln_edges,InsideG,QCs,[]), 
    call(group_pairs_by_key*keysort, QCs, InvGraph),
    rb_empty(Empty), 
-   pmap(Goal,1/Pin,Empty, Out1),
-   foldl(q_alpha, InvGraph, Out1, Out2),
-   maplist(pmap_sw_collate(Out2,=(0))*fst, Params, Eta).
+   pmap(Goal,1/Pin,Empty, Map1),
+   foldl(q_alpha, InvGraph, Map1, Map2),
+   maplist(pmap_sw_collate(=(0),Map2)*fst, Params, Eta).
 
 opt(Opts, Opt) :- option(Opt, Opts, _).
 soln_edges(soln(P,_,Expls)) --> foldl(expl_edges(P),Expls).
@@ -261,3 +255,6 @@ stoch(X,Y) :- when(ground(X), insist(stoch(X,Y,_))).
 log(X,Y) :- when(ground(X), Y is log(X)).
 exp(X,Y) :- Y is exp(X). % not lazy
 
+rb_trans(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
+rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
+rb_get(K,V,T,T) :- rb_lookup(K,V,T).
