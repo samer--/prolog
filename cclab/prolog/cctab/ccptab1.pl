@@ -1,31 +1,27 @@
-:- module(cctab, [ run_tabled/3, goal_graph/2
-                 , run_with_tables/2, run_tab_expl/2, run_expl/2
+:- module(cctab, [ run_with_tables/2, run_tab_expl/2
+                 , run_sample/4, run_notab/1, run_notab_sample/1
                  , cctabled/2, dist/2, (:=)/2
-                 , tables_graph/2, graph_params/3 
+                 , goal_graph/2, tables_graph/2, graph_params/3 
                  , graph_viterbi/3, graph_inside/3, graph_stats/4 
                  , pgraph_tree/4, print_tree/1
-                 , em_ml/3, em_map/4, em_vb/4, iterate/4
+                 , em_ml/2, em_map/3, em_vb/3, iterate/4
                  ]).
 /** <module> Continuation based probabilistic inference.
- TODO: handle more complex top goal by finding all explanations for it.
- Sampling execution.
- Approximate inference.
 */
 :- use_module(library(rbtrees)).
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
-:- use_module(library(insist)).
-:- use_module(library(dcg_core), [out//1]).
+:- use_module(library(dcg_core), [get//1, out//1]).
 :- use_module(library(dcg_progress)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(callutils), [mr/5, (*)/4, const/3]).
-:- use_module(library(math),      [stoch/3]).
-:- use_module(library(plrand),    [mean_log_dirichlet/2]).
+:- use_module(library(plrand),    [with_rnd_state/1, mean_log_dirichlet/2]).
 :- use_module(library(data/pair), [pair/3, fst/2, fsnd/3]).
 :- use_module(library(data/tree), [print_tree/2]).
 :- use_module(library(delimcc),   [p_reset/3, p_shift/2]).
-:- use_module(library(ccstate),   [run_nb_state/3, set/1, get/1, app/2, run_state/4]).
+:- use_module(library(ccstate),   [run_nb_state/3, set/1, get/1]).
 :- use_module(library(lambda2)).
+:- use_module(lazymath,  [max/3, add/3, mul/3, log_e/2, stoch/2]).
 :- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
@@ -37,33 +33,64 @@
 :- type values == list(ground).
 :- type graph  == list(pair(goal, list(list(factor)))).
 
-true(_).
-head_to_variant(Head, Variant) :-
-   copy_term_nat(Head, Variant),
-   numbervars(Variant, 0, _).
+% --- effects -----
+:- meta_predicate :=(3,-), cctabled(0,0).
 
-dist(Xs,X) :- member(P-X, Xs), event(@P).
-event(Ev) :- app(expl, out(Ev)).
+SW := X    :- p_shift(prob,sw(SW,X)).
+dist(Xs,X) :- p_shift(prob,d(Xs,X)).
 
-:- meta_predicate :=(3,-).
-SW := X :- call(SW,ID,Xs,[]), member(X,Xs), event(ID->X).
-
-:- meta_predicate cctabled(0,0).
 cctabled(TableAs,Head) :- 
-   p_shift(tab, t(TableAs,Head)), 
-   copy_term(TableAs, Factor), % protect from further instantiation
-   numbervars(Factor, 0, _),
-   event(Factor).
+   p_shift(tab, t(TableAs,Head,Inject)), 
+   call(Inject).
 
-run_tab(Goal, Ans) :-
-   p_reset(tab, Goal, Status),
-   cont_tab(Status, Ans).
+% ------------- handlers for sampling without tabling ------------------
+:- meta_predicate run_sample(0,4,+,-), run_notab(0), run_notab_sample(0).
+run_sample(Goal,P) --> {p_reset(prob, Goal, Status)}, cont_sample(Status,P).
+cont_sample(done,_) --> [].
+cont_sample(susp(Req, Cont),P) --> sample(Req,P), run_sample(Cont,P).
+
+sample(t(_),     _)  --> [].
+sample(sw(SW,X), P)  --> call(P,SW,X).
+sample(d(PXs,X),  _) --> {maplist(pair,Ps,Xs,PXs)}, discrete(Ps,Xs,X).
+sample(g(S), _)      --> get(S).
+
+run_notab(Goal) :- p_reset(tab, Goal, Status), cont_notab(Status).
+cont_notab(susp(t(_,Head,Head), Cont)) :- run_notab(Cont).
+cont_notab(done).
+
+uniform_switch_sampler(SW,X) -->
+   {call(SW,_,Xs,[]), uniform(Xs,Ps)},
+   discrete(Ps,Xs,X).
+
+discrete(Ps,Xs,X) -->
+   {length(Ps,N)},
+   plrand:sample_Discrete(N,Ps,I),
+   {nth1(I,Xs,X)}.
+
+run_notab_sample(Goal) :-
+   run_notab(with_rnd_state(run_sample(Goal,uniform_switch_sampler))).
+
+% -------- handlers for tabled explanation graph building -----------
+:- meta_predicate run_with_tables(0,-), run_tab(0,?), run_tab_expl(0,-).
+
+run_with_tables(G, T) :- rb_empty(E), run_nb_state(G, E, T).
+run_tab_expl(G, Expl) :- term_variables(G,Ans), run_tab(run_expl(G,Expl,[]), Ans-Expl).
+
+run_expl(Goal) --> {p_reset(prob, Goal, Status)}, cont_expl(Status).
+cont_expl(done) --> [].
+cont_expl(susp(Req,Cont)) --> {expl(Req,Factor)}, [Factor], run_expl(Cont). 
+
+expl(d(Xs,X), @P)     :- member(P-X, Xs).
+expl(sw(SW,X), ID->X) :- call(SW,ID,Xs,[]), member(X,Xs).
+expl(t(G), F)         :- term_to_ground(G,F).
+
+run_tab(Goal, Ans)    :- p_reset(tab, Goal, Status), cont_tab(Status, Ans).
 
 cont_tab(done, _).
-cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
+cont_tab(susp(t(TableAs,Head,cctab:p_shift(prob,t(TableAs))), Cont), Ans) :-
    term_variables(Head,Y), K= (\\Y`Ans`Cont),
    get(Tabs1),
-   head_to_variant(TableAs, Variant),
+   term_to_ground(TableAs, Variant),
    (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
    -> set(Tabs2),         % NB. this saves a COPY of Tabs2, ...
       rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
@@ -75,7 +102,7 @@ cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
    ).
 
 producer(Variant, Generate, KP, Ans) :-
-   run_state(expl, call(Generate, Y1), E, []),
+   run_expl(call(Generate, Y1), E, []),
    get(Tabs1),
    rb_trans(Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs1, Tabs2),
    (  rb_add(Y1, [E], Solns1, Solns2)
@@ -85,21 +112,12 @@ producer(Variant, Generate, KP, Ans) :-
       set(Tabs2), fail
    ).
 
-:- meta_predicate run_with_tables(0,-), run_tab_expl(0,-), run_expl(0,-).
-run_with_tables(G, T) :- rb_empty(E), run_nb_state(G, E, T).
-run_tab_expl(G, Expl) :- term_variables(G,Ans), run_tab(run_expl(G,Expl), Ans-Expl).
-run_expl(G, Expl)     :- run_state(expl,G,Expl,[]).
-
-%% run_tabled(+G:pred, F:maybe(list(factor)), -T:tables) is multi.
-:- meta_predicate run_tabled(0,-,-), goal_graph(0,-).
-run_tabled(Goal, St, Tables) :- 
-   run_with_tables((run_tab_expl(Goal,Expl), St=just(Expl);  St=nothing),
-                   Tables).
-
-goal_graph(M:Goal, Graph) :- 
-   run_with_tables(run_tab(findall(E,run_expl(M:Goal,E),Es), Es), Tables),
-   tables_graph(Tables, Graph0),
-   prune_graph(M:'$top$', [(M:'$top$')-Es|Graph0], Graph).
+% ----------- mapping tables to graphs --------------
+:- meta_predicate goal_graph(0,-).
+goal_graph(Goal, Graph) :- 
+   time(run_with_tables(run_tab(findall(E,run_expl(Goal,E,[]),Es), Es), Tables)),
+   time(tables_graph(Tables, Graph0)),
+   time(prune_graph(top:'$top$', [(top:'$top$')-Es|Graph0], Graph)).
 
 tables_graph(Tables, Graph) :-
    % this does a consistency check that each goal has only one distinct set of explanations.
@@ -124,12 +142,12 @@ children(G,Top) -->
 new_children(G, F) -->
    rb_get(F,_) -> []; children(G,F).
 
-% --- parameters ---
+% --- extracting and initialising parameters ---
 graph_params(Spec,G,Params) :- setof(L, graph_sw(G,L), SWs), maplist(sw_init(Spec),SWs,Params).
 graph_sw(G,SW) :- member(_-Es,G), member(E,Es), member(SW->_,E).
 
 sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform(Vals,Params).
-sw_init(K*Spec,SW,SW-Params) :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
+sw_init(K*Spec,SW,SW-Params)  :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
 
 uniform(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
 
@@ -150,8 +168,9 @@ graph_pgraph(Op, Graph, Params, PGraph) :-
    rb_empty(E), 
    foldl(p_soln(Op), Graph, PGraph, E, Map), 
    setof(SW, pmap_sw(Map,SW), SWs),
-   maplist(pmap_sw_collate(true,Map),SWs,Params).
+   maplist(pmap_sw_collate(true1,Map),SWs,Params).
 
+true1(_).
 p_soln(Op, Goal-Expls, soln(Goal, Pin, Expls1)) -->
    pmap(Goal,Pin),
    run_right(foldl(p_expl(Op), Expls, Expls1), 0, Pin).
@@ -166,7 +185,7 @@ p_factor(@P, const-P) --> \> mul(P).
 graph_stats(Graph,Goal,Params,Opts) :-
    maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
-   memberchk(soln(Goal,Pin,_),InsideG), log(Pin,LP), % !!! lookup in inside map instead?
+   memberchk(soln(Goal,Pin,_),InsideG), log_e(Pin,LP),
    foldl(soln_edges,InsideG,QCs,[]), 
    call(group_pairs_by_key*keysort, QCs, InvGraph),
    rb_empty(Empty), 
@@ -184,23 +203,19 @@ qc_alpha(qc(BetaQ,Pe,P)) -->
    pmap(P, AlphaP) <\> add(AlphaQC),
    % this sort of wrong, but ok, because BetaQ=0 implies that any non-zero Alpha will
    % eventually be multiplied by a zero switch probability to get a zero expected count.
-   { when(ground(BetaQ), ( BetaQ =:= 0 -> AlphaQC=0
-                         ; when(ground(AlphaP-Pe), AlphaQC is AlphaP*Pe/BetaQ)
-                         )) }.
+   { when(ground(BetaQ), (BetaQ =:= 0 -> AlphaQC=0; mul(AlphaP,Pe/BetaQ,AlphaQC))) }.
 
 eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta). 
-estep(Graph, Goal, P1, Eta, LP) :-
-   graph_stats(Graph, Goal, P1, [log_prob(LP), grad(Grad)]), 
+estep(Graph, P1, Eta, LP) :-
+   graph_stats(Graph, _:'$top$', P1, [log_prob(LP), grad(Grad)]), 
    maplist(eta, Grad, P1, Eta).
 
-:- meta_predicate em_ml(+,0,-), em_map(+,+,0,-), em_vb(+,+,0,-).
-
-em_ml(Graph, Goal, t(P1,P2,LP)) :-
-   estep(Graph, Goal, P1, Eta, LP),
+em_ml(Graph, t(P1,P2,LP)) :-
+   estep(Graph, P1, Eta, LP),
    maplist(fsnd(stoch), Eta, P2).
 
-em_map(Prior, Graph, Goal, t(P1,P2,LP)) :-
-   estep(Graph, Goal, P1, Eta, LP),
+em_map(Prior, Graph, t(P1,P2,LP)) :-
+   estep(Graph, P1, Eta, LP),
    maplist(posterior_mode, Prior, Eta, P2).
 
 posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :- 
@@ -209,13 +224,14 @@ posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :-
 
 mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
 
-em_vb(Prior, Graph, Goal, t(A1,A2,LP)) :-
+em_vb(Prior, Graph, t(A1,A2,LP)) :-
    maplist(psi,A1,P1),
-   estep(Graph, Goal, P1, Eta, LP),
+   estep(Graph, P1, Eta, LP),
    maplist(posterior, Prior, Eta, A2).
 
 psi(SW-A, SW-P) :- when(ground(A), (mean_log_dirichlet(A,H), maplist(exp,H,P))).
 posterior(SW-Prior,SW-Eta,SW-Posterior) :- maplist(add,Eta,Prior,Posterior).
+exp(X,Y) :- Y is exp(X).
 
 :- meta_predicate iterate(1,?,+,-).
 iterate(Setup, LPs) --> {call(Setup, Triple)}, seqmap_with_progress(1,unify3(Triple), LPs).
@@ -247,14 +263,9 @@ user:portray(node(nt(Label))) :- print(Label).
 user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
 
-% lazy arithmetic predicates
-max(X,Y,Z) :- when(ground(X-Y),Z is max(X,Y)).
-add(X,Y,Z) :- when(ground(X-Y),Z is X+Y). %{Z=X+Y}.
-mul(X,Y,Z) :- when(ground(X-Y),Z is X*Y). %{Z=X*Y}.
-stoch(X,Y) :- when(ground(X), insist(stoch(X,Y,_))).
-log(X,Y) :- when(ground(X), Y is log(X)).
-exp(X,Y) :- Y is exp(X). % not lazy
-
 rb_trans(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
 rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
 rb_get(K,V,T,T) :- rb_lookup(K,V,T).
+
+term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
+

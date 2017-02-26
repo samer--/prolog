@@ -14,17 +14,16 @@
 :- use_module(library(rbtrees)).
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
-:- use_module(library(insist)).
 :- use_module(library(dcg_core), [out//1]).
 :- use_module(library(dcg_progress)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(callutils), [mr/5, (*)/4, const/3]).
-:- use_module(library(math),      [stoch/3]).
 :- use_module(library(plrand),    [mean_log_dirichlet/2]).
 :- use_module(library(data/pair), [pair/3, fst/2, fsnd/3]).
 :- use_module(library(data/tree), [print_tree/2]).
 :- use_module(library(delimcc),   [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),   [run_nb_state/3, set/1, get/1, app/2, run_state/4]).
+:- use_module(lazymath,  [max/3, add/3, mul/3, log_e/2, stoch/2]).
 :- use_module(library(lambda2)).
 :- use_module(ptabled, []).
 
@@ -166,7 +165,7 @@ p_factor(@P, const-P) --> \> mul(P).
 graph_stats(Graph,Goal,Params,Opts) :-
    maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
-   rb_lookup(Goal,Pin-_,InsideG), log(Pin,LP),
+   rb_lookup(Goal,Pin-_,InsideG), log_e(Pin,LP),
    rb_fold(soln_edges,InsideG,QCs,[]), 
    call(group_pairs_by_key*keysort, QCs, InvGraph),
    rb_empty(Empty), 
@@ -216,6 +215,7 @@ em_vb(Prior, Graph, Goal, t(A1,A2,LP)) :-
 
 psi(SW-A, SW-P) :- when(ground(A), (mean_log_dirichlet(A,H), maplist(exp,H,P))).
 posterior(SW-Prior,SW-Eta,SW-Posterior) :- maplist(add,Eta,Prior,Posterior).
+exp(X,Y) :- Y is exp(X). % not lazy
 
 :- meta_predicate iterate(1,?,+,-).
 iterate(Setup, LPs) --> {call(Setup, Triple)}, seqmap_with_progress(1,unify3(Triple), LPs).
@@ -246,14 +246,6 @@ tree_to_tree(_:Head :- Expls, node(nt(Label), Subnodes)) :-
 user:portray(node(nt(Label))) :- print(Label).
 user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
-
-% lazy arithmetic predicates
-max(X,Y,Z) :- when(ground(X-Y),Z is max(X,Y)).
-add(X,Y,Z) :- when(ground(X-Y),Z is X+Y). %{Z=X+Y}.
-mul(X,Y,Z) :- when(ground(X-Y),Z is X*Y). %{Z=X*Y}.
-stoch(X,Y) :- when(ground(X), insist(stoch(X,Y,_))).
-log(X,Y) :- when(ground(X), Y is log(X)).
-exp(X,Y) :- Y is exp(X). % not lazy
 
 rb_trans(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
 rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
