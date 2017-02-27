@@ -13,7 +13,7 @@ a context that provides mutable references as a control effect. Use treeutils.pl
 to visualise the tree.
 */
 
-:- use_module(library(rbtrees)).
+:- use_module(library(rbutils)).
 :- use_module(library(typedef)).
 :- use_module(library(delimcc), [pr_reset/3, pr_shift/2]).
 :- use_module(library(ccstate), [ref_new/2, ref_get/2, ref_app/2, ref_upd/3]).
@@ -57,12 +57,12 @@ fail(_,lnode(fail,=([]))).
 mem(P,R,X,Y,K,Tree) :-
    YK = \Y^K,
    ref_upd(R,Tab,Tab1),
-   (  tab_upd(X, entry(Ys,Conts), entry(Ys,[YK|Conts]), Tab, Tab1)
+   (  rb_trans(X, entry(Ys,Conts), entry(Ys,[YK|Conts]), Tab, Tab1)
    -> Tree = lnode(cons(X,Ys), ccmemo:rb_fold(cons_expand1(YK),Ys,[]))
    ;  rb_empty(EmptySet),
       rb_insert_new(Tab, X, entry(EmptySet,[]), Tab1),
       call(P,X,YNew),
-      ref_app(R, tab_upd(X, entry(Ys,Conts), entry(Ys2,Conts))),
+      ref_app(R, rb_trans(X, entry(Ys,Conts), entry(Ys2,Conts))),
       (  rb_insert_new(Ys,YNew,t,Ys2) 
       -> Tree=lnode(prod(X,YNew),ccmemo:maplist(send_to_cont(YNew),[YK|Conts]))
       ;  Tree=lnode(dup(X,YNew),=([])), Ys2=Ys
@@ -72,7 +72,6 @@ mem(P,R,X,Y,K,Tree) :-
 cons_expand1(Kx,X-_,S,[Y|S]) :- expand1(Kx,X,Y).
 expand1(Kx,X,Y) :- pr_reset(nondet, call(Kx,X), Y).
 send_to_cont(Y,Ky,T) :- pr_reset(nondet, call(Ky,Y), T).
-tab_upd(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
 
 % for printing annotated search trees
 user:portray(choice(Xs)) :- write('?'), write(Xs).

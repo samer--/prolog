@@ -11,6 +11,7 @@
 */
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, set/1, get/1]).
+:- use_module(library(rbutils)).
 :- use_module(library(lambda1)).
 :- use_module(tabled, []).
 
@@ -24,7 +25,7 @@ cctabled(Head) :-
    head_to_variant(Head, Variant),
    get(Tabs1),
    (  rb_lookup(Variant, tab(Solns,Status), Tabs1) 
-   -> (  Status=complete -> rb_in(Y, _, Solns)
+   -> (  Status=complete -> rb_gen(Y, _, Solns)
       ;  p_shift(tab, cons(Variant, Y, Tabs1)) % active consumer
       ) 
    ;  rb_empty(Empty), % initialise producer
@@ -34,7 +35,7 @@ cctabled(Head) :-
       ;  rb_insert(Tabs2, '$tabling?', true, Tabs3), set(Tabs3),
          (  run_tab(producer(Variant, \Y^Head, \Y^Y^fail, Y), Y) % delimit top producer 
          ;  completed_table(Variant, Solns), % top producer is failure driven
-            rb_in(Y, _, Solns)
+            rb_gen(Y, _, Solns)
          )
       )
    ).
@@ -54,7 +55,7 @@ cont_tab(done, _).
 cont_tab(susp(cons(Var,Y,Tabs1), Cont), Ans) :-
    rb_update(Tabs1, Var, tab(Solns,Ks), tab(Solns,[\Y^Ans^Cont|Ks]), Tabs2),
    set(Tabs2), 
-   rb_in(Y, _, Solns),
+   rb_gen(Y, _, Solns),
    run_tab(Cont, Ans).
 cont_tab(susp(prod(Var,Y,Head), Cont), Ans) :-
    run_tab(producer(Var, \Y^Head, \Y^Ans^Cont, Ans), Ans).

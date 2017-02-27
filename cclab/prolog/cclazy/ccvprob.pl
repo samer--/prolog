@@ -8,7 +8,7 @@ handles predicates of any arity with separate tables for each calling pattern, l
 */
 
 :- use_module(library(clpr)).
-:- use_module(library(rbtrees)).
+:- use_module(library(rbutils)).
 :- use_module(library(typedef)).
 :- use_module(library(callutils), [mr/5]).
 :- use_module(library(data/pair), [snd/2]).
@@ -70,7 +70,7 @@ mem(Head,P,K,Tree) :-
    ;  rb_empty(EmptySet),
       rb_insert_new(Tabs1, Variant, entry(EmptySet,[]), Tabs2),
       run_state(expl, call(\\Y`Head, YNew), Expl, []),
-      app(tab_upd(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
+      app(rb_trans(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
       (  rb_insert_new(Ys, YNew, e(PY,[Expl]), Ys2) % PY will be the sum of the probabilities of explanations
       -> Tree=lnode(prod(Variant,YNew), ccvprob:maplist(send_to_cont(PY-YNew),[KPY|Ks])), gensym(p,PY)
       ;  rb_update(Ys, YNew, e(PY,Expls), e(PY,[Expl|Expls]), Ys2),
@@ -81,7 +81,6 @@ mem(Head,P,K,Tree) :-
 cons_expand(KPY,Y-e(P,_),Ts,[T|Ts]) :- callprob(KPY,P-Y,T).
 send_to_cont(PY,KPY,T) :- callprob(KPY,PY,T).
 callprob(KPY,PY,T)     :- pr_reset(prob, call(KPY,PY), T).
-tab_upd(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
 
 head_to_variant(Head, Variant) :-
    copy_term_nat(Head, Variant),

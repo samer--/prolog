@@ -11,7 +11,7 @@
  Sampling execution.
  Approximate inference.
 */
-:- use_module(library(rbtrees)).
+:- use_module(library(rbutils)).
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
 :- use_module(library(dcg_core), [out//1]).
@@ -64,9 +64,9 @@ cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
    get(Tabs1),
    head_to_variant(TableAs, Variant),
    (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
-   -> set(Tabs2),         % NB. this saves a COPY of Tabs2, ...
-      rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
-      run_tab(Cont, Ans)  % ... are instantiated when this continuation is run.
+   -> set(Tabs2),          % NB. this saves a COPY of Tabs2, ...
+      rb_gen(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
+      run_tab(Cont, Ans)   % ... are instantiated when this continuation is run.
    ;  rb_empty(Solns), 
       rb_add(Variant, tab(TableAs,Solns,[]), Tabs1, Tabs2),
       set(Tabs2),
@@ -107,9 +107,9 @@ tables_graph(Tables, Graph) :-
    list_to_rbtree(Trees, Graph).
 
 tabled_solution(Tabs, Goal, Expls1) :-
-   rb_in(_, tab(Goal,Solns,_), Tabs),
+   rb_gen(_, tab(Goal,Solns,_), Tabs),
    term_variables(Goal,Y), 
-   rb_in(Y,Expls,Solns),
+   rb_gen(Y,Expls,Solns),
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
 
@@ -125,7 +125,7 @@ new_children(G, F) -->
 
 % --- parameters ---
 graph_params(Spec,G,Params) :- setof(L, graph_sw(G,L), SWs), maplist(sw_init(Spec),SWs,Params).
-graph_sw(G,SW) :- rb_in(_,Es,G), member(E,Es), member(SW->_,E).
+graph_sw(G,SW) :- rb_gen(_,Es,G), member(E,Es), member(SW->_,E).
 
 sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform(Vals,Params).
 sw_init(K*Spec,SW,SW-Params) :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
@@ -138,7 +138,7 @@ uniform(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
 :- type p_factor ---> const; module:head ; prim(A)->A.
 
 pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
-pmap_sw(Map,SW) :- rb_in(SW->_,_,Map).
+pmap_sw(Map,SW) :- rb_gen(SW->_,_,Map).
 pmap_sw_collate(Get,Def,Map,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_sw_lookup(Get,Def,Map,SW),Vals,Info).
 pmap_sw_lookup(Get,Def,Map,SW,Val,P) :- rb_lookup(SW->Val, I, Map) -> call(Get,I,P); call(Def,P).
 
@@ -246,7 +246,3 @@ tree_to_tree(_:Head :- Expls, node(nt(Label), Subnodes)) :-
 user:portray(node(nt(Label))) :- print(Label).
 user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
-
-rb_trans(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
-rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
-rb_get(K,V,T,T) :- rb_lookup(K,V,T).

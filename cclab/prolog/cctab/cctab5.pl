@@ -14,7 +14,7 @@
    these have been discarded. The same problem afflicts cctab6.
 */
 
-:- use_module(library(rbtrees)).
+:- use_module(library(rbutils)).
 :- use_module(library(dcg_core), [out//1]).
 :- use_module(library(data/pair), [fst/2, fsnd/3]).
 :- use_module(library(callutils), [mr/5]).
@@ -44,13 +44,13 @@ cont_tab(susp(Head, Cont), Ans) :-
       -> Status2=active([K|Ks]), set(Tabs2)
       ;  Status2=complete
       ),
-      rb_in(Y, _, Solns),
+      rb_gen(Y, _, Solns),
       run_tab(Cont, Ans) 
    ;  rb_empty(Solns), 
       rb_insert_new(Tabs1, Variant, tab(Solns,active([])), Tabs2),
       set(Tabs2),
       (   run_tab(producer(Variant, \Y^Head, K, Ans), Ans)
-      ;   app(complete_table(Variant)), fail
+      ;   app(rb_trans(Variant, tab(SS,_), tab(Ss,complete))), fail
       )
    ).
 
@@ -59,9 +59,6 @@ producer(Variant, Generate, KP, Ans) :-
    app(add_soln(Variant, Y1, active(Ks))),
    member(K,[KP|Ks]), 
    call(K,Y1,Ans).
-
-complete_table(Variant, Tabs1, Tabs2) :-
-   rb_update(Tabs1, Variant, tab(Solns, _), tab(Solns, complete), Tabs2).
 
 add_soln(Variant, Y1, Status, Tabs1, Tabs2) :-
    rb_update(Tabs1, Variant, tab(Solns1, Status), tab(Solns2, Status), Tabs2),

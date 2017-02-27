@@ -2,6 +2,7 @@
 
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, set/1, get/1]).
+:- use_module(library(rbutils)).
 :- use_module(library(lambda1)).
 :- use_module(tabled, []).
 
@@ -23,7 +24,7 @@ cont_tab(susp(Head, Cont), Ans) :-
    head_to_variant(Head, Variant),
    (  rb_update(Tabs1, Variant, tab(Solns,Ks), tab(Solns,[K|Ks]), Tabs2) 
    -> set(Tabs2), 
-      rb_in(Y, _, Solns),
+      rb_gen(Y, _, Solns),
       run_tab(Cont, Ans) 
    ;  rb_empty(Solns), 
       rb_insert_new(Tabs1, Variant, tab(Solns,[]), Tabs2),

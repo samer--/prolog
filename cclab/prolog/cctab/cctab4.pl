@@ -2,6 +2,7 @@
 
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, set/1, get/1]).
+:- use_module(library(rbutils)).
 :- use_module(library(lambda1)).
 :- use_module(tabled, []).
 
@@ -21,12 +22,12 @@ cont_tab(susp(Head, Cont), Ans) :-
    term_variables(Head,Y), K= \Y^Ans^Cont,
    head_to_variant(Head, Variant),
    get(Tabs1),
-   (  rb_update(Tabs1, Variant, tab(Solns,Status1), tab(Solns,Status2), Tabs2) 
+   (  rb_trans(Variant, tab(Solns,Status1), tab(Solns,Status2), Tabs1, Tabs2) 
    -> (  Status1=active(Ks)
       -> Status2=active([K|Ks]), set(Tabs2)
       ;  Status2=complete
       ),
-      rb_in(Y, _, Solns),
+      rb_gen(Y, _, Solns),
       run_tab(Cont, Ans) 
    ;  rb_empty(Solns), 
       rb_insert_new(Tabs1, Variant, tab(Solns,active([])), Tabs2),
@@ -37,15 +38,14 @@ cont_tab(susp(Head, Cont), Ans) :-
 producer(Variant, Generate, KP, Ans) :-
    call(Generate, Y1),
    get(Tabs1),
-   rb_update(Tabs1, Variant, tab(Solns1, Status), tab(Solns2, Status), Tabs2),
-   rb_insert_new(Solns1, Y1, t, Solns2), 
+   rb_trans(Variant, tab(Solns1, Status), tab(Solns2, Status), Tabs1, Tabs2),
+   rb_add(Y1, t, Solns1, Solns2), 
    set(Tabs2),
    Status=active(Ks), 
    member(K,[KP|Ks]), 
    call(K,Y1,Ans).
 producer(Variant, _, _, _) :-
-   get(Tabs1), rb_update(Tabs1, Variant, tab(Solns, _), tab(Solns, complete), Tabs2),
-   set(Tabs2), fail.
+   app(rb_trans(Variant, tab(Solns, _), tab(Solns, complete)), fail
 
 :- meta_predicate run_tabled(0), run_tabled(0,-).
 run_tabled(Goal) :- run_tabled(Goal,_).

@@ -8,7 +8,6 @@
                  ]).
 /** <module> Continuation based probabilistic inference.
 */
-:- use_module(library(rbtrees)).
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
 :- use_module(library(dcg_core), [get//1, out//1]).
@@ -22,6 +21,7 @@
 :- use_module(library(data/tree), [print_tree/2]).
 :- use_module(library(delimcc),   [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),   [run_nb_state/3, set/1, get/1]).
+:- use_module(library(rbutils)).
 :- use_module(library(lambda2)).
 :- use_module(lazymath,  [max/3, add/3, mul/3, log_e/2, stoch/2]).
 :- use_module(ptabled, []).
@@ -86,9 +86,9 @@ cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
    get(Tabs1),
    term_to_ground(TableAs, Variant),
    (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
-   -> set(Tabs2),         % NB. this saves a COPY of Tabs2, ...
-      rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
-      run_tab(Cont, Ans)  % ... are instantiated when this continuation is run.
+   -> set(Tabs2),          % NB. this saves a COPY of Tabs2, ...
+      rb_gen(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
+      run_tab(Cont, Ans)   % ... are instantiated when this continuation is run.
    ;  rb_empty(Solns), 
       rb_add(Variant, tab(TableAs,Solns,[]), Tabs1, Tabs2),
       set(Tabs2),
@@ -118,9 +118,9 @@ tables_graph(Tables, Graph) :-
    bagof(G-Es, setof(Es, Tables^tabled_solution(Tables, G, Es), [Es]), Graph).
 
 tabled_solution(Tabs, Goal, Expls1) :-
-   rb_in(_, tab(Goal,Solns,_), Tabs),
+   rb_gen(_, tab(Goal,Solns,_), Tabs),
    term_variables(Goal,Y), 
-   rb_in(Y,Expls,Solns),
+   rb_gen(Y,Expls,Solns),
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
 
@@ -151,7 +151,7 @@ uniform(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
 :- type p_factor ---> const; module:head ; prim(A)->A.
 
 pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
-pmap_sw(Map,SW) :- rb_in(SW->_,_,Map).
+pmap_sw(Map,SW) :- rb_gen(SW->_,_,Map).
 pmap_sw_collate(Def,Map,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_sw_lookup(Def,Map,SW),Vals,Info).
 pmap_sw_lookup(Def,Map,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
 
@@ -256,10 +256,6 @@ tree_to_tree(_:Head :- Expls, node(nt(Label), Subnodes)) :-
 user:portray(node(nt(Label))) :- print(Label).
 user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
-
-rb_trans(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
-rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
-rb_get(K,V,T,T) :- rb_lookup(K,V,T).
 
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 

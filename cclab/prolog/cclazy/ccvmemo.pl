@@ -6,7 +6,7 @@ This is like ccmemo, but instead of memoising binary predicates (Input -> Output
 handles predicates of any arity with separate tables for each calling pattern.
 */
 
-:- use_module(library(rbtrees)).
+:- use_module(library(rbutils)).
 :- use_module(library(typedef)).
 :- use_module(library(delimcc), [pr_reset/3, pr_shift/2, p_shift/2]).
 :- use_module(library(ccstate), [app/1, upd/2, app/2, run_state/4, get/1]).
@@ -45,7 +45,7 @@ mem(Head,K,Tree) :-
    ;  rb_empty(EmptySet),
       rb_insert_new(Tabs1, Variant, entry(EmptySet,[]), Tabs2),
       run_state(expl, call(\Y^Head, YNew), Expl, []), % !!! open tail?
-      app(tab_upd(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
+      app(rb_trans(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
       (  rb_insert_new(Ys,YNew,[Expl],Ys2) 
       -> Tree=lnode(prod(Variant,YNew),ccvmemo:maplist(send_to_cont(YNew),[YK|Ks]))
       ;  rb_update(Ys,YNew,Expls,[Expl|Expls],Ys2),
@@ -56,7 +56,6 @@ mem(Head,K,Tree) :-
 cons_expand1(Kx,X-_,S,[Y|S]) :- expand1(Kx,X,Y).
 expand1(Kx,X,Y)        :- pr_reset(nondet, call(Kx,X), Y).
 send_to_cont(Y,Ky,T)   :- pr_reset(nondet, call(Ky,Y), T).
-tab_upd(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
 
 head_to_variant(Head, Variant) :-
    copy_term_nat(Head, Variant),

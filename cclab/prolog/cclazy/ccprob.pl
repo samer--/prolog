@@ -14,7 +14,7 @@ treeutils.pl to visualise the search tree.
 */
 
 :- use_module(library(clpr)).
-:- use_module(library(rbtrees)).
+:- use_module(library(rbutils)).
 :- use_module(library(typedef)).
 :- use_module(library(math), [mul/3]).
 :- use_module(library(delimcc), [pr_reset/3, pr_shift/2]).
@@ -64,7 +64,7 @@ mem(P,R,P0,X,P1,Y,K,Tree) :-
    ;  rb_empty(EmptyDist),
       rb_insert_new(Tab, X, entry(P0,EmptyDist,[]), Tab1),
       run_state(call(P,X,YNew), P0, Prob),
-      ref_app(R, tab_upd(X, entry(_,Ys,Conts), entry(P0,Ys2,Conts))),
+      ref_app(R, rb_trans(X, entry(_,Ys,Conts), entry(P0,Ys2,Conts))),
       {PY = Prob/P0},
       (  rb_insert_new(Ys,YNew,PY,Ys2)
       -> Tree=lwnode(prod(X,YNew),ccprob:maplist(send_to_cont(PY-YNew),[1-PYK|Conts]))
@@ -77,7 +77,6 @@ mem(P,R,P0,X,P1,Y,K,Tree) :-
 cons_expand1(Kx,X-W,S,[WY|S]) :- expand1(Kx,W-X,WY).
 expand1(Kpx,W-X,W-Y)          :- pr_reset(prob, call(Kpx,W-X), Y).
 send_to_cont(PY,P0-Ky,P0-T)   :- pr_reset(prob, call(Ky,PY), T).
-tab_upd(K,V1,V2,T1,T2)        :- rb_update(T1,K,V1,V2,T2).
 
 % for printing annotated search trees
 user:portray(dist(Xs))   :- write('?'), maplist(\\F-X`X:S`format(string(S),'~2g',[F]), Xs, Ss), write(Ss).

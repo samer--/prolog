@@ -5,7 +5,7 @@
    description of the problem.
 */
 
-:- use_module(library(rbtrees)).
+:- use_module(library(rbutils)).
 :- use_module(library(dcg_core), [out//1]).
 :- use_module(library(data/pair), [fst/2, fsnd/3]).
 :- use_module(library(callutils), [mr/5]).
@@ -31,12 +31,12 @@ cont_tab(susp(Head, Cont), Ans) :-
    term_variables(Head,Y), K= \Y^Ans^Cont,
    head_to_variant(Head, Variant),
    get(Tabs1),
-   (  rb_update(Tabs1, Variant, tab(Solns,Status1), tab(Solns,Status2), Tabs2) 
+   (  rb_trans(Variant, tab(Solns,Status1), tab(Solns,Status2), Tabs1, Tabs2) 
    -> (  Status1=active(Ks)
       -> Status2=active([K|Ks]), set(Tabs2)
       ;  Status2=complete
       ),
-      rb_in(Y, _, Solns),
+      rb_gen(Y, _, Solns),
       run_tab(Cont, Ans) 
    ;  rb_empty(Solns), 
       rb_insert_new(Tabs1, Variant, tab(Solns,active([])), Tabs2),
@@ -50,15 +50,12 @@ producer(Variant, Generate, _, Ans) :-
    member(K,Ks), 
    call(K,Y1,Ans).
 producer(Variant, _, KP, Ans) :-
-   app(complete_table(Variant, Solns)),
-   rb_in(Y, _, Solns),
+   app(rb_trans(Variant, tab(Solns,_), tab(Solns,complete))),
+   rb_gen(Y, _, Solns),
    call(KP,Y,Ans).
 
-complete_table(Variant, Solns, Tabs1, Tabs2) :-
-   rb_update(Tabs1, Variant, tab(Solns, _), tab(Solns, complete), Tabs2).
-
 add_soln(Variant, Y1, Status, Tabs1, Tabs2) :-
-   rb_update(Tabs1, Variant, tab(Solns1, Status), tab(Solns2, Status), Tabs2),
+   rb_trans(Variant, tab(Solns1, Status), tab(Solns2, Status), Tabs1, Tabs2),
    rb_insert_new(Solns1, Y1, t, Solns2). 
 
 :- meta_predicate run_tabled(0), run_tabled(0,-).
