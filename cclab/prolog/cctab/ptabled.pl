@@ -41,7 +41,7 @@ expand_alt(K, Goals, J, ({J=K} -> Goals)).
 
 :- cctable s//0, np//0, vp//0, pp//0, nom//0.
 
-np  | iota(4).
+np  | iota(3).
 vp  | iota(5).
 nom | iota(2).
 
@@ -49,8 +49,7 @@ s --> np, vp.
 
 np --> np ~> +d, nom
            ; +pn
-           ; np, pp
-           ; +pro.
+           ; np, pp.
 
 vp --> vp ~> +iv
            ; +tv, np
@@ -65,9 +64,8 @@ pp --> +p, np.
 
 % preterminal switch declarations
 adj | [hot,cold,thin,fat,disgusting,lovely].
-pro | ['I','you'].
-pn  | [alice, bob]. %, cuthbert, delia, edna].
-d   | [the,a]. % ,every,no,some,my].
+pn  | [alice, bob, cuthbert, delia, edna].
+d   | [the,a,some,my]. % ,every,no].
 mv  | [knew,thought,believed,said].
 dv  | [gave,made,baked].
 tv  | [saw, ate, hated, baked, liked, walked, ran, loved, caught].
