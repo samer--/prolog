@@ -1,5 +1,5 @@
 :- module(cctab, [ run_with_tables/2, run_tab_expl/2
-                 , run_sample/4, run_notab/1, run_notab_sample/1
+                 , run_sampling//2, uniform_sampler//2, lookup_sampler//3
                  , cctabled/2, dist/2, (:=)/2
                  , goal_graph/2, tables_graph/2, graph_params/3 
                  , graph_viterbi/3, graph_inside/3, graph_stats/4 
@@ -16,6 +16,8 @@
 :- use_module(library(dcg_pair)).
 :- use_module(library(callutils), [mr/5, (*)/4, const/3]).
 :- use_module(library(plrand),    [with_rnd_state/1, mean_log_dirichlet/2]).
+:- use_module(library(prob/strand), [pure//2]).
+:- use_module(library(prob/tagged), [discrete//3, uniform//2]).
 :- use_module(library(data/pair), [pair/3, fst/2, fsnd/3]).
 :- use_module(library(data/tree), [print_tree/2]).
 :- use_module(library(delimcc),   [p_reset/3, p_shift/2]).
@@ -37,57 +39,49 @@
 :- meta_predicate :=(3,-), cctabled(0,0).
 
 SW := X    :- p_shift(prob,sw(SW,X)).
-dist(Xs,X) :- p_shift(prob,d(Xs,X)).
+dist(Xs,X) :- p_shift(prob,dist(Xs,X)).
 
 cctabled(TableAs,Head) :- 
-   p_shift(tab, t(TableAs,Head,Inject)), 
+   p_shift(tab, tab(TableAs,Head,Inject)), 
    call(Inject).
 
-% ------------- handlers for sampling without tabling ------------------
-:- meta_predicate run_sample(0,4,+,-), run_notab(0), run_notab_sample(0).
-run_sample(Goal,P) --> {p_reset(prob, Goal, Status)}, cont_sample(Status,P).
-cont_sample(done,_) --> [].
-cont_sample(susp(Req, Cont),P) --> sample(Req,P), run_sample(Cont,P).
+:- meta_predicate run_prob(3,0,?,?).
+run_prob(Handler,Goal) --> {p_reset(prob, Goal, Status)}, cont_prob(Status,Handler).
+cont_prob(susp(Req,Cont),H) --> call(H,Req), run_prob(H,Cont).
+cont_prob(done,_) --> [].
 
-sample(t(_),     _)  --> [].
-sample(sw(SW,X), P)  --> call(P,SW,X).
-sample(d(PXs,X),  _) --> {maplist(pair,Ps,Xs,PXs)}, discrete(Ps,Xs,X).
-sample(g(S), _)      --> get(S).
+% ------------- handlers for sampling without tabling ------------------
+sample(_,tab(_))      --> !, [].
+sample(P,sw(SW,X))    --> !, call(P,SW,X).
+sample(_,dist(PXs,X)) --> {maplist(pair,Ps,Xs,PXs)}, pure(discrete(Xs,Ps),X).
 
 run_notab(Goal) :- p_reset(tab, Goal, Status), cont_notab(Status).
-cont_notab(susp(t(_,Head,Head), Cont)) :- run_notab(Cont).
+cont_notab(susp(tab(_,Head,Head), Cont)) :- run_notab(Cont).
 cont_notab(done).
 
-uniform_switch_sampler(SW,X) -->
-   {call(SW,_,Xs,[]), uniform(Xs,Ps)},
-   discrete(Ps,Xs,X).
+:- meta_predicate run_sampling(4,0,+,-).
+run_sampling(Sampler,Goal,S1,S2) :-
+   run_notab(run_prob(sample(Sampler),Goal,S1,S2)).
 
-discrete(Ps,Xs,X) -->
-   {length(Ps,N)},
-   plrand:sample_Discrete(N,Ps,I),
-   {nth1(I,Xs,X)}.
-
-run_notab_sample(Goal) :-
-   run_notab(with_rnd_state(run_sample(Goal,uniform_switch_sampler))).
+uniform_sampler(SW,X) --> {call(SW,_,Xs,[])}, pure(uniform(Xs),X).
+lookup_sampler(Map,SW,X) --> {call(SW,ID,Xs,[]), rb_lookup(ID,Ps,Map)}, pure(discrete(Xs,Ps),X).
+make_lookup_sampler(Params,cctab:lookup_sampler(Map)) :-
+   list_to_rbtree(Params, Map).
 
 % -------- handlers for tabled explanation graph building -----------
 :- meta_predicate run_with_tables(0,-), run_tab(0,?), run_tab_expl(0,-).
 
 run_with_tables(G, T) :- rb_empty(E), run_nb_state(G, E, T).
-run_tab_expl(G, Expl) :- term_variables(G,Ans), run_tab(run_expl(G,Expl,[]), Ans-Expl).
+run_tab_expl(G, Expl) :- term_variables(G,Ans), run_tab(run_prob(expl,G,Expl,[]), Ans-Expl).
 
-run_expl(Goal) --> {p_reset(prob, Goal, Status)}, cont_expl(Status).
-cont_expl(done) --> [].
-cont_expl(susp(Req,Cont)) --> {expl(Req,Factor)}, [Factor], run_expl(Cont). 
-
-expl(d(Xs,X), @P)     :- member(P-X, Xs).
-expl(sw(SW,X), ID->X) :- call(SW,ID,Xs,[]), member(X,Xs).
-expl(t(G), F)         :- term_to_ground(G,F).
+expl(tab(G))     --> {term_to_ground(G,F)}, [F].
+expl(sw(SW,X))   --> {call(SW,ID,Xs,[]), member(X,Xs)}, [ID->X].
+expl(dist(Xs,X)) --> {member(P-X, Xs)}, [@P].
 
 run_tab(Goal, Ans)    :- p_reset(tab, Goal, Status), cont_tab(Status, Ans).
 
 cont_tab(done, _).
-cont_tab(susp(t(TableAs,Head,cctab:p_shift(prob,t(TableAs))), Cont), Ans) :-
+cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
    term_variables(Head,Y), K= (\\Y`Ans`Cont),
    get(Tabs1),
    term_to_ground(TableAs, Variant),
@@ -102,7 +96,7 @@ cont_tab(susp(t(TableAs,Head,cctab:p_shift(prob,t(TableAs))), Cont), Ans) :-
    ).
 
 producer(Variant, Generate, KP, Ans) :-
-   run_expl(call(Generate, Y1), E, []),
+   run_prob(expl, call(Generate, Y1), E, []),
    get(Tabs1),
    rb_trans(Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs1, Tabs2),
    (  rb_add(Y1, [E], Solns1, Solns2)
@@ -115,7 +109,7 @@ producer(Variant, Generate, KP, Ans) :-
 % ----------- mapping tables to graphs --------------
 :- meta_predicate goal_graph(0,-).
 goal_graph(Goal, Graph) :- 
-   time(run_with_tables(run_tab(findall(E,run_expl(Goal,E,[]),Es), Es), Tables)),
+   time(run_with_tables(run_tab(findall(E,run_prob(expl,Goal,E,[]),Es), Es), Tables)),
    time(tables_graph(Tables, Graph0)),
    time(prune_graph(top:'$top$', [(top:'$top$')-Es|Graph0], Graph)).
 
