@@ -170,20 +170,20 @@ p_soln(Op, Goal-Expls, soln(Goal, Pin, Expls1)) -->
    run_right(foldl(p_expl(Op), Expls, Expls1), 0, Pin).
 
 p_expl(Op, Expl, Expl1-Pe) --> run_right(foldl(p_factor, Expl, Expl1), 1, Pe) <\> call(Op,Pe). 
-p_factor(M:Atom, (M:Atom)-P) --> pmap(M:Atom,P) <\> mul(P).
+p_factor(M:Head, (M:Head)-P) --> pmap(M:Head,P) <\> mul(P).
 p_factor(SW->Val, (SW->Val)-P) --> pmap(SW->Val, P) <\> mul(P).
 p_factor(@P, const-P) --> \> mul(P).
 
 % --------- outside probabilities, ESS ----------------
 :- meta_predicate graph_stats(+,:,?,-).
 graph_stats(Graph,Goal,Params,Opts) :-
-   maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Map2)]),
+   maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
-   memberchk(soln(Goal,Pin,_),InsideG), log_e(Pin,LP),
-   foldl(soln_edges,InsideG,QCs,[]), 
+   memberchk(soln(Goal,Pin,_), InsideG), log_e(Pin,LP),
+   foldl(soln_edges, InsideG, QCs, []), 
    call(group_pairs_by_key*keysort, QCs, InvGraph),
    rb_empty(Empty), 
-   pmap(Goal,1/Pin,Empty, Map1),
+   pmap(Goal, 1/Pin, Empty, Map1),
    foldl(q_alpha, InvGraph, Map1, Map2),
    maplist(pmap_sw_collate(=(0),Map2)*fst, Params, Eta).
 
