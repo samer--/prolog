@@ -1,6 +1,7 @@
 :- module(lazy,
 	[	lazy_unfold/5
 	,	lazy_unfold/4
+   ,  lazy_unfold_finite/4
 	,	lazy_seqmap/5
 	,	lazy_seqmap/4
 	]).
