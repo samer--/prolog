@@ -11,6 +11,7 @@
    ,	lazy_seqmap(3,?,?,?)
 	,	lazy_unfold(4,?,?,?,?)
 	,	lazy_unfold(3,?,?,?)
+   ,  lazy_unfold_finite(3,?,?,?)
 	.
 
 %% lazy_unfold( +P:pred(-A1,-A2,+S,-S), -XX1:list(A1), -XX2:list(A2), +S1:S, -S2:S) is det.
