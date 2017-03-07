@@ -4,6 +4,10 @@
    ,  lazy_unfold_finite/4
 	,	lazy_seqmap/5
 	,	lazy_seqmap/4
+   ,  lazy_maplist/2
+   ,  lazy_maplist/3
+   ,  lazy_maplist/4
+   ,  lazy_repeat/2
 	]).
 
 :- meta_predicate 
@@ -12,6 +16,9 @@
 	,	lazy_unfold(4,?,?,?,?)
 	,	lazy_unfold(3,?,?,?)
    ,  lazy_unfold_finite(3,?,?,?)
+   ,	lazy_maplist(1,?)
+   ,	lazy_maplist(2,?,?)
+   ,	lazy_maplist(3,?,?,?)
 	.
 
 %% lazy_unfold( +P:pred(-A1,-A2,+S,-S), -XX1:list(A1), -XX2:list(A2), +S1:S, -S2:S) is det.
@@ -51,3 +58,13 @@ lazy_seqmap(P,[X1|XX],S1,S3) :-
 	call(P,X1,S1,S2), 
 	freeze(XX,lazy_seqmap(P,XX,S2,S3)).
 
+lazy_maplist(P,[X|XX]) :- call(P,X), freeze(XX,lazy_maplist(P,XX)).
+lazy_maplist(_,[]).
+
+lazy_maplist(P,[X|XX],[Y|YY]) :- call(P,X,Y), freeze(YY,lazy_maplist(P,XX,YY)).
+lazy_maplist(_,[],[]).
+
+lazy_maplist(P,[X|XX],[Y|YY],[Z|ZZ]) :- call(P,X,Y,Z), freeze(ZZ,lazy_maplist(P,XX,YY,ZZ)).
+lazy_maplist(_,[],[],[]).
+
+lazy_repeat(X,[X|L]) :- freeze(L,lazy_repeat(X,L)).
