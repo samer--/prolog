@@ -20,7 +20,7 @@
 	[	dcgshell/2
 	,	dcgshell/3
 	,	dcgshell/4
-	,	make/2
+	,	make//0
 	,	help/3
 	,	time//1, time//2, time//3
 	,	profile_phrase//1
@@ -35,7 +35,7 @@
 		time/3, time/4, time/5,
 		profile_phrase/3,
 		catch//3, trace//1,
-		make.
+		make//0.
 
 
 %%	dcgshell( +Interp, +Id, ?S1, ?S2) is semidet.

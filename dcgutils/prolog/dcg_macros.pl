@@ -16,7 +16,7 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-:- module(dcg_macros, [ goal_expansion/2 ]).
+:- module(dcg_macros, [use_dcg_macros/0]).
 /** <module> DCG utilities implememnted by term expansion.
 
    This module provides term expansions for the following predicates and DCG goals:
@@ -53,6 +53,12 @@ mk_call(C,XX,Call) :- C =.. CL, append(CL,XX,CL2), Call =.. CL2.
 /*
  * Goal expansions 
  */
+
+use_dcg_macros.
+user:goal_expansion(G,E) :-
+   prolog_load_context(module,Mod),
+   predicate_property(Mod:use_dcg_macros, imported_from(dcg_macros)),
+   dcg_macros:expansion(G,E).
 
 cons(A,B,[A|B]).
 
@@ -94,7 +100,7 @@ expand_seqmap_with_prefix(Sep0, Callable0, SeqmapArgs, Goal) :-
 	    build_term(AuxName, Tails,    Argv, S3, S4, NextIterate),
 	    build_term(AuxName, NextArgs, Argv, S1, S4, NextHead), 
 
-		 (  goal_expansion(NextCall1,NextCall) -> true
+		 (  expansion(NextCall1,NextCall) -> true
 		 ;  NextCall1=NextCall),
 
 	    NextClause = (NextHead :- NextThing, NextIterate),
@@ -126,7 +132,7 @@ expand_call_with_prefix(Sep0, Callable0, InArgs, (SepGoal,CallGoal)) :-
 		Callable =.. [Pred|Args],
 		build_term(Pred, Args, CallArgs, S2, S3, NextCall)
 	),
-	(	goal_expansion(CallGoal1,CallGoal) -> true
+	(	expansion(CallGoal1,CallGoal) -> true
 	;	CallGoal1=CallGoal
 	).
 
@@ -175,22 +181,22 @@ expand_dcg(Term, Goal) :-
 	nonvar(Prefix), !,
 	expand_call_with_prefix(Prefix, Callable, Args, Goal).
 
-goal_expansion( GoalIn, GoalOut) :-
+expansion( GoalIn, GoalOut) :-
 	\+current_prolog_flag(xref, true),
 	expand_dcg(GoalIn, GoalOut).
-goal_expansion( run_left(P,S1,S2,T1,T2), call_dcg(P,(S1-T1),(S2-T2))).
-goal_expansion( run_right(P,S1,S2,T1,T2), call_dcg(P,(T1-S1),(T2-S2))).
-goal_expansion( \<(P,S1,S2), (S1=(L1-R),S2=(L2-R),call_dcg(P,L1,L2)) ).
-goal_expansion( \>(P,S1,S2), (S1=(L-R1),S2=(L-R2),call_dcg(P,R1,R2)) ).
-%goal_expansion( <\>(A,B,S1,S2), (S1=L1-R1, S2=L2-R2, call_dcg(A,L1,L2), call_dcg(B,R1,R2))).
-goal_expansion( <\>(A,B,S1,S2), (call_dcg(A,L1,L2), call_dcg(B,R1,R2))) :- !, S1=L1-R1, S2=L2-R2.
+expansion( run_left(P,S1,S2,T1,T2), call_dcg(P,(S1-T1),(S2-T2))).
+expansion( run_right(P,S1,S2,T1,T2), call_dcg(P,(T1-S1),(T2-S2))).
+expansion( \<(P,S1,S2), (S1=(L1-R),S2=(L2-R),call_dcg(P,L1,L2)) ).
+expansion( \>(P,S1,S2), (S1=(L-R1),S2=(L-R2),call_dcg(P,R1,R2)) ).
+%expansion( <\>(A,B,S1,S2), (S1=L1-R1, S2=L2-R2, call_dcg(A,L1,L2), call_dcg(B,R1,R2))).
+expansion( <\>(A,B,S1,S2), (call_dcg(A,L1,L2), call_dcg(B,R1,R2))) :- !, S1=L1-R1, S2=L2-R2.
 
-goal_expansion( nop(S1,S2), (S1=S2) ).
-goal_expansion( out(X,S1,S2), (S1=[X|S2]) ).
-goal_expansion( get(S,S1,S2), (S=S1,S1=S2) ).
-goal_expansion( set(S,_,S2), (S=S2) ).
-goal_expansion( A >> B, (A,B) ).
-goal_expansion( set_with(C,_,S2), Call) :- mk_call(C,[S2],Call).
-goal_expansion( trans(A1,A2,S1,S2), (S1=A1,S2=A2) ).
-goal_expansion( //(P1,P2,S1,S2), (call_dcg(P1,S1,S2),call_dcg(P2,S1,S2))).
+expansion( nop(S1,S2), (S1=S2) ).
+expansion( out(X,S1,S2), (S1=[X|S2]) ).
+expansion( get(S,S1,S2), (S=S1,S1=S2) ).
+expansion( set(S,_,S2), (S=S2) ).
+expansion( A >> B, (A,B) ).
+expansion( set_with(C,_,S2), Call) :- mk_call(C,[S2],Call).
+expansion( trans(A1,A2,S1,S2), (S1=A1,S2=A2) ).
+expansion( //(P1,P2,S1,S2), (call_dcg(P1,S1,S2),call_dcg(P2,S1,S2))).
 
