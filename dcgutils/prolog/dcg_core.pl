@@ -70,6 +70,7 @@
    % sequencing primitives
 	,	out//1
    ,  list//1
+   ,  cons//1
 ]).
 
 /** <module> DCG utilities
@@ -490,4 +491,7 @@ out(L,[L|L0],L0).
 %
 %  Matches or outputs a sequence of nonterminals.
 list(L,S1,S2) :- append(L,S2,S1).
+
+%% cons(?X)// is det.
+cons(H,T,[H|T]).
 
