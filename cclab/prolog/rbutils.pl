@@ -6,3 +6,7 @@ rb_trans(K,V1,V2,T1,T2) :- rb_update(T1,K,V1,V2,T2).
 rb_add(K,V,T1,T2) :- rb_insert_new(T1,K,V,T2).
 rb_get(K,V,T,T) :- rb_lookup(K,V,T).
 rb_gen(K,V,T) :- rb_in(K0,V,T), K=K0.
+
+user:goal_expansion(rb_add(K,V,T1,T2),rb_insert_new(T1,K,V,T2)).
+user:goal_expansion(rb_trans(K,V1,V2,T1,T2),rb_update(T1,K,V1,V2,T2)).
+user:goal_expansion(rb_get(K,V,T1,T2),(T2=T1, rb_lookup(K,V,T1))).
