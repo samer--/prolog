@@ -2,7 +2,7 @@
                  , run_sampling//2, uniform_sampler//2, lookup_sampler//3
                  , cctabled/2, dist/2, dist/3, (:=)/2
                  , goal_graph/2, tables_graph/2, graph_params/3 
-                 , graph_viterbi/3, graph_nviterbi/3, graph_inside/3, graph_stats/4 
+                 , graph_viterbi/3, graph_nviterbi/4, graph_inside/3, graph_stats/4 
                  , pgraph_tree/4, pgraph_sample_tree/4, print_tree/1
                  , em_ml/2, em_map/3, em_vb/3, iterate/4
                  , with_rnd_state/1
@@ -183,13 +183,13 @@ p_factor(SW->Val, (SW->Val)-P) --> pmap(SW->Val, P) <\> mul(P).
 p_factor(@P, const-P) --> \> mul(P).
 
 % ---- lazy N-Viterbi algorithm ----
-graph_nviterbi(Graph, Params, Tree) :-
+graph_nviterbi(Graph, Params, Tree, LP) :-
    rb_empty(E), 
    foldl(np_soln, Graph, PGraph, E, Map), 
    setof(SW, pmap_sw(Map,SW), SWs),
    maplist(pmap_collate(true1,Map),SWs,Params),
    member(soln(top:'$top$', Expls), PGraph),
-   member(Tree,Expls).
+   member(LP-Tree,Expls).
 
 np_soln(Goal-Expls, soln(Goal, NExpls)) -->
    pmap(Goal,NExpls),
@@ -214,24 +214,31 @@ k_min([X|Xs],[Y|Ys],[Z|Zs]) :-
 better(LX-_, LY-_) :- LX =< LY.
 
 k_prod(X,Y,Z) :-
-   rb_empty(EmptyT), empty_heap(EmptyQ),
-   k_queue(X-Y, EmptyT-EmptyQ, TQ1),
+   empty_set(EmptyS), empty_heap(EmptyQ),
+   k_queue(0^X-0^Y, EmptyS-EmptyQ, TQ1),
    lazy_unfold_finite(k_next,Z,TQ1,_).
 
 k_next(L-ZZ) -->
    \> pq_get(L,P),
-   {P=[X0|X]-[Y0|Y], cons_snd(X0,Y0,ZZ)},
-   k_queue(X-[Y0|Y]),
-   k_queue([X0|X]-Y).
+   {P=I^[X0|X]-J^[Y0|Y], cons_snd(X0,Y0,ZZ), succ(I,I1), succ(J,J1)},
+   k_queue(I^X-J1^[Y0|Y]),
+   k_queue(I1^[X0|X]-J^Y).
 
 cons_snd(_-H,_-T,[H|T]).
 
-k_queue(P) --> \< rb_add(P,t), {k_cost(P,L)} -> \> pq_add(L, P); [].
-k_cost([X0-_|_]-[Y0-_|_], L) :- L is X0+Y0.
+k_queue(P) --> {P=I^X-J^Y}, \< add_to_set(I-J), {k_cost(X,Y,L)} -> \> pq_add(L, P); [].
+k_cost([X0-_|_],[Y0-_|_], L) :- L is X0+Y0.
 
 pq_add(L,P,H1,H2) :- add_to_heap(H1,L,P,H2).
 pq_get(L,P,H1,H2) :- get_from_heap(H1,L,P,H2).
 
+empty_set([]).
+add_to_set(X,S1,[X|S1]) :- \+memberchk(X,S1).
+
+% empty_set([]).
+% add_to_set(X,S1,S2) :- \+ord_memberchk(X,S1), ord_add_element(S1,X,S2).
+% empty_set(E) :- rb_empty(E).
+% add_to_set(X,S1,S2) :- rb_insert_new(S1,X,t,S2).
 
 % --------- outside probabilities, ESS ----------------
 :- meta_predicate graph_stats(+,:,?,-).

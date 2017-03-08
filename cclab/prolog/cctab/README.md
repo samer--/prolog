@@ -52,10 +52,16 @@ ccptab1 - Based on cctab7 (tabled probabilistic prolog) but giving up on product
           probability labelling and instead going by goal terms, then doing a more
           thorough post processing of the tables to remove redundant variant solutions.
           After that, inside and outside probabilities can be computed more effiently.
+          Also includes efficient lazy k-best explanation tree extraction.
 ccptab2 - Based on ccptab2, but graphs are rbtrees instead of lists, and factor inside
  			 probabilities are handled differently during outside probability computation.
  			 Also, this was forked from ccptab1 before sampling execution was added to the
 			 latter.
+ccptab3 - Like ccptab1, but k-best processing stores a pair of integers in the done set, 
+          instead of big terms. Also there are three implementations of the done set as
+          the original rb_tree, an ord_set, or a plain list. It is not clear which will
+          be the most efficient in realistic use cases.
+ccptab4 - Like ccptab3, but with generalised semiring explanation analysis.
 
 
 

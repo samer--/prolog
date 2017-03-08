@@ -37,9 +37,6 @@
 :- type graph  == list(pair(goal, list(list(factor)))).
 
 true(_).
-head_to_variant(Head, Variant) :-
-   copy_term_nat(Head, Variant),
-   numbervars(Variant, 0, _).
 
 dist(Xs,X) :- member(P-X, Xs), event(@P).
 event(Ev) :- app(expl, out(Ev)).
@@ -62,7 +59,7 @@ cont_tab(done, _).
 cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
    term_variables(Head,Y), K= (\\Y`Ans`Cont),
    get(Tabs1),
-   head_to_variant(TableAs, Variant),
+   term_to_ground(TableAs, Variant),
    (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
    -> set(Tabs2),          % NB. this saves a COPY of Tabs2, ...
       rb_gen(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
@@ -246,3 +243,6 @@ tree_to_tree(_:Head :- Expls, node(nt(Label), Subnodes)) :-
 user:portray(node(nt(Label))) :- print(Label).
 user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
+
+term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
+
