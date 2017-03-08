@@ -84,10 +84,12 @@ link(l,_) :- fail_.
 link(m,_) :- fail_.
 
 link(w,X) :- dist([0.75-x,0.25-y],X).
-link(x,X) :- dist([0.5-v,0.5-z],X).
-link(y,z).
+link(x,X) :- dist([0.75-v,0.25-z],X).
+% link(y,z).
+link(y,X) :- dist([0.9-z, 0.1-v],X).
+link(z,_) :- fail_.
+% link(z,X) :- dist([0.5-t, 0.5-u],X).
 % link(z,X) :- dist([1-u],X).
-link(z,X) :- dist([0.5-t, 0.5-u],X).
 link(t,_) :- fail_.
 link(u,_) :- fail_.
 link(v,_) :- fail_.
