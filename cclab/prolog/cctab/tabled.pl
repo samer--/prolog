@@ -5,7 +5,7 @@
 */
 
 :- use_module(library(ccmacros)).
-
+:- persistent_history.
 :- cctable fib/2.
 
 fib(0,1).
@@ -30,6 +30,10 @@ pathl  --> edge; pathl, edge.
 pathl1 --> pathl1, edge; edge.
 pathr  --> edge; edge, pathr.
 pathr1 --> edge, pathr1; edge.
+
+:- cctable pp//0, qq//0.
+pp --> qq, edge; edge.
+qq --> pp.
 
 % for testing handling of input and output variables in continuations.
 path_a(Y) :- pathl(a,X), Y=a(X).
