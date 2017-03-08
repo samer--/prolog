@@ -50,7 +50,7 @@ cont_tab(susp(Head, Cont), Ans) :-
       rb_insert_new(Tabs1, Variant, tab(Solns,active([])), Tabs2),
       set(Tabs2),
       (   run_tab(producer(Variant, \Y^Head, K, Ans), Ans)
-      ;   app(rb_trans(Variant, tab(SS,_), tab(Ss,complete))), fail
+      ;   app(rb_trans(Variant, tab(Ss,_), tab(Ss,complete))), fail
       )
    ).
 

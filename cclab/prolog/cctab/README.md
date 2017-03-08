@@ -52,6 +52,10 @@ ccptab1 - Based on cctab7 (tabled probabilistic prolog) but giving up on product
           probability labelling and instead going by goal terms, then doing a more
           thorough post processing of the tables to remove redundant variant solutions.
           After that, inside and outside probabilities can be computed more effiently.
+ccptab2 - Based on ccptab2, but graphs are rbtrees instead of lists, and factor inside
+ 			 probabilities are handled differently during outside probability computation.
+ 			 Also, this was forked from ccptab1 before sampling execution was added to the
+			 latter.
 
 
 
