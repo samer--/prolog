@@ -44,7 +44,7 @@
 :- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
 :- use_module(library(rbutils),     [rb_gen/3, rb_add//2, rb_trans//3, rb_get//2]).
 :- use_module(library(lambda2)).
-:- use_module(lazymath, [max/3, add/3, mul/3, log_e/2, lse/3, stoch/2, lazy/4, surp/2]).
+:- use_module(lazymath, [max/3, min/3, add/3, mul/3, log_e/2, lse/3, stoch/2, lazy/4, surp/2]).
 :- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
@@ -216,50 +216,47 @@ sr_param(SR,F,X,P) :- sr_inj(SR,F,P,X).
 true1(_).
 
 % --------- semirings ---------
-sr_inj(cons/cons,  F, _, F).
-sr_inj(_/mul,      _, P, P).
-sr_inj(_/add,      _, P, Q) :- log(P,Q).
-sr_inj(kbest,      F, P, [Q-F]) :- surp(P,Q).
-sr_inj(best,       F, P, Q-F) :- log(P,Q).
-sr_inj(ann(SR),    F, P, Q-F)   :- sr_inj(SR,F,P,Q).
-sr_inj(R1-R2,      F, P, Q1-Q2) :- sr_inj(R1,F,P,Q1), sr_inj(R2,F,P,Q2).
+sr_inj(r(I,_,_),  _, P, X)     :- call(I,P,X).
+sr_inj(best,      F, P, Q-F)   :- log(P,Q).
+sr_inj(kbest,     F, P, [Q-F]) :- surp(P,Q).
+sr_inj(ann(SR),   F, P, Q-F)   :- sr_inj(SR,F,P,Q).
+sr_inj(R1-R2,     F, P, Q1-Q2) :- sr_inj(R1,F,P,Q1), sr_inj(R2,F,P,Q2).
 
-sr_proj(cons/cons,  G, _, G) :- !.
-sr_proj(_/_,        _, X, X).
-sr_proj(kbest,      G, X, Y) :- freeze(Y,lazy_maplist(k_tag(G),X,Y)).
-sr_proj(best,       G, X-E, X-(G-E)).
-sr_proj(ann(SR),    G, X-_, Y-G) :- sr_proj(SR,G,X,Y).
-sr_proj(R1-R2,      G, X1-X2, Y1-Y2) :- sr_proj(R1,G,X1,Y1), sr_proj(R2,G,X2,Y2).
+sr_proj(r(_,_,_), _, X, X).
+sr_proj(best,     G, X-E, X-(G-E)).
+sr_proj(kbest,    G, X, Y)         :- freeze(Y,lazy_maplist(k_tag(G),X,Y)).
+sr_proj(ann(SR),  G, X-_, Y-G)     :- sr_proj(SR,G,X,Y).
+sr_proj(R1-R2,    G, X1-X2, Y1-Y2) :- sr_proj(R1,G,X1,Y1), sr_proj(R2,G,X2,Y2).
 
-sr_plus(Op/_,    X) --> call(Op,X).
-sr_plus(kbest,   X) --> lazy(k_min,X).
-sr_plus(best,    X) --> v_max(X).
-sr_plus(ann(SR), X-Expl) --> sr_plus(SR,X) <\> cons(X-Expl).
-sr_plus(R1-R2, X1-X2) --> sr_plus(R1,X1) <\> sr_plus(R2,X2).
+sr_plus(r(_,_,O), X) --> call(O,X).
+sr_plus(best,     X) --> v_max(X).
+sr_plus(kbest,    X) --> lazy(k_min,X).
+sr_plus(ann(SR),  X-Expl) --> sr_plus(SR,X) <\> cons(X-Expl).
+sr_plus(R1-R2,    X1-X2) --> sr_plus(R1,X1) <\> sr_plus(R2,X2).
 
-sr_times(_/Op,    X) --> call(Op,X).
-sr_times(kbest,   X) --> lazy(k_mul,X).
-sr_times(best,    X-F) --> add(X) <\> cons(F).
-sr_times(ann(SR), X-F) --> sr_times(SR,X) <\> cons(X-F).
-sr_times(R1-R2, X1-X2) --> sr_times(R1,X1) <\> sr_times(R2,X2).
+sr_times(r(_,O,_), X) --> call(O,X).
+sr_times(best,     X-F) --> add(X) <\> cons(F).
+sr_times(kbest,    X) --> lazy(k_mul,X).
+sr_times(ann(SR),  X-F) --> sr_times(SR,X) <\> cons(X-F).
+sr_times(R1-R2,    X1-X2) --> sr_times(R1,X1) <\> sr_times(R2,X2).
 
-sr_zero(Op/_,    I) :- m_zero(Op,I).
-sr_zero(kbest,   []).
-sr_zero(best,    Z-_) :- m_zero(max,Z).
-sr_zero(ann(SR), Z-[]) :- sr_zero(SR,Z).
-sr_zero(R1-R2, Z1-Z2) :- sr_zero(R1,Z1), sr_zero(R2,Z2).
+sr_zero(r(_,_,O), I) :- m_zero(O,I).
+sr_zero(best,     Z-_)   :- m_zero(max,Z).
+sr_zero(kbest,    []).
+sr_zero(ann(SR),  Z-[])  :- sr_zero(SR,Z).
+sr_zero(R1-R2,    Z1-Z2) :- sr_zero(R1,Z1), sr_zero(R2,Z2).
 
-sr_unit(_/Op,    I) :- m_zero(Op,I).
-sr_unit(kbest,   [0-[]]).
-sr_unit(best,    0-[]).
-sr_unit(ann(SR), U-[]) :- sr_unit(SR,U).
-sr_unit(R1-R2, U1-U2) :- sr_unit(R1,U1), sr_unit(R2,U2).
+sr_unit(r(_,O,_), I) :- m_zero(O,I).
+sr_unit(best,     0-[]).
+sr_unit(kbest,    [0-[]]).
+sr_unit(ann(SR),  U-[])  :- sr_unit(SR,U).
+sr_unit(R1-R2,    U1-U2) :- sr_unit(R1,U1), sr_unit(R2,U2).
 
 m_zero(lse,-inf).
 m_zero(add,0).
 m_zero(mul,1).
 m_zero(max,-inf).
-m_zero(cons,[]).
+m_zero(min,inf).
 
 v_max(LX-X,LY-Y,Z) :- when(ground(LX-LY),(LX>=LY -> Z=LX-X; Z=LY-Y)).
 
@@ -294,7 +291,7 @@ add_to_set(X,S1,[X|S1]) :- \+memberchk(X,S1).
 empty_set([]).
 
 % ---------- inside and viterbi probs, explanation trees -----------
-graph_inside(Graph, Params, PGraph)  :- semiring_graph_fold(ann(add/mul), Graph,Params,PGraph).
+graph_inside(Graph, Params, PGraph)  :- semiring_graph_fold(ann(r(=,mul,add)), Graph,Params,PGraph).
 graph_viterbi(Graph, Params, Tree, LP) :- 
    semiring_graph_fold(best, Graph,Params,PGraph),
    member((top:'$top$')-(LP-Tree), PGraph).
