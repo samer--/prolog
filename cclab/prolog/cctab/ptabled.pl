@@ -62,6 +62,12 @@ nom --> nom ~> +n
 
 pp --> +p, np.
 
+:- cctable toss//0, flip//1, result//1.
+flip(X,[X|T],T) :- dist([0.6,0.4],[heads,tails],X).
+result(heads) --> ['I',win].
+result(tails) --> [you, lose].
+toss --> flip(T), result(T).
+
 % preterminal switch declarations
 adj | [hot,cold,thin,fat,disgusting,lovely].
 pn  | [alice, bob, cuthbert, delia, edna].
