@@ -12,7 +12,8 @@
 /** <module> High-order utility predicates
 
 Some high-order predicates to enable high-order 'point-free' and
-lambda free composition of predicates.
+lambda free composition of predicates. Also provides a goal expansion 
+for call/N when the target predicate is already known.
 */
 
 :- meta_predicate *(2,2,?,?)
@@ -53,4 +54,15 @@ constf(F,_,X) --> call(F,X).
 %% mr(+Mapper:pred(A,B), +Reducer:pred(B,S,S), X:A, S1:S, S2:S) is det.
 %  Meet Mr. mr. A map reducer for use with any folding predicate. 
 mr(M,R,X,S1,S2) :- call(M,X,Y), call(R,Y,S1,S2).
+
+user:goal_expansion(G1, G2) :-
+   G1 =.. [call, Closure |Args],
+   nonvar(Closure), expand_call(Closure, Args, G2).
+
+expand_call(Mod:Head, Args, Mod:G) :-
+   nonvar(Head), expand_call(Head, Args, G).
+expand_call(Head, Args, G) :-
+   Head =.. [Pred|Bound],
+   append(Bound, Args, AllArgs),
+   G =.. [Pred | AllArgs].
 
