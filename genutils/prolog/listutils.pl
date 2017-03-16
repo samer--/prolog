@@ -25,6 +25,7 @@
 	,	take/3, takec/3, take_while/3
 	,	drop/3, dropc/3, drop_while/3
    ,  map_filter/3
+   ,  foldr/4
    ,  split_at/4
    ,  same_length/2
 	,  rep/3          % make a list of repeats of the same term
@@ -40,6 +41,7 @@
 		drop_while(1,?,?)
 	,	take_while(1,?,?)
    ,  map_filter(2,+,-)
+   ,  foldr(3,?,?,?)
 	.
 
 %% natural(+N) is semidet.
@@ -185,4 +187,9 @@ zip([X|XX],[Y|YY],[Z|ZZ]) :- Z=X-Y, zip(XX,YY,ZZ).
 map_filter(_, [], []).
 map_filter(P, [X|Xs], [Y|Ys]) :- call(P,X,Y), !, map_filter(P, Xs, Ys).
 map_filter(P, [_|Xs], Ys) :- map_filter(P, Xs, Ys).
+
+%% foldr(P:pred(A,B,B), X:list(A), S1:B, S2:B) is det.
+foldr(P,XX) --> foldr_(XX,P).
+foldr_([],_) --> [].
+foldr_([X|XX],P) --> foldr_(XX,P), call(P,X).
 
