@@ -1,51 +1,68 @@
 :- module(cctab, [ run_with_tables/2, run_tab_expl/2
                  , run_sampling//2, uniform_sampler//2, lookup_sampler//3
-                 , cctabled/2, dist/2, dist/3, (:=)/2
-                 , goal_graph/2, tables_graph/2, graph_params/3 
-                 , graph_viterbi/3, graph_nviterbi/4, graph_inside/3, graph_stats/4 
-                 , pgraph_tree/4, pgraph_sample_tree/4, print_tree/1
+                 , cctabled/2, dist/2, dist/3, (:=)/2, sample/1
+                 , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
+                 , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/4 
+                 , pgraph_sample_tree/4, print_tree/1
                  , em_ml/2, em_map/3, em_vb/3, iterate/4
-                 , with_rnd_state/1
+                 , strand/0, strand/1 % reexport for clients to use
                  ]).
+
 /** <module> Continuation based probabilistic inference.
+
+   This module provides several services for working with probabilistic models and
+   is based on the functionality of PRISM. Models are written as Prolog programs
+   enriched with extra computational effects: probabilistic choice and tabling.
+   Programs can be run in sampling mode or explanation mode. Explanation mode 
+   results in a hypergraph representing the computation, which can then be processed
+   to get:
+
+      * inside probabilities (generalised sum-product algorithm)
+      * the single best explanation (generalised Viterbi algorithm)
+      * any number of explanations in order of probability (lazy k-best algorithm)
+      * outside probabilities for computing parameter sufficient statistics
+      *
+   Based on these several EM parameter learning methods are provided: maximum likelihood,
+   maximum a posterior, variational Bayes, and (to come, probably) Viterbi learning.
 */
+
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
 :- use_module(library(lazy)).
-:- use_module(library(dcg_core), [get//1, out//1]).
 :- use_module(library(dcg_progress)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
-:- use_module(library(math), [stoch/3]).
-:- use_module(library(listutils), [takec/3]).
-:- use_module(library(callutils), [mr/5, (*)/4, const/3]).
-:- use_module(library(plrand),    [with_rnd_state/1, mean_log_dirichlet/2]).
-:- use_module(library(prob/strand), [pure//2]).
+:- use_module(library(math),        [stoch/3]).
+:- use_module(library(listutils),   [foldr/4, cons//1]).
+:- use_module(library(callutils),   [mr/5, (*)/4, const/3]).
+:- use_module(library(data/pair),   [pair/3, fst/2, fsnd/3]).
+:- use_module(library(data/tree),   [print_tree/2]).
+:- use_module(library(plrand),      [mean_log_dirichlet/2]).
+:- use_module(library(prob/strand), [pure//2, strand/1, strand/0]).
 :- use_module(library(prob/tagged), [discrete//3, uniform//2]).
-:- use_module(library(data/pair), [pair/3, fst/2, fsnd/3]).
-:- use_module(library(data/tree), [print_tree/2]).
-:- use_module(library(delimcc),   [p_reset/3, p_shift/2]).
-:- use_module(library(ccstate),   [run_nb_state/3, set/1, get/1]).
-:- use_module(library(rbutils)).
+:- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
+:- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
+:- use_module(library(rbutils),     [rb_gen/3, rb_add//2, rb_trans//3, rb_get//2]).
 :- use_module(library(lambda2)).
-:- use_module(lazymath,  [max/3, add/3, mul/3, log_e/2, stoch/2]).
+:- use_module(lazymath, [max/3, add/3, mul/3, log_e/2, lse/3, stoch/2, lazy/4, surp/2]).
 :- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
 
 :- type tables == map(variant, table).
 :- type table  ---> tab(goal, map(values, list(list(factor))), list(cont)).
-:- type factor ---> module:head ; @number ; prim(A)->A.
+:- type factor ---> module:head ; @number ; sw(A):=A.
 :- type cont   == pred(+values, -values).
 :- type values == list(ground).
 :- type graph  == list(pair(goal, list(list(factor)))).
 
-% --- effects -----
-:- meta_predicate :=(3,-), cctabled(0,0).
+% ------------- effects -----------
+:- meta_predicate :=(3,-), cctabled(0,0), sample(2).
 
 SW := X    :- p_shift(prob,sw(SW,X)).
 dist(Ps,Xs,X) :- p_shift(prob,dist(Ps,Xs,X)).
 dist(Norm,X) :- maplist(pair,Ps,Xs,Norm), p_shift(prob,dist(Ps,Xs,X)).
+sample(Goal) :- p_shift(prob,sample(Goal)). % currently only for sampling execution!
 
 cctabled(TableAs,Head) :- 
    p_shift(tab, tab(TableAs,Head,Inject)), 
@@ -56,10 +73,11 @@ run_prob(Handler,Goal) --> {p_reset(prob, Goal, Status)}, cont_prob(Status,Handl
 cont_prob(susp(Req,Cont),H) --> call(H,Req), run_prob(H,Cont).
 cont_prob(done,_) --> [].
 
+
 % ------------- handlers for sampling without tabling ------------------
-sample(_,tab(_))      --> !, [].
 sample(P,sw(SW,X))    --> !, call(P,SW,X).
 sample(_,dist(Ps,Xs,X)) --> pure(discrete(Xs,Ps),X).
+sample(_,Goal) --> call(Goal).
 
 run_notab(Goal) :- p_reset(tab, Goal, Status), cont_notab(Status).
 cont_notab(susp(tab(_,Head,Head), Cont)) :- run_notab(Cont).
@@ -74,6 +92,7 @@ lookup_sampler(Map,SW,X) --> {call(SW,ID,Xs,[]), rb_lookup(ID,Ps,Map)}, pure(dis
 make_lookup_sampler(Params,cctab:lookup_sampler(Map)) :-
    list_to_rbtree(Params, Map).
 
+
 % -------- handlers for tabled explanation graph building -----------
 :- meta_predicate run_with_tables(0,-), run_tab(0,?), run_tab_expl(0,-).
 
@@ -81,7 +100,7 @@ run_with_tables(G, T) :- rb_empty(E), run_nb_state(G, E, T).
 run_tab_expl(G, Expl) :- term_variables(G,Ans), run_tab(run_prob(expl,G,Expl,[]), Ans-Expl).
 
 expl(tab(G))     --> {term_to_ground(G,F)}, [F].
-expl(sw(SW,X))   --> {call(SW,ID,Xs,[]), member(X,Xs)}, [ID->X].
+expl(sw(SW,X))   --> {call(SW,ID,Xs,[]), member(X,Xs)}, [ID:=X].
 expl(dist(Ps,Xs,X)) --> {member2(P,X,Ps,Xs)}, [@P].
 
 run_tab(Goal, Ans)    :- p_reset(tab, Goal, Status), cont_tab(Status, Ans).
@@ -113,6 +132,7 @@ producer(Variant, Generate, KP, Ans) :-
    ).
 
 % ----------- mapping tables to graphs --------------
+
 :- meta_predicate goal_graph(0,-).
 goal_graph(Goal, Graph) :- 
    time(run_with_tables(run_tab(findall(E,run_prob(expl,Goal,E,[]),Es), Es), Tables)),
@@ -120,7 +140,7 @@ goal_graph(Goal, Graph) :-
    time(prune_graph(top:'$top$', [(top:'$top$')-Es|Graph0], Graph)).
 
 tables_graph(Tables, Graph) :-
-   % this does a consistency check that each goal has only one distinct set of explanations.
+   % does a consistency check that each goal has only one distinct set of explanations.
    bagof(G-Es, setof(Es, Tables^tabled_solution(Tables, G, Es), [Es]), Graph).
 
 tabled_solution(Tabs, Goal, Expls1) :-
@@ -135,154 +155,192 @@ prune_graph(Top, GL1, GL2) :-
    rb_empty(E), children(G1,Top,E,G2),
    rb_visit(G2,GL2).
 
-children(_,_->_) --> !.
-children(G,Top) --> 
+children(_, _:=_) --> !.
+children(_, @_) --> !.
+children(G, Top) --> 
    {rb_lookup(Top,Expls,G)}, rb_add(Top,Expls),
    foldl(foldl(new_children(G)),Expls).
 new_children(G, F) -->
    rb_get(F,_) -> []; children(G,F).
 
 % --- extracting and initialising parameters ---
-graph_params(Spec,G,Params) :- setof(L, graph_sw(G,L), SWs), maplist(sw_init(Spec),SWs,Params).
-graph_sw(G,SW) :- member(_-Es,G), member(E,Es), member(SW->_,E).
+graph_params(Spec,G,Params) :- 
+   (setof(L, graph_sw(G,L), SWs) -> true; SWs=[]), 
+   maplist(sw_init(Spec),SWs,Params).
+graph_sw(G,SW) :- member(_-Es,G), member(E,Es), member(SW:=_,E).
 
 sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform(Vals,Params).
-sw_init(random,SW,SW-Params) :- call(SW,_,Vals,[]), random_dist(Vals,Params).
+sw_init(random,SW,SW-Params)  :- call(SW,_,Vals,[]), random_dist(Vals,Params).
 sw_init(K*Spec,SW,SW-Params)  :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
 
 uniform(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
-random_dist(Vals,Probs) :- length(Vals,N), length(Weights,N), maplist(random,Weights), stoch(Weights,Probs, _).
+random_dist(Vals,Probs) :- same_length(Vals,Ws), maplist(random,Ws), stoch(Ws,Probs, _).
+
 
 % --------- graphs with probabilities -----------
-:- type p_graph == list(p_soln).
-:- type p_soln ---> soln(goal, number, list(pair(list(weighted(p_factor)), number))).
-:- type p_factor ---> const; module:head ; prim(A)->A.
 
 pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
-pmap_sw(Map,SW) :- rb_gen(SW->_,_,Map).
-pmap_collate(Def,Map,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_get(Def,Map,SW),Vals,Info).
-pmap_get(Def,Map,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
+pmap_sw(Map,SW) :- rb_gen(SW:=_,_,Map).
 
-% inside and viterbi probs
-graph_inside(Graph, Params, PGraph)  :- graph_pgraph(sr(add,mul,0,1), Graph,Params,PGraph).
-graph_viterbi(Graph, Params, PGraph) :- graph_pgraph(sr(max,mul,0,1), Graph,Params,PGraph).
+:- meta_predicate pmap_collate(3,1,+,+,?).
+pmap_collate(Conv,Def,Map,SW,SW-XX) :- 
+   call(SW,_,Vals,[]), maplist(pmap_get(Conv,Def,Map,SW),Vals,XX).
 
-graph_pgraph(SR, Graph, Params, PGraph) :- 
+pmap_get(Conv,Def,Map,SW,Val,X) :- 
+   rb_lookup(SW:=Val, P, Map) -> call(Conv,SW:=Val,P,X); call(Def,X).
+
+%% semiring_graph_fold(+SR:sr(A,B,C,T), +G:graph, ?:params(T), -R:list(pair(goal,C))) is det.
+%
+%  Folds the semiring SR over the explanation graph G, resulting in R, a list of pairs
+%  of goals in the original graph with the result of the fold for that goal. Different
+%  semirings can produce many kinds of parsing analysis.
+semiring_graph_fold(SR, Graph, Params, PGraph) :- 
    rb_empty(E), 
-   foldl(p_soln(SR), Graph, PGraph, E, Map), 
-   setof(SW, pmap_sw(Map,SW), SWs),
-   maplist(pmap_collate(true1,Map),SWs,Params).
+   foldl(sr_sum(SR), Graph, PGraph, E, Map), 
+   (setof(SW, pmap_sw(Map,SW), SWs) -> true; SWs=[]),
+   maplist(pmap_collate(sr_param(SR),true1,Map),SWs,Params).
 
+sr_sum(SR, Goal-Expls, Goal-Sum) -->
+   pmap(Goal,Proj),
+   {sr_zero(SR,Zero), sr_proj(SR,Goal,Sum,Proj)}, !, 
+   run_right(foldr(sr_add_prod(SR),Expls), Zero, Sum).
+
+sr_add_prod(SR, Expl) --> 
+   {sr_unit(SR,Unit)}, !, 
+   run_right(foldr(sr_factor(SR), Expl), Unit, Prod) <\> sr_plus(SR,Prod), !. 
+
+sr_factor(SR, M:Head)  --> pmap(M:Head,X) <\> sr_times(SR,X), !. 
+sr_factor(SR, SW:=Val) --> pmap(SW:=Val,X) <\> sr_times(SR,X), !. 
+sr_factor(SR, @P)      --> {sr_inj(SR,const,P,X)}, \> sr_times(SR,X), !.
+sr_param(SR,F,X,P) :- sr_inj(SR,F,P,X).
 true1(_).
-p_soln(SR, Goal-Expls, soln(Goal, Pin, Expls1)) -->
-   pmap(Goal,Pin),
-   sr_zero(SR,Zero),
-   run_right(foldl(p_expl(SR), Expls, Expls1), Zero, Pin).
 
-p_expl(SR, Expl, Pe-Expl1) --> 
-   sr_unit(SR,Unit), 
-   run_right(foldl(p_factor(SR), Expl, Expl1), Unit, Pe) <\> sr_plus(SR,Pe). 
+% --------- semirings ---------
+sr_inj(cons/cons,  F, _, F).
+sr_inj(_/mul,      _, P, P).
+sr_inj(_/add,      _, P, Q) :- log(P,Q).
+sr_inj(kbest,      F, P, [Q-F]) :- surp(P,Q).
+sr_inj(best,       F, P, Q-F) :- log(P,Q).
+sr_inj(ann(SR),    F, P, Q-F)   :- sr_inj(SR,F,P,Q).
+sr_inj(R1-R2,      F, P, Q1-Q2) :- sr_inj(R1,F,P,Q1), sr_inj(R2,F,P,Q2).
 
-p_factor(SR, M:Head, (M:Head)-P) --> pmap(M:Head,P) <\> sr_times(SR,P).
-p_factor(SR, SW->Val, (SW->Val)-P) --> pmap(SW->Val, P) <\> sr_times(SR,P).
-p_factor(SR, @P, const-P) --> \> call(Mul,P).
+sr_proj(cons/cons,  G, _, G) :- !.
+sr_proj(_/_,        _, X, X).
+sr_proj(kbest,      G, X, Y) :- freeze(Y,lazy_maplist(k_tag(G),X,Y)).
+sr_proj(best,       G, X-E, X-(G-E)).
+sr_proj(ann(SR),    G, X-_, Y-G) :- sr_proj(SR,G,X,Y).
+sr_proj(R1-R2,      G, X1-X2, Y1-Y2) :- sr_proj(R1,G,X1,Y1), sr_proj(R2,G,X2,Y2).
 
-sr_plus(add/_, X) --> add(X).
-sr_plus(max/_, X) --> max(X).
-sr_plus(kbest, X) --> lazy(k_min,X).
-sr_times(_/mul, X) --> mul(X).
-sr_times(kbest, X) --> lazy(k_prod,X).
-sr_zero(add/_, 0).
-sr_zero(max/_, 0).
-sr_zero(kbest, []).
-sr_unit(_/mul_, 1).
-sr_unit(kbest, [0-[]]).
+sr_plus(Op/_,    X) --> call(Op,X).
+sr_plus(kbest,   X) --> lazy(k_min,X).
+sr_plus(best,    X) --> v_max(X).
+sr_plus(ann(SR), X-Expl) --> sr_plus(SR,X) <\> cons(X-Expl).
+sr_plus(R1-R2, X1-X2) --> sr_plus(R1,X1) <\> sr_plus(R2,X2).
 
-sr_factor(_/_, SW->Val, const-P, P, P).
+sr_times(_/Op,    X) --> call(Op,X).
+sr_times(kbest,   X) --> lazy(k_mul,X).
+sr_times(best,    X-F) --> add(X) <\> cons(F).
+sr_times(ann(SR), X-F) --> sr_times(SR,X) <\> cons(X-F).
+sr_times(R1-R2, X1-X2) --> sr_times(R1,X1) <\> sr_times(R2,X2).
 
-% ---- lazy N-Viterbi algorithm ----
-graph_nviterbi(Graph, Params, Tree, LP) :-
-   graph_pgraph(kbest, Graph, Params, PGraph),
-   foldl(np_soln, Graph, PGraph, E, Map), 
-   setof(SW, pmap_sw(Map,SW), SWs),
-   maplist(pmap_collate(true1,Map),SWs,Params),
-   member(soln(top:'$top$', Expls), PGraph),
-   member(LP-Tree,Expls).
+sr_zero(Op/_,    I) :- m_zero(Op,I).
+sr_zero(kbest,   []).
+sr_zero(best,    Z-_) :- m_zero(max,Z).
+sr_zero(ann(SR), Z-[]) :- sr_zero(SR,Z).
+sr_zero(R1-R2, Z1-Z2) :- sr_zero(R1,Z1), sr_zero(R2,Z2).
 
-np_soln(Goal-Expls, soln(Goal, NExpls)) -->
-   pmap(Goal,NExpls),
-   run_right(foldl(np_expl, Expls), [], NExpls).
+sr_unit(_/Op,    I) :- m_zero(Op,I).
+sr_unit(kbest,   [0-[]]).
+sr_unit(best,    0-[]).
+sr_unit(ann(SR), U-[]) :- sr_unit(SR,U).
+sr_unit(R1-R2, U1-U2) :- sr_unit(R1,U1), sr_unit(R2,U2).
 
-np_expl(Expl) --> run_right(foldl(np_factor, Expl), [0-[]], Pe) <\> lazy(k_min,Pe). 
-np_factor(M:Head) --> pmap(M:Head,NExpls) <\> lazy(k_prod,NExpls).
-np_factor(SW->Val) --> pmap(SW->Val, P) <\> lazy(k_prod,[LP-(SW->Val)]), {surp(P,LP)}.
-np_factor(@P) --> \> lazy(k_prod,[LP-const]), {surp(P,LP)}.
+m_zero(lse,-inf).
+m_zero(add,0).
+m_zero(mul,1).
+m_zero(max,-inf).
+m_zero(cons,[]).
 
-lazy(P,X,S1,S2) :- freeze(S2,call(P,X,S1,S2)).
-surp(P,LP) :- when(ground(P), LP is -log(P)).
+v_max(LX-X,LY-Y,Z) :- when(ground(LX-LY),(LX>=LY -> Z=LX-X; Z=LY-Y)).
 
+% ---- lazy k-best algebra ----
+% 232.5 x 152.3
+k_tag(G,L-X,L-(G-X)). % tag explanaiton with head goal
 k_min([],Y,Y) :- !.
 k_min(X,[],X) :- !.
 k_min([X|Xs],[Y|Ys],[Z|Zs]) :-
-   (  better(X,Y)
+   (  LX-_=X, LY-_=Y, LX =< LY
    -> Z=X, freeze(Zs, k_min(Xs,[Y|Ys],Zs))
    ;  Z=Y, freeze(Zs, k_min([X|Xs],Ys,Zs))
    ).
 
-better(LX-_, LY-_) :- LX =< LY.
-
-k_prod(X,Y,Z) :-
+k_mul(X,Y,Z) :-
    empty_set(EmptyS), empty_heap(EmptyQ),
    k_queue(0^X-0^Y, EmptyS-EmptyQ, TQ1),
-   lazy_unfold_finite(k_next,Z,TQ1,_).
+   lazy_unfold_finite(k_next, Z, TQ1, _).
 
-k_next(L-ZZ) -->
+k_next(L-[XF|YFs]) -->
    \> pq_get(L,P),
-   {P=I^[X0|X]-J^[Y0|Y], cons_snd(X0,Y0,ZZ), succ(I,I1), succ(J,J1)},
-   k_queue(I^X-J1^[Y0|Y]),
-   k_queue(I1^[X0|X]-J^Y).
+   {P=I^[X0|X]-J^[Y0|Y], _-XF=X0, _-YFs=Y0}, 
+   {succ(J,J1)}, k_queue(I^X-J1^[Y0|Y]),
+   {succ(I,I1)}, k_queue(I1^[X0|X]-J^Y).
 
-cons_snd(_-H,_-T,[H|T]).
-
-k_queue(P) --> {P=I^X-J^Y}, \< add_to_set(I-J), {k_cost(X,Y,L)} -> \> pq_add(L, P); [].
+k_queue(P) --> {P=I^X-J^Y}, \< add_to_set(I-J), {k_cost(X,Y,L)} -> \> pq_add(L,P); [].
 k_cost([X0-_|_],[Y0-_|_], L) :- L is X0+Y0.
 
 pq_add(L,P,H1,H2) :- add_to_heap(H1,L,P,H2).
 pq_get(L,P,H1,H2) :- get_from_heap(H1,L,P,H2).
-
-empty_set([]).
 add_to_set(X,S1,[X|S1]) :- \+memberchk(X,S1).
+empty_set([]).
 
-% empty_set([]).
-% add_to_set(X,S1,S2) :- \+ord_memberchk(X,S1), ord_add_element(S1,X,S2).
-% empty_set(E) :- rb_empty(E).
-% add_to_set(X,S1,S2) :- rb_insert_new(S1,X,t,S2).
+% ---------- inside and viterbi probs, explanation trees -----------
+graph_inside(Graph, Params, PGraph)  :- semiring_graph_fold(ann(add/mul), Graph,Params,PGraph).
+graph_viterbi(Graph, Params, Tree, LP) :- 
+   semiring_graph_fold(best, Graph,Params,PGraph),
+   member((top:'$top$')-(LP-Tree), PGraph).
+graph_nviterbi(Graph, Params, Tree, LP) :-
+   semiring_graph_fold(kbest, Graph, Params, PGraph),
+   member((top:'$top$')-Expls, PGraph),
+   member(LP-Tree,Expls).
+
+:- meta_predicate pgraph_sample_tree(+,0,-,-).
+pgraph_sample_tree(Graph, Head, Head - Subtrees, LogProb) :-
+   member(Head-(_-Expls), Graph),
+   maplist(pair,Ps,Es,Expls), stoch(Ps,Ps1,_), dist(Ps1,Es,Expl),
+   maplist(sample_subexpl_tree(Graph), Expl, LogProbs, Subtrees), 
+   sumlist(LogProbs, LogProb).
+
+sample_subexpl_tree(G, _-(M:Goal), LP, Tree) :- !, pgraph_sample_tree(G, M:Goal, Tree, LP).
+sample_subexpl_tree(_, P-(SW:=Val), LP, SW:=Val) :- LP is log(P), writeln(inc(SW:=Val)).
+sample_subexpl_tree(_, P-const, LP, const) :- LP is log(P).
 
 % --------- outside probabilities, ESS ----------------
 :- meta_predicate graph_stats(+,:,?,-).
 graph_stats(Graph,Goal,Params,Opts) :-
    maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
-   memberchk(soln(Goal,Pin,_), InsideG), log_e(Pin,LP),
+   memberchk(Goal-(Pin-_), InsideG), log_e(Pin,LP),
    foldl(soln_edges, InsideG, QCs, []), 
    call(group_pairs_by_key*keysort, QCs, InvGraph),
    rb_empty(Empty), 
    pmap(Goal, 1/Pin, Empty, Map1),
    foldl(q_alpha, InvGraph, Map1, Map2),
-   maplist(pmap_collate(=(0),Map2)*fst, Params, Eta).
+   maplist(pmap_collate(copy,=(0),Map2)*fst, Params, Eta).
+copy(_,X,X).
 
 opt(Opts, Opt) :- option(Opt, Opts, _).
-soln_edges(soln(P,_,Expls)) --> foldl(expl_edges(P),Expls).
+soln_edges(P-(_-Expls)) --> foldl(expl_edges(P),Expls).
 expl_edges(P,Pe-Expl)       --> foldl(factor_edge(Pe,P),Expl).
-factor_edge(Pe,P,Q-BetaQ)   --> [Q-qc(BetaQ,Pe,P)].
+factor_edge(Pe,P,BetaQ-Q)   --> [Q-qc(BetaQ,Pe,P)].
 
 q_alpha(Q-QCs) --> pmap(Q, AlphaQ), run_right(foldl(qc_alpha, QCs), 0, AlphaQ).
 qc_alpha(qc(BetaQ,Pe,P)) --> 
    pmap(P, AlphaP) <\> add(AlphaQC),
-   % this sort of wrong, but ok, because BetaQ=0 implies that any non-zero Alpha will
-   % eventually be multiplied by a zero switch probability to get a zero expected count.
-   { when(ground(BetaQ), (BetaQ =:= 0 -> AlphaQC=0; mul(AlphaP,Pe/BetaQ,AlphaQC))) }.
+   { when(ground(BetaQ), ( BetaQ =:= 0 -> AlphaQC=0
+                         ; mul(AlphaP,Pe/BetaQ,AlphaQC))) }.
 
+
+% ----------------- EM algorithms -----------------
 eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta). 
 estep(Graph, P1, Eta, LP) :-
    graph_stats(Graph, _:'$top$', P1, [log_prob(LP), grad(Grad)]), 
@@ -296,63 +354,36 @@ em_map(Prior, Graph, t(P1,P2,LP)) :-
    estep(Graph, P1, Eta, LP),
    maplist(posterior_mode, Prior, Eta, P2).
 
-posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :- 
-   maplist(add,Prior,Eta,Posterior),
-   mode_dirichlet(Posterior,Probs2).
-
-mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
-
 em_vb(Prior, Graph, t(A1,A2,LP)) :-
    maplist(psi,A1,P1),
    estep(Graph, P1, Eta, LP),
    maplist(posterior, Prior, Eta, A2).
 
+posterior(SW-Prior,SW-Eta,SW-Post)       :- maplist(add,Eta,Prior,Post).
+posterior_mode(SW-Prior,SW-Eta,SW-Probs) :- maplist(add,Eta,Prior,Post), mode_dirichlet(Post,Probs).
+mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
 psi(SW-A, SW-P) :- when(ground(A), (mean_log_dirichlet(A,H), maplist(exp,H,P))).
-posterior(SW-Prior,SW-Eta,SW-Posterior) :- maplist(add,Eta,Prior,Posterior).
 exp(X,Y) :- Y is exp(X).
 
 :- meta_predicate iterate(1,?,+,-).
 iterate(Setup, LPs) --> {call(Setup, Triple)}, seqmap_with_progress(1,unify3(Triple), LPs).
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
 
-% ---------- explanation tree with log probability ------
-:- meta_predicate pgraph_tree(+,:,-,-).
-pgraph_tree(Graph, Head, Head :- Subtrees, LogProb) :-
-   member(soln(Head,_,Expls), Graph),
-   order_by([desc(Pe)], member(Pe-Expl, Expls)),
-   maplist(subexpl_tree(Graph), Expl, SubtreesLogProbs),
-   maplist(pair, Subtrees, LogProbs, SubtreesLogProbs),
-   sumlist(LogProbs, LogProb).
-
-subexpl_tree(G, (M:Goal)-_, Tree-LP) :- !, pgraph_tree(G, M:Goal, Tree, LP).
-subexpl_tree(_, L-Pin, L-LP) :- LP is log(Pin).
-
-% -------- sample explanation tree from posterior graph ---
-:- meta_predicate pgraph_sample_tree(+,0,-,-).
-pgraph_sample_tree(Graph, Head, Head :- Subtrees, LogProb) :-
-   member(soln(Head,_,Expls), Graph),
-   maplist(pair,Ps,Es,Expls), stoch(Ps,Ps1,_), dist(Ps1,Es,Expl),
-   maplist(sample_subexpl_tree(Graph), Expl, SubtreesLogProbs),
-   maplist(pair, Subtrees, LogProbs, SubtreesLogProbs),
-   sumlist(LogProbs, LogProb).
-
-sample_subexpl_tree(G, (M:Goal)-_, Tree-LP) :- !, pgraph_sample_tree(G, M:Goal, Tree, LP).
-sample_subexpl_tree(_, L-Pin, L-LP) :- LP is log(Pin).
-
 % ---- tree conversion and printing ----
 print_tree(T) :- tree_to_tree(T,T1), write('  '), print_tree('  ', T1), nl.
 
 tree_to_tree(@P, node(p(P),[])).
-tree_to_tree((_:SW)->Val, node(t(SW->Val),[])).
-tree_to_tree(_:Head :- Expls, node(nt(Label), Subnodes)) :-
+tree_to_tree((_:SW):=Val, node(t(SW:=Val),[])).
+tree_to_tree((_:Head) - Expls, node(nt(Label), Subnodes)) :-
    functor(Head,Label,_),
-   exclude(=(x), Expls, Expls1),
+   exclude(=(const), Expls, Expls1),
    maplist(tree_to_tree, Expls1, Subnodes).
 
 user:portray(node(nt(Label))) :- print(Label).
 user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
 
+% ----- misc -----
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
 member2(X,Y,[_|XX],[_|YY]) :- member2(X,Y,XX,YY).
