@@ -1,4 +1,4 @@
-:- module(cctab, [run_tabled/1, cctabled/1]).
+:- module(cctab, [run_tabled/1, run_tabled/2, cctabled/1]).
 
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate), [run_nb_state/3, set/1, get/1]).
