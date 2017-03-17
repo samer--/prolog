@@ -111,6 +111,10 @@ fib(N,X) :-
    succ(L,M), fib(L,Z),
    X is Y+Z.
 
+% for testing table copying overhead 
+last(Last,[H|T],L) :- T=[] -> L=H; call(Last,T,L).
+
+
 test_path(l,D,Start, End) :- test_path(pathl(P), P, D, Start, End).
 test_path(r,D,Start, End) :- test_path(pathr(P), P, D, Start, End).
 test_path(Inc,Complete,Dump, Start, End) :- 
