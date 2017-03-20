@@ -6,12 +6,15 @@
           , select_key_default_value/5
           , map_select_key_value/5
           , map_select_key_default_value/6
+          , (&)/4
+          , op(650,xfy,&)
 			 ]).
 
 :- meta_predicate fsnd(2,?,?), 
 						ffst(2,?,?),
                   fsnd(4,?,?,?,?), 
 						ffst(4,?,?,?,?),
+                  &(2,2,?,?),
 						map_select_key_value(2,+,-,+,-),
 						map_select_key_default_value(2,+,+,-,+,-).
 
@@ -37,6 +40,11 @@ ffst(P,Y-X,Z-X) --> call(P,Y,Z).
 %  another for use in DCG goals.
 fsnd(P,X-Y,X-Z) :- call(P,Y,Z).
 fsnd(P,X-Y,X-Z) --> call(P,Y,Z).
+
+%% &(+F:pred(A,B), +G:pred(A,C), X:A, Y:pair(B,C)) is det.
+%  Apply F and G to X and pair results.
+&(F,G,X,Y-Z) :- call(F,X,Y), call(G,X,Z).
+
 
 %% map_select_key_value(+P:pred(A,B), K:C, Y:B, L1:list(pair(C,A)), L2:list(pair(C,A))) is nondet.
 %  True when L2 is L1 with an element K-X removed, and P maps X to Y.
