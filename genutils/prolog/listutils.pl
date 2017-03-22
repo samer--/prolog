@@ -165,7 +165,7 @@ take_while(_,[],[]).
 %  remaining items. Also works in other modes, like append.
 split_at(N,Pref,Rest,List) :-
    (  nonvar(N)
-   -> length(Pref,N), append(Pref,Rest,List).
+   -> length(Pref,N), append(Pref,Rest,List)
    ;  append(Pref,Rest,List), length(Pref,N)
    ).
 
