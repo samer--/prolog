@@ -158,13 +158,16 @@ take_while(P,[X|T],O) :- call(P,X) -> O=[X|V], take_while(P,T,V); O=[].
 take_while(_,[],[]).
 
 
-%% split_at(+N:natural, +In:list(A), -Prefix:list(A), -Suffix:list(A)) is det.
+%% split_at(+N:natural,  -Prefix:list(A), -Suffix:list(A), +In:list(A)) is det.
+%% split_at(-N:natural, -Prefix:list(A), -Suffix:list(A), +In:list(A)) is det.
 %
 %  True when Prefix is the length-N prefix of Items and Suffix is the list of
 %  remaining items. Also works in other modes, like append.
 split_at(N,Pref,Rest,List) :-
-	length(Pref,N),
-	append(Pref,Rest,List).
+   (  nonvar(N)
+   -> length(Pref,N), append(Pref,Rest,List).
+   ;  append(Pref,Rest,List), length(Pref,N)
+   ).
 
 
 %% same_length(+L1:list(_), +L2:list(_)) is det.
