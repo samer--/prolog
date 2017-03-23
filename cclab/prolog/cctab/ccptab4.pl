@@ -1,10 +1,10 @@
 :- module(cctab, [ run_with_tables/2, run_tab_expl/2
-                 , run_sampling//2, uniform_sampler//2, lookup_sampler//3
-                 , cctabled/2, dist/2, dist/3, (:=)/2, sample/1
+                 , run_sampling//2, uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
+                 , cctabled/2, dist/2, dist/3, (:=)/2, sample/1, fallback_sampler//4
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
-                 , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/4 
-                 , pgraph_sample_tree/4, print_tree/1
-                 , em_ml/2, em_map/3, em_vb/3, iterate/4
+                 , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
+                 , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
+                 , learn/3, iterate/4, scanner/3, mh_stream/3
                  , strand/0, strand/1 % reexport for clients to use
                  ]).
 
@@ -21,28 +21,40 @@
       * the single best explanation (generalised Viterbi algorithm)
       * any number of explanations in order of probability (lazy k-best algorithm)
       * outside probabilities for computing parameter sufficient statistics
-      *
+ 
    Based on these several EM parameter learning methods are provided: maximum likelihood,
    maximum a posterior, variational Bayes, and (to come, probably) Viterbi learning.
+
+   @tbd
+      - Goal subsumption in tabling lookup
+      - Grammar with integer states instead of difference lists
+      - Deterministic annealing
+      - Short cut uniform sampler
+      - Metropolis-Hastings sampling for evidence
+      - Automatic differentiation for counts?
+      - Fix free energy computation (to include Dirichlet priors)
+      - Alternative mhs_ and mht_ implementations
+      - Modularise!
 */
 
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
-:- use_module(library(lazy)).
 :- use_module(library(dcg_progress)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
+:- use_module(library(dcg_core),    [rep//2]).
+:- use_module(library(lazy),        [lazy_maplist/3, lazy_unfold/4, lazy_unfold_finite/4]).
 :- use_module(library(math),        [stoch/3]).
-:- use_module(library(listutils),   [foldr/4, cons//1]).
+:- use_module(library(listutils),   [foldr/4, cons//1, split_at/4]).
 :- use_module(library(callutils),   [mr/5, (*)/4, const/3]).
-:- use_module(library(data/pair),   [pair/3, fst/2, fsnd/3]).
+:- use_module(library(data/pair),   [pair/3, fst/2, fsnd/3, snd/2]).
 :- use_module(library(data/tree),   [print_tree/2]).
 :- use_module(library(plrand),      [mean_log_dirichlet/2]).
 :- use_module(library(prob/strand), [pure//2, strand/1, strand/0]).
-:- use_module(library(prob/tagged), [discrete//3, uniform//2]).
+:- use_module(library(prob/tagged), [discrete//3, uniform//2, dirichlet//2]).
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
-:- use_module(library(rbutils),     [rb_gen/3, rb_add//2, rb_trans//3, rb_get//2]).
+:- use_module(library(rbutils),     [rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
 :- use_module(library(lambda2)).
 :- use_module(lazymath, [max/3, min/3, add/3, mul/3, log_e/2, lse/3, stoch/2, lazy/4, surp/2]).
 :- use_module(ptabled, []).
@@ -61,7 +73,7 @@
 
 SW := X    :- p_shift(prob,sw(SW,X)).
 dist(Ps,Xs,X) :- p_shift(prob,dist(Ps,Xs,X)).
-dist(Norm,X) :- maplist(pair,Ps,Xs,Norm), p_shift(prob,dist(Ps,Xs,X)).
+dist(Dist,X) :- maplist(pair,Ps,Xs,Dist), p_shift(prob,dist(Ps,Xs,X)).
 sample(Goal) :- p_shift(prob,sample(Goal)). % currently only for sampling execution!
 
 cctabled(TableAs,Head) :- 
@@ -76,8 +88,8 @@ cont_prob(done,_) --> [].
 
 % ------------- handlers for sampling without tabling ------------------
 sample(P,sw(SW,X))    --> !, call(P,SW,X).
-sample(_,dist(Ps,Xs,X)) --> pure(discrete(Xs,Ps),X).
-sample(_,Goal) --> call(Goal).
+sample(_,dist(Ps,Xs,X)) --> !, pure(discrete(Xs,Ps),X).
+sample(_,sample(Goal)) --> call(Goal).
 
 run_notab(Goal) :- p_reset(tab, Goal, Status), cont_notab(Status).
 cont_notab(susp(tab(_,Head,Head), Cont)) :- run_notab(Cont).
@@ -91,6 +103,7 @@ uniform_sampler(SW,X) --> {call(SW,_,Xs,[])}, pure(uniform(Xs),X).
 lookup_sampler(Map,SW,X) --> {call(SW,ID,Xs,[]), rb_lookup(ID,Ps,Map)}, pure(discrete(Xs,Ps),X).
 make_lookup_sampler(Params,cctab:lookup_sampler(Map)) :-
    list_to_rbtree(Params, Map).
+fallback_sampler(S1, S2, SW,X) --> call(S1,SW,X) -> []; call(S2,SW,X).
 
 
 % -------- handlers for tabled explanation graph building -----------
@@ -137,7 +150,9 @@ producer(Variant, Generate, KP, Ans) :-
 goal_graph(Goal, Graph) :- 
    time(run_with_tables(run_tab(findall(E,run_prob(expl,Goal,E,[]),Es), Es), Tables)),
    time(tables_graph(Tables, Graph0)),
-   time(prune_graph(top:'$top$', [(top:'$top$')-Es|Graph0], Graph)).
+   time(prune_graph(=, top:'$top$', [(top:'$top$')-Es|Graph0], Graph)).
+
+top_value(Pairs, Top) :- memberchk((top:'$top$')-Top, Pairs).
 
 tables_graph(Tables, Graph) :-
    % does a consistency check that each goal has only one distinct set of explanations.
@@ -150,18 +165,19 @@ tabled_solution(Tabs, Goal, Expls1) :-
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
 
-prune_graph(Top, GL1, GL2) :-
+prune_graph(Mapper, Top, GL1, GL2) :-
    list_to_rbtree(GL1,G1), 
-   rb_empty(E), children(G1,Top,E,G2),
+   rb_empty(E), children(Top,Mapper,G1,E,G2),
    rb_visit(G2,GL2).
 
-children(_, _:=_) --> !.
-children(_, @_) --> !.
-children(G, Top) --> 
-   {rb_lookup(Top,Expls,G)}, rb_add(Top,Expls),
-   foldl(foldl(new_children(G)),Expls).
-new_children(G, F) -->
-   rb_get(F,_) -> []; children(G,F).
+children(_:=_, _, _) --> !.
+children(@_,   _, _) --> !.
+children(Top,  M, G) --> 
+   {rb_lookup(Top,Entry,G)}, rb_add(Top,Entry),
+   {call(M, Entry, Expls)},
+   foldl(mr(M,foldl(mr(M,new_children(M,G)))),Expls).
+new_children(M, G, F) -->
+   rb_get(F,_) -> []; children(F,M,G).
 
 % --- extracting and initialising parameters ---
 graph_params(Spec,G,Params) :- 
@@ -194,9 +210,9 @@ pmap_get(Conv,Def,Map,SW,Val,X) :-
 %  Folds the semiring SR over the explanation graph G, resulting in R, a list of pairs
 %  of goals in the original graph with the result of the fold for that goal. Different
 %  semirings can produce many kinds of parsing analysis.
-semiring_graph_fold(SR, Graph, Params, PGraph) :- 
+semiring_graph_fold(SR, Graph, Params, GoalSums) :- 
    rb_empty(E), 
-   foldl(sr_sum(SR), Graph, PGraph, E, Map), 
+   foldl(sr_sum(SR), Graph, GoalSums, E, Map), 
    (setof(SW, pmap_sw(Map,SW), SWs) -> true; SWs=[]),
    maplist(pmap_collate(sr_param(SR),true1,Map),SWs,Params).
 
@@ -217,7 +233,7 @@ true1(_).
 
 % --------- semirings ---------
 sr_inj(r(I,_,_),  _, P, X)     :- call(I,P,X).
-sr_inj(best,      F, P, Q-F)   :- log(P,Q).
+sr_inj(best,      F, P, Q-F)   :- log_e(P,Q).
 sr_inj(kbest,     F, P, [Q-F]) :- surp(P,Q).
 sr_inj(ann(SR),   F, P, Q-F)   :- sr_inj(SR,F,P,Q).
 sr_inj(R1-R2,     F, P, Q1-Q2) :- sr_inj(R1,F,P,Q1), sr_inj(R2,F,P,Q2).
@@ -261,7 +277,6 @@ m_zero(min,inf).
 v_max(LX-X,LY-Y,Z) :- when(ground(LX-LY),(LX>=LY -> Z=LX-X; Z=LY-Y)).
 
 % ---- lazy k-best algebra ----
-% 232.5 x 152.3
 k_tag(G,L-X,L-(G-X)). % tag explanaiton with head goal
 k_min([],Y,Y) :- !.
 k_min(X,[],X) :- !.
@@ -291,39 +306,38 @@ add_to_set(X,S1,[X|S1]) :- \+memberchk(X,S1).
 empty_set([]).
 
 % ---------- inside and viterbi probs, explanation trees -----------
-graph_inside(Graph, Params, PGraph)  :- semiring_graph_fold(ann(r(=,mul,add)), Graph,Params,PGraph).
+graph_inside(Graph, Params, IGraph)  :- 
+   semiring_graph_fold(ann(r(=,mul,add)), Graph, Params, IGraph).
 graph_viterbi(Graph, Params, Tree, LP) :- 
-   semiring_graph_fold(best, Graph,Params,PGraph),
-   member((top:'$top$')-(LP-Tree), PGraph).
+   semiring_graph_fold(best, Graph, Params, VGraph), top_value(VGraph, LP-Tree).
 graph_nviterbi(Graph, Params, Tree, LP) :-
-   semiring_graph_fold(kbest, Graph, Params, PGraph),
-   member((top:'$top$')-Expls, PGraph),
+   semiring_graph_fold(kbest, Graph, Params, VGraph), top_value(VGraph, Expls),
    member(LP-Tree,Expls).
 
-:- meta_predicate pgraph_sample_tree(+,0,-,-).
-pgraph_sample_tree(Graph, Head, Head - Subtrees, LogProb) :-
-   member(Head-(_-Expls), Graph),
+igraph_sample_tree(Graph, Tree, LogProb) :-
+   igraph_sample_tree(Graph, top:'$top$', Tree, LogProb).
+igraph_sample_tree(Graph, Head, Head - Subtrees, LogProb) :-
+   memberchk(Head-(_-Expls), Graph), % Head should be unique in graph
    maplist(pair,Ps,Es,Expls), stoch(Ps,Ps1,_), dist(Ps1,Es,Expl),
    maplist(sample_subexpl_tree(Graph), Expl, LogProbs, Subtrees), 
    sumlist(LogProbs, LogProb).
 
-sample_subexpl_tree(G, _-(M:Goal), LP, Tree) :- !, pgraph_sample_tree(G, M:Goal, Tree, LP).
-sample_subexpl_tree(_, P-(SW:=Val), LP, SW:=Val) :- LP is log(P), writeln(inc(SW:=Val)).
+sample_subexpl_tree(G, _-(M:Goal), LP, Tree) :- !, igraph_sample_tree(G, M:Goal, Tree, LP).
+sample_subexpl_tree(_, P-(SW:=Val), LP, SW:=Val) :- !, LP is log(P).
 sample_subexpl_tree(_, P-const, LP, const) :- LP is log(P).
 
 % --------- outside probabilities, ESS ----------------
-:- meta_predicate graph_stats(+,:,?,-).
-graph_stats(Graph,Goal,Params,Opts) :-
+graph_stats(Graph,Params,Opts) :-
    maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
-   memberchk(Goal-(Pin-_), InsideG), log_e(Pin,LP),
+   top_value(InsideG, Pin-_), log_e(Pin,LP),
    foldl(soln_edges, InsideG, QCs, []), 
    call(group_pairs_by_key*keysort, QCs, InvGraph),
    rb_empty(Empty), 
-   pmap(Goal, 1/Pin, Empty, Map1),
+   pmap(top:'$top$', 1/Pin, Empty, Map1),
    foldl(q_alpha, InvGraph, Map1, Map2),
-   maplist(pmap_collate(copy,=(0),Map2)*fst, Params, Eta).
-copy(_,X,X).
+   maplist(pmap_collate(right,=(0),Map2)*fst, Params, Eta).
+right(_,X,X).
 
 opt(Opts, Opt) :- option(Opt, Opts, _).
 soln_edges(P-(_-Expls)) --> foldl(expl_edges(P),Expls).
@@ -336,35 +350,152 @@ qc_alpha(qc(BetaQ,Pe,P)) -->
    { when(ground(BetaQ), ( BetaQ =:= 0 -> AlphaQC=0
                          ; mul(AlphaP,Pe/BetaQ,AlphaQC))) }.
 
+:- meta_predicate accum_stats(//,-), accum_stats(//,+,-).
+accum_stats(Pred,Stats) :- 
+   rb_empty(C0), 
+   call_dcg(Pred,C0,C1),
+   (setof(SW, cctab:pmap_sw(C1,SW), SWs) -> true; SWs=[]),
+   maplist(cctab:pmap_collate(right,=(0),C1),SWs,Stats).
+accum_stats(Pred,SWs,Stats) :- 
+   rb_empty(C0), 
+   call_dcg(Pred,C0,C1),
+   maplist(cctab:pmap_collate(right,=(0),C1),SWs,Stats).
 
-% ----------------- EM algorithms -----------------
-eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta). 
-estep(Graph, P1, Eta, LP) :-
-   graph_stats(Graph, _:'$top$', P1, [log_prob(LP), grad(Grad)]), 
+tree_stats(Tree,Counts) :- accum_stats(tree_stats(Tree),Counts).
+
+tree_stats(_-Subtrees) --> foldl(subtree_stats,Subtrees).
+subtree_stats(_-Trees) --> foldl(subtree_stats,Trees).
+subtree_stats(SW:=Val) --> rb_app(SW:=Val,succ) -> []; rb_add(SW:=Val,1).
+subtree_stats(const) --> [].
+
+add_stats(Stats) --> foldl(add_sw,Stats).
+add_sw(SW-Counts) --> {call(SW,_,Vals)}, foldl(add_sw_val(SW), Vals, Counts).
+add_sw_val(SW,Val,N) --> rb_app(SW:=Val,add(N)) -> []; rb_add(SW:=Val,N).
+
+
+% ----------------- Learning algorithms -----------------
+
+graph_counts(io, Graph, P1, Eta, LP) :-
+   graph_stats(Graph, P1, [log_prob(LP), grad(Grad)]), 
    maplist(eta, Grad, P1, Eta).
 
-em_ml(Graph, t(P1,P2,LP)) :-
-   estep(Graph, P1, Eta, LP),
-   maplist(fsnd(stoch), Eta, P2).
+graph_counts(vit, Graph, P1, Eta, LP) :-
+   graph_viterbi(Graph, P1, Tree, LP),
+   when(ground(LP), tree_stats(_-Tree, Eta)).
 
-em_map(Prior, Graph, t(P1,P2,LP)) :-
-   estep(Graph, P1, Eta, LP),
+learn(Stats-ml, Graph, cctab:unify3(t(P1,P2,LP))) :-
+   graph_counts(Stats, Graph, P1, Eta, LP),
+   maplist(expectation, Eta, P2).
+
+learn(Stats-map(Prior), Graph, cctab:unify3(t(P1,P2,LP))) :-
+   graph_counts(Stats, Graph, P1, Eta, LP),
+   % !! add log Dirichlet prior?
    maplist(posterior_mode, Prior, Eta, P2).
 
-em_vb(Prior, Graph, t(A1,A2,LP)) :-
+learn(Stats-vb(Prior), Graph, cctab:unify3(t(A1,A2,LP))) :-
+   same_length(Prior,A1),
    maplist(psi,A1,P1),
-   estep(Graph, P1, Eta, LP),
+   graph_counts(Stats, Graph, P1, Eta, LP),
+   % !! add log Dirichlet prior?
    maplist(posterior, Prior, Eta, A2).
 
+learn(gibbs(Prior), Graph, cctab:gstep(Prior,P0,IG)) :- 
+   graph_inside(Graph, P0, IG).
+
+gstep(Prior,P0,IG,LP,P1,P2) :-
+   copy_term(P0-IG,P1-IG1),
+   igraph_sample_tree(IG1,Tree,LP),
+   tree_stats(Tree, Counts),
+   maplist(posterior, Prior, Counts, Post),
+   maplist(sample_dirichlet, Post, P2).
+
+unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
+
+eta(SW-Alphas,SW-Probs1,SW-Eta)          :- maplist(mul,Alphas,Probs1,Eta). 
 posterior(SW-Prior,SW-Eta,SW-Post)       :- maplist(add,Eta,Prior,Post).
 posterior_mode(SW-Prior,SW-Eta,SW-Probs) :- maplist(add,Eta,Prior,Post), mode_dirichlet(Post,Probs).
+expectation(SW-Alphas, SW-Probs)         :- stoch(Alphas,Probs).
 mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
+sample_dirichlet(SW-Alpha,SW-Probs) :- sample(pure(dirichlet(Alpha),Probs)).
 psi(SW-A, SW-P) :- when(ground(A), (mean_log_dirichlet(A,H), maplist(exp,H,P))).
 exp(X,Y) :- Y is exp(X).
 
-:- meta_predicate iterate(1,?,+,-).
-iterate(Setup, LPs) --> {call(Setup, Triple)}, seqmap_with_progress(1,unify3(Triple), LPs).
-unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
+:- meta_predicate iterate(1,?,+,-), scanner(2,1,-).
+iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
+scanner(Sel, Setup, cctab:scan(Sel, Step)) :- call(Setup,Step).
+scan(Sel,Trans,X,P1,P2) :- call(Trans,LP,P1,P2), call(Sel,t(LP,P1,P2),X).
+scan0(Trans,S1,S1,S2)   :- call(Trans,S1,S2).
+
+% ---- Metropolis Hastings sampler ----
+
+mh_stream(Graph, Prior, States) :-
+   mh_init(Graph, Prior, Stepper, State0),
+   lazy_unfold(scan0(Stepper), States, State0, _).
+
+mh_init(Graph, Prior, Stepper, State) :-
+   length(LPs, 10),
+   insist(top_value(Graph, [_])),
+   iterate(learn(io-vb(Prior), Graph), LPs, Prior, VBPost),
+   maplist(expectation, VBPost, VBProbs), 
+   graph_viterbi(Graph, VBProbs, VTree, _), 
+   length(VTree,N),
+   mhs_init(VTree, State),
+   make_tree_sampler(Graph, SampleGoal),
+   make_nat_sampler(N, SampleK), 
+   Stepper=cctab:mh_step(SampleK, SampleGoal, Prior).
+
+% one step, takes state to next state, uses sampling effect
+mh_step(SampleK, SampleGoal, Prior, State1, State2) :-
+   call(SampleK, K),
+   mhs_extract(K, TK_O, State1, StateExK),
+   mhs_posterior(StateExK, Prior, PostExK),
+   maplist(expectation, PostExK, ProbsExK),
+   mht_goal(TK_O, GoalK), call(SampleGoal, ProbsExK, GoalK, TreeK),
+   mht_make(GoalK, TreeK, TK_P),
+   maplist(tree_acceptance_weight(PostExK, ProbsExK), [TK_O, TK_P], [W_O, W_P]),
+   (W_P>=W_O -> Accept=1; PA is exp(W_P-W_O), bernoulli(PA, Accept)),
+   (Accept=0 -> State2=State1; mhs_rebuild(TK_P, StateExK, State2)).
+
+make_nat_sampler(N, cctab:dist(Ps,Ks)) :- numlist(1,N,Ks), uniform(Ks,Ps).
+make_tree_sampler(G, cctab:sample_goal(P,IG)) :- graph_inside(G, P, IG).
+sample_goal(P0, IGraph0, P1, Goal, Tree) :-
+   prune_graph(snd, Goal, IGraph0, ISubGraph0),
+   copy_term(P0-ISubGraph0, P1-ISubGraph), 
+   igraph_sample_tree(ISubGraph, Goal, _-Tree, _).
+
+tree_acceptance_weight(Prior, Params, Tree, W) :- 
+   mht_counts(Prior, Tree, Counts), 
+   map_sum(params_log_prob,     Params, Counts, LP),
+   map_sum(prior_log_post_part, Prior,  Counts, LZ),
+   W is LZ - LP.
+
+params_log_prob(SW-Probs, SW-Counts, LP) :- map_sum(log_mul,Probs,Counts,LP).
+log_mul(Prob, N, X) :- X is N*log(Prob).
+
+prior_log_post_part(SW-Prior, SW-Counts, LP) :-
+   maplist(add,Prior,Counts,Posterior),
+   maplist(gammaln,Posterior,GA),
+   sumlist(GA,Sum),
+   sumlist(Posterior,A0),
+   LP is Sum - lgamma(A0).
+
+gammaln(X,Y) :- Y is lgamma(X).
+bernoulli(P1,X) :- P0 is 1-P1, dist([P0-0,P1-1],X).
+map_sum(P,X,Y,Sum) :- maplist(P,X,Y,Z), sumlist(Z,Sum).
+
+% MH state
+mhs_init(VTree, VTree).
+mhs_extract(K, Tree, Trees, Pre-Suff) :- succ(K0,K), split_at(K0,Pre,[Tree|Suff],Trees).
+mhs_rebuild(Tree, Pre-Suff, Trees) :- append(Pre,[Tree|Suff],Trees). 
+mhs_posterior(Pre-Suff, Prior, Posterior) :-
+   maplist(fst,Prior,SWs),
+   accum_stats((tree_stats(_-Pre), tree_stats(_-Suff)), SWs, Counts),
+   maplist(posterior, Prior, Counts, Posterior).
+
+mht_goal(Goal-_, Goal).
+mht_make(Goal, Tree, Goal-Tree).
+mht_counts(Prior,T,C) :- maplist(fst,Prior,SWs), accum_stats(tree_stats(T),SWs,C).
+
 
 % ---- tree conversion and printing ----
 print_tree(T) :- tree_to_tree(T,T1), write('  '), print_tree('  ', T1), nl.
