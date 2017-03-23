@@ -1,4 +1,4 @@
-:- module(delimcc, [reset/2, p_shift/2, p_reset/3, pr_shift/2, pr_reset/3]).
+:- module(delimcc, [reset/2, p_shift/2, p_reset/3, pr_shift/2, pr_reset/3, ccshell/0]).
 /** <module> Three alternative interfaces to delimited continuations
 
 This module builds on the interface provided by reset/3 and shift/1 to
@@ -104,3 +104,11 @@ pr_cont(susp(Handler, K), Prompt, X, Result) :-
 :- meta_predicate pr_shift(+,2).
 pr_shift(Prompt, Handler) :- shift(Prompt-Handler).
 
+:- module_transparent ccshell/0.
+ccshell :-
+   '$toplevel':read_expanded_query(1, Query, Bindings),
+   (   Query == end_of_file
+   ->  print_message(query, query(eof))
+   ;   '$toplevel':'$execute'(Query, Bindings),
+		 ccshell
+   ).
