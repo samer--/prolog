@@ -62,6 +62,14 @@ nom --> nom ~> +n
 
 pp --> +p, np.
 
+biased_sampler(fallback_sampler(LU,uniform_sampler)) :-
+   make_lookup_sampler([(ptabled:nom)-[0.8,0.2], (ptabled:np)-[0.3,0.6,0.1]],LU).
+make_dataset(N,XX) :-
+   length(XX,N),
+   biased_sampler(SS),
+   strand(run_sampling(SS, maplist(phrase(s), XX))).
+mcmc(G) :- strand(run_sampling(uniform_sampler,G)).
+
 :- cctable toss//0, flip//1, result//1.
 flip(X,[X|T],T) :- dist([0.6,0.4],[heads,tails],X).
 result(heads) --> ['I',win].
