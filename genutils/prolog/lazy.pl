@@ -27,18 +27,18 @@
 %  Lazily unfold an infinite stream
 lazy_unfold(P,[X1|XX],[Y1|YY],S1,S3) :-
 	call(P,X1,Y1,S1,S2), 
-	freeze(YY,lazy_unfold(P,XX,YY,S2,S3)).
+	freeze(YY,lazy:lazy_unfold(P,XX,YY,S2,S3)).
 
 lazy_unfold(P,[X1|XX],S1,S3) :-
 	call(P,X1,S1,S2), 
-	freeze(XX,lazy_unfold(P,XX,S2,S3)).
+	freeze(XX,lazy:lazy_unfold(P,XX,S2,S3)).
 
 %% lazy_unfold_finite( +P:pred(-A1,+S,-S), -XX1:list(A1), +S1:S, -S2:S) is det.
 %  Lazily unfold a finite list or infinite stream. If unfolding predicate fails,
 %  then a finite list is produced.
 lazy_unfold_finite(P,Xs,S1,S3) :-
    (  call(P,X1,S1,S2) 
-   -> Xs=[X1|XX], freeze(XX,lazy_unfold_finite(P,XX,S2,S3))
+   -> Xs=[X1|XX], freeze(XX,lazy:lazy_unfold_finite(P,XX,S2,S3))
    ;  Xs=[]
    ).
 
@@ -51,20 +51,20 @@ lazy_unfold_finite(P,Xs,S1,S3) :-
 lazy_seqmap(_,[],[],S,S).
 lazy_seqmap(P,[X1|XX],[Y1|YY],S1,S3) :-
 	call(P,X1,Y1,S1,S2), 
-	freeze(YY,lazy_seqmap(P,XX,YY,S2,S3)).
+	freeze(YY,lazy:lazy_seqmap(P,XX,YY,S2,S3)).
 
 lazy_seqmap(_,[],S,S).
 lazy_seqmap(P,[X1|XX],S1,S3) :-
 	call(P,X1,S1,S2), 
-	freeze(XX,lazy_seqmap(P,XX,S2,S3)).
+	freeze(XX,lazy:lazy_seqmap(P,XX,S2,S3)).
 
-lazy_maplist(P,[X|XX]) :- call(P,X), freeze(XX,lazy_maplist(P,XX)).
+lazy_maplist(P,[X|XX]) :- call(P,X), freeze(XX,lazy:lazy_maplist(P,XX)).
 lazy_maplist(_,[]).
 
-lazy_maplist(P,[X|XX],[Y|YY]) :- call(P,X,Y), freeze(YY,lazy_maplist(P,XX,YY)).
+lazy_maplist(P,[X|XX],[Y|YY]) :- call(P,X,Y), freeze(YY,lazy:lazy_maplist(P,XX,YY)).
 lazy_maplist(_,[],[]).
 
-lazy_maplist(P,[X|XX],[Y|YY],[Z|ZZ]) :- call(P,X,Y,Z), freeze(ZZ,lazy_maplist(P,XX,YY,ZZ)).
+lazy_maplist(P,[X|XX],[Y|YY],[Z|ZZ]) :- call(P,X,Y,Z), freeze(ZZ,lazy:lazy_maplist(P,XX,YY,ZZ)).
 lazy_maplist(_,[],[],[]).
 
-lazy_repeat(X,[X|L]) :- freeze(L,lazy_repeat(X,L)).
+lazy_repeat(X,[X|L]) :- freeze(L,lazy:lazy_repeat(X,L)).
