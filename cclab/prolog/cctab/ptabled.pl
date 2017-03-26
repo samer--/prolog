@@ -6,6 +6,8 @@
 
 :- use_module(library(tabling)).
 :- use_module(library(ccmacros2)).
+:- use_module(library(callutils), [(*)/4]).
+:- use_module(library(listutils), [take/3]).
 :- use_module(library(dcg_core), [rep//2]).
 
 :- initialization debug(cctab), module(ptabled).
