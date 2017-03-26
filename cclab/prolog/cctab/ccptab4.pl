@@ -375,6 +375,26 @@ add_sw(SW-Counts) --> {call(SW,_,Vals)}, foldl(add_sw_val(SW), Vals, Counts).
 add_sw_val(SW,Val,N) --> rb_app(SW:=Val,add(N)) -> []; rb_add(SW:=Val,N).
 
 
+% --- machines ---
+scanner(Sel, Setup, cctab:scan(Sel, Step)) :- call(Setup,Step).
+scan(Sel,Trans,X,P1,P2) :- call(Trans,LP,P1,P2), call(Sel,t(LP,P1,P2),X).
+scan0(Trans,S1,S1,S2)   :- call(Trans,S1,S2).
+>>(U,T,M) :- call(U, Unfolder), call(T, Unfolder, M).
+
+mapper(F, unfolder(TA,SA), unfolder(cctab:map_step(TA,F), SA)).
+map_step(T,F,Y) --> call(T,X), {call(F,X,Y)}.
+
+moore(TB,OB,SB, unfolder(TA,SA), unfolder(cctab:moore_step(TA,TB,OB), SA-SB)).
+moore_step(TA,TB,OB, Out, SA1-SB1, SA2-SB2) :- call(TA,OA,SA1,SA2), call(TB,OA,SB1,SB2), call(OB,SB2,Out).
+
+mean(U,M) :- moore(cctab:mm_step, cctab:mm_out, 0-0,U,M).
+mm_step(X) --> succ <\> add(X).
+mm_out(N-S,M) :- divby(N,S,M).
+
+:- meta_predicate unfold_machine(1,-), iterate(1,?,+,-), scanner(2,1,-).
+unfold_machine(MakeMachine, Stream) :- call(MakeMachine,unfolder(T,S)), lazy_unfold(T,Stream,S,_).
+iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
+
 % ----------------- Learning algorithms -----------------
 
 graph_counts(io, Graph, P1, Eta, LP) :-
@@ -414,7 +434,6 @@ gstep(Prior,P0,IG,LP,P1,P2) :-
 
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
 
-fsnd(P,SW-X,SW-Y,SW-Z) :- call(P,X,Y,Z).
 user:goal_expansion(fsnd(P,SX,SY,SZ),(SX=S-X, SY=S-Y, SZ=S-Z, call(P,X,Y,Z))).
 
 eta(SW-Alphas,SW-Probs1,SW-Eta)          :- maplist(mul,Alphas,Probs1,Eta). 
@@ -430,16 +449,6 @@ log_prob_dirichlet(SW-Prior, SW-Probs, LP) :-
    length(Prior,N),
    when(ground(Probs), plrand:log_prob_Dirichlet(N,Prior,Probs,LP)).
 
-:- meta_predicate iterate(1,?,+,-), scanner(2,1,-).
-iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
-scanner(Sel, Setup, cctab:scan(Sel, Step)) :- call(Setup,Step).
-scan(Sel,Trans,X,P1,P2) :- call(Trans,LP,P1,P2), call(Sel,t(LP,P1,P2),X).
-scan0(Trans,S1,S1,S2)   :- call(Trans,S1,S2).
-
-mean(U,M) :- moore(cctab:mm_step, cctab:mm_out, 0-0,U,M).
-mm_step(X) --> succ <\> add(X).
-mm_out(N-S,M) :- divby(N,S,M).
-
 mh_perplexity(Graph, Prior, Stream) :-
    length(LPs, 10),
    iterate(learn(io-vb(Prior), Graph), LPs, Prior, VBPost),
@@ -448,7 +457,7 @@ mh_perplexity(Graph, Prior, Stream) :-
    maplist(log_prob_dirichlet, Prior, VBProbs, LogsPVBProbs),
    sumlist(LogsPVBProbs, LogPVBProbs),
    LogPDataVBProbs is LogPDataGivenVBProbs + LogPVBProbs,
-   unfold_machine(mh_posterior(Graph, Prior, VBProbs) 
+   unfold_machine(mh_machine(Graph, Prior, VBProbs) 
                   >> mapper(p_params_given_mhs(Prior,VBProbs)) >> mean 
                   >> mapper(sub(LogPDataVBProbs)*log), Stream).
 
@@ -457,26 +466,15 @@ p_params_given_mhs(Prior,Probs,Counts-_,P) :-
    maplist(log_prob_dirichlet,Post,Probs,LPs),
    sumlist(LPs,LP), P is exp(LP).
 
->>(U,T,M) :- call(U, Unfolder), call(T, Unfolder, M).
-
-mapper(F, unfolder(TA,SA), unfolder(cctab:map_step(TA,F), SA)).
-map_step(T,F,Y) --> call(T,X), {call(F,X,Y)}.
-
-moore(TB,OB,SB, unfolder(TA,SA), unfolder(cctab:moore_step(TA,TB,OB), SA-SB)).
-moore_step(TA,TB,OB, Out, SA1-SB1, SA2-SB2) :- call(TA,OA,SA1,SA2), call(TB,OA,SB1,SB2), call(OB,SB2,Out).
-
-:- meta_predicate unfold_machine(1,-).
-unfold_machine(MakeMachine, Stream) :- call(MakeMachine,unfolder(T,S)), lazy_unfold(T,Stream,S,_).
-
 % ---- Metropolis Hastings sampler ----
 
 mh_stream(Graph, Prior, States) :-
    length(LPs, 10),
    iterate(learn(io-vb(Prior), Graph), LPs, Prior, VBPost),
    maplist(expectation, VBPost, VBProbs), 
-   unfold_machine(mh_posterior(Graph,Prior,VBProbs), States).
+   unfold_machine(mh_machine(Graph,Prior,VBProbs), States).
 
-mh_posterior(Graph, Prior, Probs0, unfolder(scan0(Stepper), State)) :-
+mh_machine(Graph, Prior, Probs0, unfolder(scan0(Stepper), State)) :-
    insist(top_value(Graph, [_])),
    graph_viterbi(Graph, Probs0, VTree, _), 
    length(VTree,N),
@@ -525,41 +523,7 @@ map_sum(P,X,Y,Sum) :- maplist(P,X,Y,Z), sumlist(Z,Sum).
 sws_tree_stats(SWs,Tree,Stats) :- accum_stats(tree_stats(Tree),SWs,Stats).
 sws_trees_stats(SWs,Trees,Stats) :- accum_stats(tree_stats(_-Trees),SWs,Stats).
 
-% ------------ MH state, multiple implementations -----------------
-
-% % 1. List of trees, recompute counts a lot
-% mhs_init(_, VTree, VTree).
-% mhs_extract(K, T, Trees, Pre-Suff) :- succ(K0,K), split_at(K0,Pre,[T|Suff],Trees).
-% mhs_rebuild(T, Pre-Suff, Trees) :- append(Pre,[T|Suff],Trees). 
-% mhs_counts(Trees, SWs, Counts)  :- accum_stats(tree_stats(_-Trees), SWs, Counts).
-% mhs_dcounts(Pre-Suff, SWs, Counts) :- accum_stats((tree_stats(_-Pre), tree_stats(_-Suff)), SWs, Counts).
-
-% mht_goal(Goal-_, Goal).
-% mht_make(_, Goal, Tree, Goal-Tree).
-% mht_counts(SWs,T,C) :- sws_tree_stats(SWs,T,C).
-
-% % 2. List of counts with total counts
-% mhs_init(SWs, VTree, Totals-GoalsCounts) :-
-%    accum_stats(tree_stats(_-VTree), SWs, Totals),
-%    maplist(fsnd(sws_trees_stats(SWs)), VTree, GoalsCounts). 
-%    % foldl(mr(snd,maplist(posterior)), GoalsCounts, Zeros, Totals).
-   
-% mhs_extract(K, G-C, Totals-GoalsCounts, dmhs(CountsExK,Pre,Suff)) :- 
-%    succ(K0,K), split_at(K0,Pre,[G-C|Suff],GoalsCounts),
-%    maplist(unobserve, C, Totals, CountsExK).
-
-% mhs_rebuild(G-C, dmhs(CountsExK,Pre,Suff), Totals-GoalsCounts) :- 
-%    maplist(posterior, C, CountsExK, Totals),
-%    append(Pre,[G-C|Suff],GoalsCounts). 
-
-% mhs_dcounts(dmhs(CountsExK,_,_), _, CountsExK).
-% mhs_counts(Counts-_, _, Counts).
-
-% mht_goal(Goal-_, Goal).
-% mht_make(SWs, Goal, T, Goal-C) :- sws_trees_stats(SWs,T,C).
-% mht_counts(_,_-C,C).
-
-% 3. rbtree to map K to tree, stash counts
+% MH state: rbtree to map K to tree, stash counts
 mhs_init(SWs, VTree, Totals-Map) :-
    accum_stats(tree_stats(_-VTree), SWs, Totals),
    maplist(fsnd(sws_trees_stats(SWs)), VTree, GoalsCounts),
@@ -595,6 +559,7 @@ user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
 
 % ----- misc -----
+fsnd(P,SW-X,SW-Y,SW-Z) :- call(P,X,Y,Z).
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
 member2(X,Y,[_|XX],[_|YY]) :- member2(X,Y,XX,YY).
