@@ -55,6 +55,9 @@ constf(F,_,X) --> call(F,X).
 %  Meet Mr. mr. A map reducer for use with any folding predicate. 
 mr(M,R,X,S1,S2) :- call(M,X,Y), call(R,Y,S1,S2).
 
+user:goal_expansion(*(P,Q,X,Z), (call(Q,X,Y), call(P,Y,Z)) :- 
+   nonvar(P), nonvar(Q).
+
 user:goal_expansion(G1, G2) :-
    G1 =.. [call, Closure |Args],
    nonvar(Closure), expand_call(Closure, Args, G2).
