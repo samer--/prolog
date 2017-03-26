@@ -72,10 +72,12 @@ run_nb_state_x(Prompt, Goal, Key) :-
 
 cont_nb_state(done, _, _).
 cont_nb_state(susp(P,Cont), Prompt, Key) :-
-   nb_getval(Key, S1), call(P, S1, S2),
-   nb_setval(Key, S2),
-   run_nb_state_x(Prompt, Cont, Key).
+   handle_nb_state(P,Key), run_nb_state_x(Prompt, Cont, Key).
 
+handle_nb_state(get(S),Key) :- !, nb_getval(Key,S).
+handle_nb_state(set(S),Key) :- !, nb_setval(Key,S).
+handle_nb_state(trans(S1,S2),Key) :- !, nb_getval(Key,S1), nb_setval(Key,S2).
+handle_nb_state(P,Key) :- nb_getval(Key,S1), call(P,S1,S2), nb_setval(Key,S2).
 
 % stateful operators
 get(S) :- p_shift(state,get(S)).
@@ -84,10 +86,6 @@ app(P) :- p_shift(state,P).
 upd(S1,S2) :- p_shift(state,trans(S1,S2)).
 
 app(Pr,P) :- p_shift(Pr,P).
-
-get(S,S,S).
-set(S,_,S).
-trans(S1,S2,S1,S2).
 
 % --------- stateful references ----------------------
 :- meta_predicate run_ref(0), ref_app(+,2).
