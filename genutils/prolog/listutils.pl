@@ -22,6 +22,7 @@
 :- module(listutils, 
 	[	natural/1		% test or enumerate natural numbers
 	,	int/1				% test or enumerate integers
+   ,  enumerate/2    % pair list items with 1-based positon
 	,	take/3, takec/3, take_while/3
 	,	drop/3, dropc/3, drop_while/3
    ,  map_filter/3
@@ -62,6 +63,13 @@ natural(N) :- (var(N) -> between(0,inf,N); integer(N), N>=0).
 % and negative values.
 int(N)     :- nonvar(N), integer(N).
 int(N)     :- var(N), (N=0; (between(1,inf,M), (N=M; N is -M))).
+
+
+%% enumerate(+L:list(A), -NL:list(pair(natural,A))) is det.
+%% enumerate(-L:list(A), -NL:list(pair(natural,A))) is nondet.
+enumerate(X,Y) :- enumerate(X,0,Y).
+enumerate([],_,[]).
+enumerate([X|Xs],I,[I-X|IXs]) :- J is I+1, enumerate(Xs,J,IXs).
 
 %% print_list( +L:list) is det.
 %

@@ -9,6 +9,9 @@
 	,	stoch/3
 	,	to_float/2
    ,  max/3
+   ,  gammaln/2
+   ,  log/2
+   ,  exp/2
 	]).
 
 :- use_module(library(apply_macros)).
@@ -19,7 +22,10 @@ sub(X,Y,Z)   :- Z is Y-X.
 add(X,Y,Z)   :- Z is Y+X.
 mul(X,Y,Z)   :- Z is X*Y.
 equal(X,Y,V) :- X=Y -> V=1; V=0.
-recip(X,Y)     :- Y is 1/X.
+recip(X,Y)   :- Y is 1/X.
+gammaln(X,Y) :- Y is lgamma(X).
+log(X,Y)     :- Y is log(X).
+exp(X,Y)     :- Y is exp(X).
 
 prodlist(L,X) :- prodlist(L,1,X).
 prodlist([],X,X) :- !.
