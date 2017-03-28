@@ -1,6 +1,6 @@
 :- module(cctab, [ run_with_tables/2, run_tab_expl/2
                  , run_sampling//2, uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
-                 , cctabled/2, dist/2, dist/3, (:=)/2, sample/1, fallback_sampler//4
+                 , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/1, fallback_sampler//4
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
                  , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
@@ -29,7 +29,6 @@
       - Goal subsumption in tabling lookup
       - Grammar with integer states instead of difference lists
       - Deterministic annealing
-      - Short cut uniform sampler
       - Automatic differentiation for counts?
       - Add lazy list versions of learning, with convergence test
       - Modularise!
@@ -70,10 +69,11 @@
 % ------------- effects -----------
 :- meta_predicate :=(3,-), cctabled(0,0), sample(2).
 
-SW := X    :- p_shift(prob,sw(SW,X)).
+dist(Dist,X)  :- maplist(pair,Ps,Xs,Dist), p_shift(prob,dist(Ps,Xs,X)).
 dist(Ps,Xs,X) :- p_shift(prob,dist(Ps,Xs,X)).
-dist(Dist,X) :- maplist(pair,Ps,Xs,Dist), p_shift(prob,dist(Ps,Xs,X)).
-sample(Goal) :- p_shift(prob,sample(Goal)). % currently only for sampling execution!
+uniform(Xs,X) :- p_shift(prob,uniform(Xs,X)).
+sample(Goal)  :- p_shift(prob,sample(Goal)). % currently only for sampling execution!
+SW := X       :- p_shift(prob,sw(SW,X)).
 
 cctabled(TableAs,Head) :- 
    p_shift(tab, tab(TableAs,Head,Inject)), 
@@ -88,6 +88,7 @@ cont_prob(done,_) --> [].
 % ------------- handlers for sampling without tabling ------------------
 sample(P,sw(SW,X))    --> !, call(P,SW,X).
 sample(_,dist(Ps,Xs,X)) --> !, pure(discrete(Xs,Ps),X).
+sample(_,uniform(Xs,X)) --> !, pure(uniform(Xs),X).
 sample(_,sample(Goal)) --> call(Goal).
 
 run_notab(Goal) :- p_reset(tab, Goal, Status), cont_notab(Status).
@@ -114,6 +115,7 @@ run_tab_expl(G, Expl) :- term_variables(G,Ans), run_tab(run_prob(expl,G,Expl,[])
 expl(tab(G))     --> {term_to_ground(G,F)}, [F].
 expl(sw(SW,X))   --> {call(SW,ID,Xs,[]), member(X,Xs)}, [ID:=X].
 expl(dist(Ps,Xs,X)) --> {member2(P,X,Ps,Xs)}, [@P].
+expl(uniform(Xs,X)) --> {length(Xs,N), P is 1/N, member(X,Xs)}, [@P].
 
 run_tab(Goal, Ans)    :- p_reset(tab, Goal, Status), cont_tab(Status, Ans).
 
@@ -185,13 +187,13 @@ graph_params(Spec,G,Params) :-
    maplist(sw_init(Spec),SWs,Params).
 graph_sw(G,SW) :- member(_-Es,G), member(E,Es), member(SW:=_,E).
 
-sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform(Vals,Params).
+sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform_probs(Vals,Params).
 sw_init(unit,SW,SW-Params)    :- call(SW,_,Vals,[]), maplist(const(1),Vals,Params).
-sw_init(random,SW,SW-Params)  :- call(SW,_,Vals,[]), random_dist(Vals,Params).
+sw_init(random,SW,SW-Params)  :- call(SW,_,Vals,[]), random_probs(Vals,Params).
 sw_init(K*Spec,SW,SW-Params)  :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
 
-uniform(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
-random_dist(Vals,Probs) :- same_length(Vals,Ws), maplist(random,Ws), stoch(Ws,Probs, _).
+uniform_probs(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
+random_probs(Vals,Probs)  :- same_length(Vals,Ws), maplist(random,Ws), stoch(Ws,Probs, _).
 
 
 % --------- graphs with probabilities -----------
@@ -511,7 +513,7 @@ mh_step(SampleK, SampleGoal, SWs, Prior, State1, State2) :-
    (W_P>=W_O -> Accept=1; PA is exp(W_P-W_O), bernoulli(PA, Accept)),
    (Accept=0 -> State2=State1; mhs_rebuild(TK_P, StateExK, State2)).
 
-make_nat_sampler(N, cctab:dist(Ps,Ks)) :- numlist(1,N,Ks), uniform(Ks,Ps).
+make_nat_sampler(N, cctab:uniform(Ks)) :- numlist(1,N,Ks).
 make_tree_sampler(G, cctab:sample_goal(P,IG)) :- graph_inside(G, P, IG).
 sample_goal(P0, IGraph0, P1, Goal, Tree) :-
    prune_graph(snd, Goal, IGraph0, ISubGraph0),
