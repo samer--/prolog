@@ -439,13 +439,13 @@ learn(map(Prior), Stats, Graph, cctab:unify3(t(P1,P2,LP))) :-
    maplist(posterior_mode, Prior, Eta, P2),
    LP = LL + LogProbP1.
 
-learn(vb(Prior), Stats, Beta, Graph, cctab:unify3(t(A1,A2,F))) :-
+learn(vb(Prior), Stats, ITemp, Graph, cctab:unify3(t(A1,A2,F))) :-
    same_length(Prior,A1),
-   maplist(f_psi(exp*mul(Beta)), A1, P1),
+   maplist(f_psi(exp*mul(ITemp)), A1, P1),
    graph_counts(Stats, Graph, P1, Eta, LL),
-   maplist(posterior(add_beta(Beta)), Prior, Eta, A2),
+   maplist(posterior(add_anneal(ITemp)), Prior, Eta, A2),
    map_sum(kldiv, Prior, A1, DA),
-   F = LL-DA/Beta.  % sub(DA,LP,F).
+   F = LL-DA/ITemp.  % sub(DA,LP,F).
 
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
 
@@ -456,8 +456,8 @@ expectation(SW-Alphas, SW-Probs)         :- stoch(Alphas,Probs).
 mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
 f_psi(F,SW-A,SW-P) :- when(ground(A), (mean_log_dirichlet(A,Q), maplist(F,Q,P))).
 
-add_beta(1,X,Y,Z)    :- !, add(X,Y,Z).
-add_beta(Beta,X,Y,Z) :- when(ground(X-Y), Z is Beta*(X+Y) + (1-Beta)).
+add_anneal(1,X,Y,Z)    :- !, add(X,Y,Z).
+add_anneal(ITemp,X,Y,Z) :- when(ground(X-Y), Z is ITemp*(X+Y) + (1-ITemp)).
 
 log_prob_dirichlet(SW-Prior, SW-Probs, LP) :-
    length(Prior,N),
