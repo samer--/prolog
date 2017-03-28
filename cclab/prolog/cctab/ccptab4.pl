@@ -4,7 +4,7 @@
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
                  , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
-                 , learn/3, iterate/4, scanner/3, mh_stream/3, mh_perplexity/3
+                 , learn/4, learn/5, iterate/4, scanner/3, gibbs/3, mh_stream/3, mh_perplexity/3
                  , strand/0, strand/1 % reexport for clients to use
                  ]).
 
@@ -28,7 +28,6 @@
    @tbd
       - Goal subsumption in tabling lookup
       - Grammar with integer states instead of difference lists
-      - Deterministic annealing
       - Automatic differentiation for counts?
       - Add lazy list versions of learning, with convergence test
       - Modularise!
@@ -65,6 +64,9 @@
 :- type cont   == pred(+values, -values).
 :- type values == list(ground).
 :- type graph  == list(pair(goal, list(list(factor)))).
+
+fsnd3(P,SW-X,SW-Y,SW-Z) :- call(P,X,Y,Z).
+user:goal_expansion(fsnd3(P,SX,SY,SZ),(SX=S-X, SY=S-Y, SZ=S-Z, call(P,X,Y,Z))).
 
 % ------------- effects -----------
 :- meta_predicate :=(3,-), cctabled(0,0), sample(2).
@@ -415,61 +417,67 @@ unfold_machine(MakeMachine, Stream) :- call(MakeMachine,unfolder(T,S)), lazy_unf
 iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
 
 % ----------------- Learning algorithms -----------------
+% !!! DO ANNEALLING FOR ALL METHODS! LOG SCALING FOR ALL METHODS
 
 graph_counts(io, Graph, P1, Eta, LP) :-
    graph_stats(Graph, P1, [log_prob(LP), grad(Grad)]), 
-   maplist(fsnd(maplist(mul)), Grad, P1, Eta).
+   maplist(fsnd3(maplist(mul)), Grad, P1, Eta).
 
 graph_counts(vit, Graph, P1, Eta, LP) :-
    graph_viterbi(Graph, P1, Tree, LP),
    when(ground(LP), tree_stats(_-Tree, Eta)).
 
-learn(Stats-ml, Graph, cctab:unify3(t(P1,P2,LP))) :-
+learn(Method,Stats,Graph,Step) :- learn(Method,Stats,1,Graph,Step).
+
+learn(ml, Stats, Graph, cctab:unify3(t(P1,P2,LP))) :-
    graph_counts(Stats, Graph, P1, Eta, LP),
    maplist(expectation, Eta, P2).
 
-learn(Stats-map(Prior), Graph, cctab:unify3(t(P1,P2,LP))) :-
+learn(map(Prior), Stats, Graph, cctab:unify3(t(P1,P2,LP))) :-
    graph_counts(Stats, Graph, P1, Eta, LL),
    map_sum(log_prob_dirichlet, Prior, P1, LogProbP1),
    maplist(posterior_mode, Prior, Eta, P2),
    LP = LL + LogProbP1.
 
-learn(Stats-vb(Prior), Graph, cctab:unify3(t(A1,A2,F))) :-
+learn(vb(Prior), Stats, Beta, Graph, cctab:unify3(t(A1,A2,F))) :-
    same_length(Prior,A1),
-   maplist(psi,A1,P1),
+   maplist(f_psi(exp*mul(Beta)), A1, P1),
    graph_counts(Stats, Graph, P1, Eta, LL),
-   maplist(posterior, Prior, Eta, A2),
+   maplist(posterior(add_beta(Beta)), Prior, Eta, A2),
    map_sum(kldiv, Prior, A1, DA),
-   F = LL-DA.  % sub(DA,LP,F).
+   F = LL-DA/Beta.  % sub(DA,LP,F).
 
-learn(gibbs(Prior), Graph, cctab:gstep(Prior,P0,IG)) :- 
+unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
+
+kldiv(SW-Prior,SW-Post,KL)               :- when(ground(Post), kldiv_dirichlet(Post,Prior,KL)).
+posterior(F,SW-Prior,SW-Eta,SW-Post)     :- maplist(F,Eta,Prior,Post).
+posterior_mode(SW-Prior,SW-Eta,SW-Probs) :- maplist(add,Eta,Prior,Post), mode_dirichlet(Post,Probs).
+expectation(SW-Alphas, SW-Probs)         :- stoch(Alphas,Probs).
+mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
+f_psi(F,SW-A,SW-P) :- when(ground(A), (mean_log_dirichlet(A,Q), maplist(F,Q,P))).
+
+add_beta(1,X,Y,Z)    :- !, add(X,Y,Z).
+add_beta(Beta,X,Y,Z) :- when(ground(X-Y), Z is Beta*(X+Y) + (1-Beta)).
+
+log_prob_dirichlet(SW-Prior, SW-Probs, LP) :-
+   length(Prior,N),
+   when(ground(Probs), plrand:log_prob_Dirichlet(N,Prior,Probs,LP)).
+
+% ---- Gibbs sampler -----------------
+gibbs(Prior, Graph, cctab:gstep(Prior,P0,IG)) :- 
    graph_inside(Graph, P0, IG).
 
 gstep(Prior,P0,IG,LP,P1,P2) :-
    copy_term(P0-IG,P1-IG1),
    igraph_sample_tree(IG1,Tree,LP),
    tree_stats(Tree, Counts),
-   maplist(posterior, Prior, Counts, Post),
+   maplist(posterior(add), Prior, Counts, Post),
    maplist(fsnd(dirichlet), Post, P2).
 
-unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
-
-user:goal_expansion(fsnd(P,SX,SY,SZ),(SX=S-X, SY=S-Y, SZ=S-Z, call(P,X,Y,Z))).
-
-kldiv(SW-Prior,SW-Post,KL)               :- when(ground(Post), kldiv_dirichlet(Post,Prior,KL)).
-posterior(SW-Prior,SW-Eta,SW-Post)       :- maplist(add,Eta,Prior,Post).
-posterior_mode(SW-Prior,SW-Eta,SW-Probs) :- maplist(add,Eta,Prior,Post), mode_dirichlet(Post,Probs).
-expectation(SW-Alphas, SW-Probs)         :- stoch(Alphas,Probs).
-mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
-psi(SW-A, SW-P) :- when(ground(A), (mean_log_dirichlet(A,H), maplist(exp,H,P))).
-
-log_prob_dirichlet(SW-Prior, SW-Probs, LP) :-
-   length(Prior,N),
-   when(ground(Probs), plrand:log_prob_Dirichlet(N,Prior,Probs,LP)).
-
+% ---- Metropolis Hastings sampler ----
 mh_perplexity(Graph, Prior, Stream) :-
    length(LPs, 10),
-   iterate(learn(io-vb(Prior), Graph), LPs, Prior, VBPost),
+   iterate(learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
    maplist(expectation, VBPost, VBProbs), 
    call(log*fst*top_value*graph_inside(Graph), VBProbs, LogPDataGivenVBProbs),
    map_sum(log_prob_dirichlet, Prior, VBProbs, LogPVBProbs),
@@ -479,14 +487,13 @@ mh_perplexity(Graph, Prior, Stream) :-
                   >> mapper(sub(LogPDataVBProbs)*log), Stream).
 
 p_params_given_mhs(Prior,Probs,Counts-_,P) :-
-   maplist(posterior,Prior,Counts,Post),
+   maplist(posterior(add),Prior,Counts,Post),
    map_sum(log_prob_dirichlet,Post,Probs,LP), P is exp(LP).
 
-% ---- Metropolis Hastings sampler ----
 
 mh_stream(Graph, Prior, States) :-
    length(LPs, 10),
-   iterate(learn(io-vb(Prior), Graph), LPs, Prior, VBPost),
+   iterate(learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
    maplist(expectation, VBPost, VBProbs), 
    unfold_machine(mh_machine(Graph,Prior,VBProbs), States).
 
@@ -505,7 +512,7 @@ mh_step(SampleK, SampleGoal, SWs, Prior, State1, State2) :-
    call(SampleK, K),
    mhs_extract(K, TK_O, State1, StateExK),
    mhs_dcounts(StateExK, SWs, CountsExK),
-   maplist(posterior, Prior, CountsExK, PostExK),
+   maplist(posterior(add), Prior, CountsExK, PostExK),
    maplist(expectation, PostExK, ProbsExK),
    mht_goal(TK_O, GoalK), call(SampleGoal, ProbsExK, GoalK, TreeK),
    mht_make(SWs, GoalK, TreeK, TK_P),
@@ -548,10 +555,10 @@ mhs_init(SWs, VTree, Totals-Map) :-
    
 mhs_extract(K, G-C, Totals-Map, dmhs(K,CountsExK,MapExK)) :-
    rb_delete(Map, K, G-C, MapExK),
-   maplist(fsnd(maplist(sub)), C, Totals, CountsExK).
+   maplist(fsnd3(maplist(sub)), C, Totals, CountsExK).
 
 mhs_rebuild(G-C, dmhs(K,CountsExK,MapExK), Totals-Map) :- 
-   maplist(posterior, C, CountsExK, Totals),
+   maplist(posterior(add), C, CountsExK, Totals),
    rb_insert_new(MapExK, K, G-C, Map).
 
 mhs_dcounts(dmhs(_,CountsExK,_), _, CountsExK).
@@ -576,7 +583,6 @@ user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
 
 % ----- misc -----
-fsnd(P,SW-X,SW-Y,SW-Z) :- call(P,X,Y,Z).
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
 member2(X,Y,[_|XX],[_|YY]) :- member2(X,Y,XX,YY).
