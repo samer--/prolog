@@ -95,6 +95,10 @@ three_dice(X) :- length(Xs,3), maplist(:=(die), Xs), sumlist(Xs,X).
 
 two_dice(X1,X2) :- die := X1, die := X2.
 
+:- cctable dice/2.
+dice(0,0).
+dice(N,Z) :- succ(M,N), die := X, dice(M,Y), Z is X+Y.
+
 % test handling of variables in answers
 :- cctable ssucc/2.
 ssucc(X, a(X)).

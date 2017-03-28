@@ -30,12 +30,10 @@
       - Grammar with integer states instead of difference lists
       - Deterministic annealing
       - Short cut uniform sampler
-      - Metropolis-Hastings sampling for evidence
       - Automatic differentiation for counts?
-      - Fix free energy computation (to include Dirichlet priors)
-      - Alternative mhs_ and mht_ implementations
       - Add lazy list versions of learning, with convergence test
       - Modularise!
+      - Log scaling for VB (psi) and entropy
 */
 
 :- use_module(library(apply_macros)).
@@ -50,12 +48,12 @@
 :- use_module(library(callutils),   [mr/5, (*)/4, const/3]).
 :- use_module(library(data/pair),   [pair/3, fst/2, fsnd/3, snd/2]).
 :- use_module(library(data/tree),   [print_tree/2]).
-:- use_module(library(plrand),      [mean_log_dirichlet/2, log_partition_dirichlet/2]).
+:- use_module(library(plrand),      [mean_log_dirichlet/2, log_partition_dirichlet/2, kldiv_dirichlet/3]).
 :- use_module(library(prob/strand), [pure//2, strand/1, strand/0]).
 :- use_module(library(prob/tagged), [discrete//3, uniform//2, dirichlet//2]).
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
-:- use_module(library(rbutils),     [rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
+:- use_module(library(rbutils),     [rb_fold/4, rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
 :- use_module(library(lambda2)).
 :- use_module(lazymath, [max/3, min/3, add/3, sub/3, mul/3, log_e/2, lse/3, stoch/2, lazy/4, surp/2]).
 :- use_module(ptabled, []).
@@ -151,20 +149,21 @@ producer(Variant, Generate, KP, Ans) :-
 goal_graph(Goal, Graph) :- 
    time(run_with_tables(run_tab(findall(E,run_prob(expl,Goal,E,[]),Es), Es), Tables)),
    time(tables_graph(Tables, Graph0)),
-   time(prune_graph(=, top:'$top$', [(top:'$top$')-Es|Graph0], Graph)).
+   prune_graph(=, top:'$top$', [(top:'$top$')-Es|Graph0], Graph).
 
 top_value(Pairs, Top) :- memberchk((top:'$top$')-Top, Pairs).
 
 tables_graph(Tables, Graph) :-
-   % does a consistency check that each goal has only one distinct set of explanations.
-   bagof(G-Es, setof(Es, Tables^tabled_solution(Tables, G, Es), [Es]), Graph).
+   rb_empty(Empty),
+   rb_fold(goal_expls, Tables, Empty, GMap),
+   rb_visit(GMap, Graph).
 
-tabled_solution(Tabs, Goal, Expls1) :-
-   rb_gen(_, tab(Goal,Solns,_), Tabs),
-   term_variables(Goal,Y), 
-   rb_gen(Y,Expls,Solns),
-   numbervars(Goal-Expls, 0, _),
-   sort(Expls,Expls1).
+goal_expls(_-tab(Goal,Solns,_)) -->
+   {term_variables(Goal,Vars)},
+   rb_fold(soln_expls(Goal,Vars), Solns).
+soln_expls(G,Y,Y1-Es) -->
+   {copy_term(G-Y,G1-Y1), numbervars(G1-Y1, 0, _)}, % NB Es is already ground
+   (rb_add(G1,Es) -> []; []). % NB duplicate goals should have the same explanations!
 
 prune_graph(Mapper, Top, GL1, GL2) :-
    list_to_rbtree(GL1,G1), 
@@ -321,12 +320,30 @@ igraph_sample_tree(Graph, Tree, LogProb) :-
 igraph_sample_tree(Graph, Head, Head - Subtrees, LogProb) :-
    memberchk(Head-(_-Expls), Graph), % Head should be unique in graph
    maplist(pair,Ps,Es,Expls), stoch(Ps,Ps1,_), dist(Ps1,Es,Expl),
-   maplist(sample_subexpl_tree(Graph), Expl, LogProbs, Subtrees), 
-   sumlist(LogProbs, LogProb).
+   map_sum(sample_subexpl_tree(Graph), Expl, Subtrees, LogProb). 
 
-sample_subexpl_tree(G, _-(M:Goal), LP, Tree) :- !, igraph_sample_tree(G, M:Goal, Tree, LP).
-sample_subexpl_tree(_, P-(SW:=Val), LP, SW:=Val) :- !, LP is log(P).
-sample_subexpl_tree(_, P-const, LP, const) :- LP is log(P).
+sample_subexpl_tree(G, _-(M:Goal),  Tree,    LP) :- !, igraph_sample_tree(G, M:Goal, Tree, LP).
+sample_subexpl_tree(_, P-(SW:=Val), SW:=Val, LP) :- !, LP is log(P).
+sample_subexpl_tree(_, P-const,     const,   LP) :- LP is log(P).
+
+% ---- explanation entropy ----
+% TODO: log scaled version
+inside_graph_entropy(IGraph, GoalEntropies) :- 
+   rb_empty(E), 
+   foldl(goal_entropy, IGraph, GoalEntropies, E, Map), 
+   rb_visit(Map, GoalEntropies).
+
+goal_entropy(Goal-(_ - WeightedExpls), Goal-Entropy) -->
+   pmap(Goal,Entropy),
+   {maplist(pair, Ws, Es, WeightedExpls), stoch(Ws, Ps)},
+   run_right(foldl(expl_entropy,Ps,Es), 0, Entropy).
+
+expl_entropy(Pe, Expl) --> 
+   {when(ground(FactorEntropies-Pe), ExplEntropy is Pe*(FactorEntropies - log(Pe)))},
+   run_right(foldl(mr(snd,factor_entropy),Expl), 0, FactorEntropies) <\> add(ExplEntropy). 
+
+factor_entropy(M:Head) --> !, pmap(M:Head,H) <\> add(H).
+factor_entropy(_) --> []. 
 
 % --------- outside probabilities, ESS ----------------
 graph_stats(Graph,Params,Opts) :-
@@ -399,7 +416,7 @@ iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
 
 graph_counts(io, Graph, P1, Eta, LP) :-
    graph_stats(Graph, P1, [log_prob(LP), grad(Grad)]), 
-   maplist(eta, Grad, P1, Eta).
+   maplist(fsnd(maplist(mul)), Grad, P1, Eta).
 
 graph_counts(vit, Graph, P1, Eta, LP) :-
    graph_viterbi(Graph, P1, Tree, LP),
@@ -411,16 +428,17 @@ learn(Stats-ml, Graph, cctab:unify3(t(P1,P2,LP))) :-
 
 learn(Stats-map(Prior), Graph, cctab:unify3(t(P1,P2,LP))) :-
    graph_counts(Stats, Graph, P1, Eta, LL),
+   map_sum(log_prob_dirichlet, Prior, P1, LogProbP1),
    maplist(posterior_mode, Prior, Eta, P2),
-   maplist(log_prob_dirichlet, Prior, P2, LPs),
-   foldl(add,LPs,LL,LP).
+   LP = LL + LogProbP1.
 
-learn(Stats-vb(Prior), Graph, cctab:unify3(t(A1,A2,LP))) :-
+learn(Stats-vb(Prior), Graph, cctab:unify3(t(A1,A2,F))) :-
    same_length(Prior,A1),
    maplist(psi,A1,P1),
-   graph_counts(Stats, Graph, P1, Eta, LP),
-   maplist(posterior, Prior, Eta, A2).
-   % !! add KL div from A2 to Prior and entropy of inside distribution
+   graph_counts(Stats, Graph, P1, Eta, LL),
+   maplist(posterior, Prior, Eta, A2),
+   map_sum(kldiv, Prior, A1, DA),
+   F = LL-DA.  % sub(DA,LP,F).
 
 learn(gibbs(Prior), Graph, cctab:gstep(Prior,P0,IG)) :- 
    graph_inside(Graph, P0, IG).
@@ -430,19 +448,17 @@ gstep(Prior,P0,IG,LP,P1,P2) :-
    igraph_sample_tree(IG1,Tree,LP),
    tree_stats(Tree, Counts),
    maplist(posterior, Prior, Counts, Post),
-   maplist(sample_dirichlet, Post, P2).
+   maplist(fsnd(dirichlet), Post, P2).
 
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
 
 user:goal_expansion(fsnd(P,SX,SY,SZ),(SX=S-X, SY=S-Y, SZ=S-Z, call(P,X,Y,Z))).
 
-eta(SW-Alphas,SW-Probs1,SW-Eta)          :- maplist(mul,Alphas,Probs1,Eta). 
-unobserve(SW-Eta,SW-Post,SW-Prior)       :- maplist(sub,Eta,Post,Prior).
+kldiv(SW-Prior,SW-Post,KL)               :- when(ground(Post), kldiv_dirichlet(Post,Prior,KL)).
 posterior(SW-Prior,SW-Eta,SW-Post)       :- maplist(add,Eta,Prior,Post).
 posterior_mode(SW-Prior,SW-Eta,SW-Probs) :- maplist(add,Eta,Prior,Post), mode_dirichlet(Post,Probs).
 expectation(SW-Alphas, SW-Probs)         :- stoch(Alphas,Probs).
 mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
-sample_dirichlet(SW-Alpha,SW-Probs) :- sample(pure(dirichlet(Alpha),Probs)).
 psi(SW-A, SW-P) :- when(ground(A), (mean_log_dirichlet(A,H), maplist(exp,H,P))).
 
 log_prob_dirichlet(SW-Prior, SW-Probs, LP) :-
@@ -454,8 +470,7 @@ mh_perplexity(Graph, Prior, Stream) :-
    iterate(learn(io-vb(Prior), Graph), LPs, Prior, VBPost),
    maplist(expectation, VBPost, VBProbs), 
    call(log*fst*top_value*graph_inside(Graph), VBProbs, LogPDataGivenVBProbs),
-   maplist(log_prob_dirichlet, Prior, VBProbs, LogsPVBProbs),
-   sumlist(LogsPVBProbs, LogPVBProbs),
+   map_sum(log_prob_dirichlet, Prior, VBProbs, LogPVBProbs),
    LogPDataVBProbs is LogPDataGivenVBProbs + LogPVBProbs,
    unfold_machine(mh_machine(Graph, Prior, VBProbs) 
                   >> mapper(p_params_given_mhs(Prior,VBProbs)) >> mean 
@@ -463,8 +478,7 @@ mh_perplexity(Graph, Prior, Stream) :-
 
 p_params_given_mhs(Prior,Probs,Counts-_,P) :-
    maplist(posterior,Prior,Counts,Post),
-   maplist(log_prob_dirichlet,Post,Probs,LPs),
-   sumlist(LPs,LP), P is exp(LP).
+   map_sum(log_prob_dirichlet,Post,Probs,LP), P is exp(LP).
 
 % ---- Metropolis Hastings sampler ----
 
@@ -518,7 +532,8 @@ prior_log_post_part(SW-Prior, SW-Counts, LP) :-
    log_partition_dirichlet(Posterior,LP).
 
 bernoulli(P1,X) :- P0 is 1-P1, dist([P0-0,P1-1],X).
-map_sum(P,X,Y,Sum) :- maplist(P,X,Y,Z), sumlist(Z,Sum).
+dirichlet(As,Ps) :- sample(pure(dirichlet(As),Ps)).
+map_sum(P,X,Y,Sum) :- maplist(P,X,Y,Z), when(ground(Z), sumlist(Z,Sum)).
 
 sws_tree_stats(SWs,Tree,Stats) :- accum_stats(tree_stats(Tree),SWs,Stats).
 sws_trees_stats(SWs,Trees,Stats) :- accum_stats(tree_stats(_-Trees),SWs,Stats).
@@ -531,7 +546,7 @@ mhs_init(SWs, VTree, Totals-Map) :-
    
 mhs_extract(K, G-C, Totals-Map, dmhs(K,CountsExK,MapExK)) :-
    rb_delete(Map, K, G-C, MapExK),
-   maplist(unobserve, C, Totals, CountsExK).
+   maplist(fsnd(maplist(sub)), C, Totals, CountsExK).
 
 mhs_rebuild(G-C, dmhs(K,CountsExK,MapExK), Totals-Map) :- 
    maplist(posterior, C, CountsExK, Totals),
