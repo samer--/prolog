@@ -55,8 +55,8 @@
 :- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
 :- use_module(library(rbutils),     [rb_fold/4, rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
 :- use_module(library(lambda2)).
-:- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, log_e/2, surp/2, lse/3, stoch/2
-                        , patient/3, lazy/4, map_sum/3, map_sum/4]).
+:- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, pow/3, log_e/2, surp/2, lse/3, stoch/2
+                        , patient/4, patient/3, lazy/4, map_sum/3, map_sum/4]).
 :- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
@@ -243,7 +243,6 @@ sr_factor(SR, M:Head)  --> pmap(M:Head,X) <\> sr_times(SR,X), !.
 sr_factor(SR, SW:=Val) --> pmap(SW:=Val,X) <\> sr_times(SR,X), !. 
 sr_factor(SR, @P)      --> {sr_inj(SR,const,P,X)}, \> sr_times(SR,X), !.
 sr_param(SR,F,X,P) :- sr_inj(SR,F,P,X).
-true1(_).
 
 % --------- semirings ---------
 sr_inj(r(I,_,_),  _, P, X)     :- call(I,P,X).
@@ -429,7 +428,7 @@ iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
 
 graph_counts(io, Graph, P1, LP-Eta) :-
    graph_stats(Graph, P1, [log_prob(LP), grad(Grad)]), 
-   maplist(fsnd3(maplist(mul)), Grad, P1, Eta).
+   map_swc(mul, Grad, P1, Eta).
 
 graph_counts(vit, Graph, P1, LP-Eta) :-
    graph_viterbi(Graph, P1, Tree, LP),
@@ -437,40 +436,41 @@ graph_counts(vit, Graph, P1, LP-Eta) :-
 
 learn(Method,Stats,Graph,Step) :- learn(Method,Stats,1,Graph,Step).
 
-learn(ml, Stats, Graph, cctab:unify3(t(P1,P2,LL))) :-
-   graph_counts(Stats, Graph, P1, LL-Eta),
+learn(ml, Stats, ITemp, Graph, cctab:unify3(t(P1,P2,LL))) :-
+   graph_counts(Stats, Graph, PP, LL-Eta),
+   map_swc(pow(ITemp), P1, PP),
    map_sw(stoch, Eta, P2).
 
-learn(map(Prior), Stats, Graph, cctab:unify3(t(P1,P2,LL+LogProbP1))) :-
-   graph_counts(Stats, Graph, P1, LL-Eta),
-   sw_log_prob(Prior, P1, LogProbP1),
+learn(map(Prior), Stats, ITemp, Graph, cctab:unify3(t(P1,P2,LL+LP))) :-
+   graph_counts(Stats, Graph, PP, LL-Eta),
+   patient(mul(ITemp)*sw_log_prob(Prior), P1, LP),
    sw_posteriors(Prior, Eta, Post),
+   map_swc(pow(ITemp), P1, PP),
    map_sw(stoch*maplist(max(0)*add(-1)), Post, P2).
 
-learn(vb(Prior), Stats, ITemp, Graph, cctab:unify3(t(A1,A2,F))) :-
-   maplist(map_swc(true2,Prior), [A1,PsiA1]), % establish same shape
-   map_swc(add(1-ITemp)*mul(ITemp), Prior, EffPrior),
+learn(vb(Prior), Stats, ITemp, Graph, cctab:unify3(t(A1,A2,LL-Div))) :-
+   maplist(map_swc(true2,Prior), [A1,Pi]), % establish same shape as prior
+   map_swc(mul_add(ITemp,1-ITemp), Prior, EffPrior),
    map_sum_sw(log_partition_dirichlet, Prior, LogZPrior),
-   % patient(divergence(ITemp, Prior, EffPrior), A1, PsiA1, Diff),
-   patient(patient(map_sum_sw(map_sum(math:mul)),PsiA1) * map_swc(math:sub,EffPrior), A1, Diff),
-   patient(map_sum_sw(log_partition_dirichlet), A1, LogZA1),
-   map_sw(patient(mean_log_dirichlet), A1, PsiA1),
-   call(graph_counts(Stats, Graph) * map_swc(patient(exp)*mul(ITemp)), PsiA1, LL-Eta),
-   call(map_swc(add, EffPrior) * map_swc(mul(ITemp)), Eta, A2),
-   F = LL + LogZA1 - ITemp*LogZPrior - Diff.
+   patient(vb_helper(ITemp, LogZPrior, EffPrior), A1, Pi - Div),
+   graph_counts(Stats, Graph, Pi, LL-Eta),
+   map_swc(mul_add(ITemp), EffPrior, Eta, A2).
 
-divergence(ITemp, Prior, EffPrior, A, PsiA, Div + LogZA1 - ITemp*LogZPrior) :- 
-   map_sum_sw(log_partition_dirichlet, Prior, LogZPrior),
-   map_sum_sw(log_partition_dirichlet, A1, LogZA1),
-   map_swc(math:sub,EffPrior, A, Delta),
-   map_sum_sw(map_sum(math:mul), PsiA, Delta, Div).
+vb_helper(ITemp, LogZPrior, EffPrior, A, Pi - Div) :- 
+   map_sw(mean_log_dirichlet, A, PsiA),
+   map_swc(math:sub, EffPrior, A, Delta),
+   map_swc(exp*(math:mul(ITemp)), PsiA, Pi),
+   map_sum_sw(log_partition_dirichlet, A, LogZA),
+   map_sum_sw(map_sum(math:mul), PsiA, Delta, Diff),
+   Div is Diff - LogZA + ITemp*LogZPrior.
 
+mul_add(1,X,Y,Z) :- !, when(ground(Y), Z is X+Y).
+mul_add(K,X,Y,Z) :- when(ground(Y), Z is X+K*Y).
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
-true2(_,_).
 
 sw_posteriors(Prior,Eta,Post) :- map_swc(add,Eta,Prior,Post).
 sw_expectations(Alphas,Probs) :- map_sw(stoch,Alphas,Probs).
-sw_log_prob(Alphas,Probs,LP)  :- patient(map_sum_sw(log_prob_dirichlet,Alphas),Probs,LP).
+sw_log_prob(Alphas,Probs,LP)  :- map_sum_sw(log_prob_dirichlet,Alphas,Probs,LP).
 
 % ---- Gibbs sampler -----------------
 gibbs(Prior, Graph, cctab:gstep(Prior,P0,IG)) :- 
@@ -586,3 +586,5 @@ user:portray(node(p(Prob))) :- write('@'), print(Prob).
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
 member2(X,Y,[_|XX],[_|YY]) :- member2(X,Y,XX,YY).
+true2(_,_).
+true1(_).
