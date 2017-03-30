@@ -4,8 +4,8 @@
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
                  , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
-                 , learn/4, learn/5, iterate/4, scanner/3, gibbs/3, mh_stream/3, mh_perplexity/3
-                 , strand/0, strand/1 % reexport for clients to use
+                 , learn/4, learn/5, iterate/4, gibbs/3, mh_stream/3, mh_perplexity/3
+                 , strand/0, strand/1, iterate/4, unfold_machine/2, iterator/3 % reexport for clients to use
                  ]).
 
 /** <module> Continuation based probabilistic inference.
@@ -26,23 +26,22 @@
    maximum a posterior, variational Bayes, and (to come, probably) Viterbi learning.
 
    @tbd
+      - Add lazy list versions of learning, with convergence test
+      - Log scaling for all learning methods and entropy
+      - Alternate Gibbs sampler
+      - Test perplexity using all three MCMC methods
       - Goal subsumption in tabling lookup
       - Grammar with integer states instead of difference lists
       - Automatic differentiation for counts?
-      - Add lazy list versions of learning, with convergence test
       - Modularise!
-      - Log scaling for VB (psi) and entropy
-      - Alternate Gibbs sampler
-      - Test perplexity using all three MCMC methods
 */
 
 :- use_module(library(apply_macros)).
 :- use_module(library(typedef)).
-:- use_module(library(dcg_progress)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
 :- use_module(library(dcg_core),    [rep//2]).
-:- use_module(library(lazy),        [lazy_maplist/3, lazy_unfold/4, lazy_unfold_finite/4]).
+:- use_module(library(lazy),        [lazy_maplist/3, lazy_unfold_finite/4]).
 :- use_module(library(math),        [stoch/3, divby/3, gammaln/2, exp/2]).
 :- use_module(library(listutils),   [cons//1, enumerate/2, foldr/4, split_at/4]).
 :- use_module(library(callutils),   [mr/5, (*)/4, const/3]).
@@ -54,6 +53,7 @@
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
 :- use_module(library(rbutils),     [rb_fold/4, rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
+:- use_module(library(machines),    [iterate/4, iterator/3, unfold_machine/2, moore/5, mapper/3, scan0/4, (>>)/3]).
 :- use_module(library(lambda2)).
 :- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, pow/3, log_e/2, surp/2, lse/3, stoch/2
                         , patient/4, patient/3, lazy/4, map_sum/3, map_sum/4]).
@@ -339,7 +339,6 @@ sample_subexpl_tree(_, P-(SW:=Val), SW:=Val, LP) :- !, LP is log(P).
 sample_subexpl_tree(_, P-const,     const,   LP) :- LP is log(P).
 
 % ---- explanation entropy ----
-% TODO: log scaled version
 inside_graph_entropy(IGraph, GoalEntropies) :- 
    rb_empty(E), 
    foldl(goal_entropy, IGraph, GoalEntropies, E, Map), 
@@ -402,29 +401,9 @@ add_stats(Stats) --> foldl(add_sw,Stats).
 add_sw(SW-Counts) --> {call(SW,_,Vals)}, foldl(add_sw_val(SW), Vals, Counts).
 add_sw_val(SW,Val,N) --> rb_app(SW:=Val,add(N)) -> []; rb_add(SW:=Val,N).
 
-
-% --- machines ---
-scanner(Sel, Setup, cctab:scan(Sel, Step)) :- call(Setup,Step).
-scan(Sel,Trans,X,P1,P2) :- call(Trans,LP,P1,P2), call(Sel,t(LP,P1,P2),X).
-scan0(Trans,S1,S1,S2)   :- call(Trans,S1,S2).
->>(U,T,M) :- call(U, Unfolder), call(T, Unfolder, M).
-
-mapper(F, unfolder(TA,SA), unfolder(cctab:map_step(TA,F), SA)).
-map_step(T,F,Y) --> call(T,X), {call(F,X,Y)}.
-
-moore(TB,OB,SB, unfolder(TA,SA), unfolder(cctab:moore_step(TA,TB,OB), SA-SB)).
-moore_step(TA,TB,OB, Out, SA1-SB1, SA2-SB2) :- call(TA,OA,SA1,SA2), call(TB,OA,SB1,SB2), call(OB,SB2,Out).
-
-mean(U,M) :- moore(cctab:mm_step, cctab:mm_out, 0-0,U,M).
-mm_step(X) --> succ <\> add(X).
-mm_out(N-S,M) :- divby(N,S,M).
-
-:- meta_predicate unfold_machine(1,-), iterate(1,?,+,-), scanner(2,1,-).
-unfold_machine(MakeMachine, Stream) :- call(MakeMachine,unfolder(T,S)), lazy_unfold(T,Stream,S,_).
-iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
-
-% ----------------- Learning algorithms -----------------
-% !!! DO ANNEALLING FOR ALL METHODS! LOG SCALING FOR ALL METHODS
+sw_posteriors(Prior,Eta,Post) :- map_swc(add,Eta,Prior,Post).
+sw_expectations(Alphas,Probs) :- map_sw(stoch,Alphas,Probs).
+sw_log_prob(Alphas,Probs,LP)  :- map_sum_sw(log_prob_dirichlet,Alphas,Probs,LP).
 
 graph_counts(io, Graph, P1, LP-Eta) :-
    graph_stats(Graph, P1, [log_prob(LP), grad(Grad)]), 
@@ -468,10 +447,6 @@ mul_add(1,X,Y,Z) :- !, when(ground(Y), Z is X+Y).
 mul_add(K,X,Y,Z) :- when(ground(Y), Z is X+K*Y).
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
 
-sw_posteriors(Prior,Eta,Post) :- map_swc(add,Eta,Prior,Post).
-sw_expectations(Alphas,Probs) :- map_sw(stoch,Alphas,Probs).
-sw_log_prob(Alphas,Probs,LP)  :- map_sum_sw(log_prob_dirichlet,Alphas,Probs,LP).
-
 % ---- Gibbs sampler -----------------
 gibbs(Prior, Graph, cctab:gstep(Prior,P0,IG)) :- 
    graph_inside(Graph, P0, IG).
@@ -499,6 +474,10 @@ p_params_given_mhs(Prior,Probs,Counts-_,P) :-
    sw_posteriors(Prior,Counts,Post),
    sw_log_prob(Post,Probs,LP), P is exp(LP).
 
+% mean machine
+mean(In,Out) :- moore(mm_step, mm_out, 0-0, In, Out).
+mm_step(X) --> succ <\> add(X).
+mm_out(N-S,M) :- divby(N,S,M).
 
 mh_stream(Graph, Prior, States) :-
    length(LPs, 10),
