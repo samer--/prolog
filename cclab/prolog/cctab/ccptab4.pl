@@ -1,6 +1,6 @@
 :- module(cctab, [ run_with_tables/2, run_tab_expl/2
                  , run_sampling//2, uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
-                 , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/1, fallback_sampler//4
+                 , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/2, fallback_sampler//4
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
                  , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
@@ -32,6 +32,8 @@
       - Add lazy list versions of learning, with convergence test
       - Modularise!
       - Log scaling for VB (psi) and entropy
+      - Alternate Gibbs sampler
+      - Test perplexity using all three MCMC methods
 */
 
 :- use_module(library(apply_macros)).
@@ -46,14 +48,15 @@
 :- use_module(library(callutils),   [mr/5, (*)/4, const/3]).
 :- use_module(library(data/pair),   [pair/3, fst/2, fsnd/3, snd/2]).
 :- use_module(library(data/tree),   [print_tree/2]).
-:- use_module(library(plrand),      [mean_log_dirichlet/2, log_partition_dirichlet/2, kldiv_dirichlet/3]).
+:- use_module(library(plrand),      [log_prob_dirichlet/3, mean_log_dirichlet/2, log_partition_dirichlet/2, kldiv_dirichlet/3]).
 :- use_module(library(prob/strand), [pure//2, strand/1, strand/0]).
 :- use_module(library(prob/tagged), [discrete//3, uniform//2, dirichlet//2]).
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
 :- use_module(library(rbutils),     [rb_fold/4, rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
 :- use_module(library(lambda2)).
-:- use_module(lazymath, [max/3, min/3, add/3, sub/3, mul/3, log_e/2, lse/3, stoch/2, lazy/4, surp/2]).
+:- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, log_e/2, surp/2, lse/3, stoch/2
+                        , patient/3, lazy/4, map_sum/3, map_sum/4]).
 :- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
@@ -69,12 +72,15 @@ fsnd3(P,SW-X,SW-Y,SW-Z) :- call(P,X,Y,Z).
 user:goal_expansion(fsnd3(P,SX,SY,SZ),(SX=S-X, SY=S-Y, SZ=S-Z, call(P,X,Y,Z))).
 
 % ------------- effects -----------
-:- meta_predicate :=(3,-), cctabled(0,0), sample(2).
+:- meta_predicate :=(3,-), cctabled(0,0), sample(3,-).
+
+bernoulli(P1,X) :- P0 is 1-P1, dist([P0-0,P1-1],X).
+dirichlet(As,Ps) :- sample(pure(dirichlet(As)),Ps).
 
 dist(Dist,X)  :- maplist(pair,Ps,Xs,Dist), p_shift(prob,dist(Ps,Xs,X)).
 dist(Ps,Xs,X) :- p_shift(prob,dist(Ps,Xs,X)).
 uniform(Xs,X) :- p_shift(prob,uniform(Xs,X)).
-sample(Goal)  :- p_shift(prob,sample(Goal)). % currently only for sampling execution!
+sample(P,X)   :- p_shift(prob,sample(P,X)). % currently only for sampling execution!
 SW := X       :- p_shift(prob,sw(SW,X)).
 
 cctabled(TableAs,Head) :- 
@@ -86,12 +92,11 @@ run_prob(Handler,Goal) --> {p_reset(prob, Goal, Status)}, cont_prob(Status,Handl
 cont_prob(susp(Req,Cont),H) --> call(H,Req), run_prob(H,Cont).
 cont_prob(done,_) --> [].
 
-
 % ------------- handlers for sampling without tabling ------------------
-sample(P,sw(SW,X))    --> !, call(P,SW,X).
+sample(P,sw(SW,X))      --> !, call(P,SW,X).
 sample(_,dist(Ps,Xs,X)) --> !, pure(discrete(Xs,Ps),X).
 sample(_,uniform(Xs,X)) --> !, pure(uniform(Xs),X).
-sample(_,sample(Goal)) --> call(Goal).
+sample(_,sample(P,X))   --> call(P,X).
 
 run_notab(Goal) :- p_reset(tab, Goal, Status), cont_notab(Status).
 cont_notab(susp(tab(_,Head,Head), Cont)) :- run_notab(Cont).
@@ -103,8 +108,7 @@ run_sampling(Sampler,Goal,S1,S2) :-
 
 uniform_sampler(SW,X) --> {call(SW,_,Xs,[])}, pure(uniform(Xs),X).
 lookup_sampler(Map,SW,X) --> {call(SW,ID,Xs,[]), rb_lookup(ID,Ps,Map)}, pure(discrete(Xs,Ps),X).
-make_lookup_sampler(Params,cctab:lookup_sampler(Map)) :-
-   list_to_rbtree(Params, Map).
+make_lookup_sampler(Params,cctab:lookup_sampler(Map)) :- list_to_rbtree(Params, Map).
 fallback_sampler(S1, S2, SW,X) --> call(S1,SW,X) -> []; call(S2,SW,X).
 
 
@@ -152,7 +156,7 @@ producer(Variant, Generate, KP, Ans) :-
 :- meta_predicate goal_graph(0,-).
 goal_graph(Goal, Graph) :- 
    time(run_with_tables(run_tab(findall(E,run_prob(expl,Goal,E,[]),Es), Es), Tables)),
-   time(tables_graph(Tables, Graph0)),
+   tables_graph(Tables, Graph0),
    prune_graph(=, top:'$top$', [(top:'$top$')-Es|Graph0], Graph).
 
 top_value(Pairs, Top) :- memberchk((top:'$top$')-Top, Pairs).
@@ -195,13 +199,19 @@ sw_init(random,SW,SW-Params)  :- call(SW,_,Vals,[]), random_probs(Vals,Params).
 sw_init(K*Spec,SW,SW-Params)  :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
 
 uniform_probs(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
-random_probs(Vals,Probs)  :- same_length(Vals,Ws), maplist(random,Ws), stoch(Ws,Probs, _).
+random_probs(Vals,Probs)  :- maplist(const(1),Vals,Ones), dirichlet(Ones,Probs).
 
+% manipulating parameter lists
+map_sw(P,X,Y) :- maplist(fsnd(P),X,Y).
+map_swc(P,X,Y) :- map_sw(maplist(P),X,Y).
+map_swc(P,X,Y,Z) :- maplist(fsnd3(maplist(P)),X,Y,Z).
+map_sum_sw(P,X,Sum) :- map_sum(P*snd,X,Sum).
+map_sum_sw(P,X,Y,Sum) :- map_sum(f2sw1(P),X,Y,Sum).
+f2sw1(P,SW-X,SW-Y,Z) :- call(P,X,Y,Z).
 
-% --------- graphs with probabilities -----------
-
+% --------- switch-value map -----------
 pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
-pmap_sw(Map,SW) :- rb_gen(SW:=_,_,Map).
+pmap_sws(Map,SWs) :- setof(SW, V^X^rb_gen(SW:=V,X,Map), SWs) -> true; SWs=[].
 
 :- meta_predicate pmap_collate(3,1,+,+,?).
 pmap_collate(Conv,Def,Map,SW,SW-XX) :- 
@@ -217,8 +227,7 @@ pmap_get(Conv,Def,Map,SW,Val,X) :-
 %  semirings can produce many kinds of parsing analysis.
 semiring_graph_fold(SR, Graph, Params, GoalSums) :- 
    rb_empty(E), 
-   foldl(sr_sum(SR), Graph, GoalSums, E, Map), 
-   (setof(SW, pmap_sw(Map,SW), SWs) -> true; SWs=[]),
+   foldl(sr_sum(SR), Graph, GoalSums, E, Map), pmap_sws(Map, SWs),
    maplist(pmap_collate(sr_param(SR),true1,Map),SWs,Params).
 
 sr_sum(SR, Goal-Expls, Goal-Sum) -->
@@ -376,8 +385,7 @@ qc_alpha(qc(BetaQ,Pe,P)) -->
 :- meta_predicate accum_stats(//,-), accum_stats(//,+,-).
 accum_stats(Pred,Stats) :- 
    rb_empty(C0), 
-   call_dcg(Pred,C0,C1),
-   (setof(SW, cctab:pmap_sw(C1,SW), SWs) -> true; SWs=[]),
+   call_dcg(Pred,C0,C1), pmap_sws(C1, SWs),
    maplist(cctab:pmap_collate(right,=(0),C1),SWs,Stats).
 accum_stats(Pred,SWs,Stats) :- 
    rb_empty(C0), 
@@ -419,49 +427,50 @@ iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
 % ----------------- Learning algorithms -----------------
 % !!! DO ANNEALLING FOR ALL METHODS! LOG SCALING FOR ALL METHODS
 
-graph_counts(io, Graph, P1, Eta, LP) :-
+graph_counts(io, Graph, P1, LP-Eta) :-
    graph_stats(Graph, P1, [log_prob(LP), grad(Grad)]), 
    maplist(fsnd3(maplist(mul)), Grad, P1, Eta).
 
-graph_counts(vit, Graph, P1, Eta, LP) :-
+graph_counts(vit, Graph, P1, LP-Eta) :-
    graph_viterbi(Graph, P1, Tree, LP),
    when(ground(LP), tree_stats(_-Tree, Eta)).
 
 learn(Method,Stats,Graph,Step) :- learn(Method,Stats,1,Graph,Step).
 
-learn(ml, Stats, Graph, cctab:unify3(t(P1,P2,LP))) :-
-   graph_counts(Stats, Graph, P1, Eta, LP),
-   maplist(expectation, Eta, P2).
+learn(ml, Stats, Graph, cctab:unify3(t(P1,P2,LL))) :-
+   graph_counts(Stats, Graph, P1, LL-Eta),
+   map_sw(stoch, Eta, P2).
 
-learn(map(Prior), Stats, Graph, cctab:unify3(t(P1,P2,LP))) :-
-   graph_counts(Stats, Graph, P1, Eta, LL),
-   map_sum(log_prob_dirichlet, Prior, P1, LogProbP1),
-   maplist(posterior_mode, Prior, Eta, P2),
-   LP = LL + LogProbP1.
+learn(map(Prior), Stats, Graph, cctab:unify3(t(P1,P2,LL+LogProbP1))) :-
+   graph_counts(Stats, Graph, P1, LL-Eta),
+   sw_log_prob(Prior, P1, LogProbP1),
+   sw_posteriors(Prior, Eta, Post),
+   map_sw(stoch*maplist(max(0)*add(-1)), Post, P2).
 
 learn(vb(Prior), Stats, ITemp, Graph, cctab:unify3(t(A1,A2,F))) :-
-   same_length(Prior,A1),
-   maplist(f_psi(exp*mul(ITemp)), A1, P1),
-   graph_counts(Stats, Graph, P1, Eta, LL),
-   maplist(posterior(add_anneal(ITemp)), Prior, Eta, A2),
-   map_sum(kldiv, Prior, A1, DA),
-   F = LL-DA/ITemp.  % sub(DA,LP,F).
+   maplist(map_swc(true2,Prior), [A1,PsiA1]), % establish same shape
+   map_swc(add(1-ITemp)*mul(ITemp), Prior, EffPrior),
+   map_sum_sw(log_partition_dirichlet, Prior, LogZPrior),
+   % patient(divergence(ITemp, Prior, EffPrior), A1, PsiA1, Diff),
+   patient(patient(map_sum_sw(map_sum(math:mul)),PsiA1) * map_swc(math:sub,EffPrior), A1, Diff),
+   patient(map_sum_sw(log_partition_dirichlet), A1, LogZA1),
+   map_sw(patient(mean_log_dirichlet), A1, PsiA1),
+   call(graph_counts(Stats, Graph) * map_swc(patient(exp)*mul(ITemp)), PsiA1, LL-Eta),
+   call(map_swc(add, EffPrior) * map_swc(mul(ITemp)), Eta, A2),
+   F = LL + LogZA1 - ITemp*LogZPrior - Diff.
+
+divergence(ITemp, Prior, EffPrior, A, PsiA, Div + LogZA1 - ITemp*LogZPrior) :- 
+   map_sum_sw(log_partition_dirichlet, Prior, LogZPrior),
+   map_sum_sw(log_partition_dirichlet, A1, LogZA1),
+   map_swc(math:sub,EffPrior, A, Delta),
+   map_sum_sw(map_sum(math:mul), PsiA, Delta, Div).
 
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
+true2(_,_).
 
-kldiv(SW-Prior,SW-Post,KL)               :- when(ground(Post), kldiv_dirichlet(Post,Prior,KL)).
-posterior(F,SW-Prior,SW-Eta,SW-Post)     :- maplist(F,Eta,Prior,Post).
-posterior_mode(SW-Prior,SW-Eta,SW-Probs) :- maplist(add,Eta,Prior,Post), mode_dirichlet(Post,Probs).
-expectation(SW-Alphas, SW-Probs)         :- stoch(Alphas,Probs).
-mode_dirichlet(A,P) :- maplist(max(0)*add(-1),A,W), stoch(W,P).
-f_psi(F,SW-A,SW-P) :- when(ground(A), (mean_log_dirichlet(A,Q), maplist(F,Q,P))).
-
-add_anneal(1,X,Y,Z)    :- !, add(X,Y,Z).
-add_anneal(ITemp,X,Y,Z) :- when(ground(X-Y), Z is ITemp*(X+Y) + (1-ITemp)).
-
-log_prob_dirichlet(SW-Prior, SW-Probs, LP) :-
-   length(Prior,N),
-   when(ground(Probs), plrand:log_prob_Dirichlet(N,Prior,Probs,LP)).
+sw_posteriors(Prior,Eta,Post) :- map_swc(add,Eta,Prior,Post).
+sw_expectations(Alphas,Probs) :- map_sw(stoch,Alphas,Probs).
+sw_log_prob(Alphas,Probs,LP)  :- patient(map_sum_sw(log_prob_dirichlet,Alphas),Probs,LP).
 
 % ---- Gibbs sampler -----------------
 gibbs(Prior, Graph, cctab:gstep(Prior,P0,IG)) :- 
@@ -471,30 +480,30 @@ gstep(Prior,P0,IG,LP,P1,P2) :-
    copy_term(P0-IG,P1-IG1),
    igraph_sample_tree(IG1,Tree,LP),
    tree_stats(Tree, Counts),
-   maplist(posterior(add), Prior, Counts, Post),
-   maplist(fsnd(dirichlet), Post, P2).
+   sw_posteriors(Prior, Counts, Post),
+   map_sw(dirichlet, Post, P2).
 
 % ---- Metropolis Hastings sampler ----
 mh_perplexity(Graph, Prior, Stream) :-
    length(LPs, 10),
    iterate(learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
-   maplist(expectation, VBPost, VBProbs), 
+   sw_expectations(VBPost, VBProbs), 
    call(log*fst*top_value*graph_inside(Graph), VBProbs, LogPDataGivenVBProbs),
-   map_sum(log_prob_dirichlet, Prior, VBProbs, LogPVBProbs),
+   sw_log_prob(Prior, VBProbs, LogPVBProbs),
    LogPDataVBProbs is LogPDataGivenVBProbs + LogPVBProbs,
    unfold_machine(mh_machine(Graph, Prior, VBProbs) 
                   >> mapper(p_params_given_mhs(Prior,VBProbs)) >> mean 
                   >> mapper(sub(LogPDataVBProbs)*log), Stream).
 
 p_params_given_mhs(Prior,Probs,Counts-_,P) :-
-   maplist(posterior(add),Prior,Counts,Post),
-   map_sum(log_prob_dirichlet,Post,Probs,LP), P is exp(LP).
+   sw_posteriors(Prior,Counts,Post),
+   sw_log_prob(Post,Probs,LP), P is exp(LP).
 
 
 mh_stream(Graph, Prior, States) :-
    length(LPs, 10),
    iterate(learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
-   maplist(expectation, VBPost, VBProbs), 
+   sw_expectations(VBPost, VBProbs), 
    unfold_machine(mh_machine(Graph,Prior,VBProbs), States).
 
 mh_machine(Graph, Prior, Probs0, unfolder(scan0(Stepper), State)) :-
@@ -512,12 +521,12 @@ mh_step(SampleK, SampleGoal, SWs, Prior, State1, State2) :-
    call(SampleK, K),
    mhs_extract(K, TK_O, State1, StateExK),
    mhs_dcounts(StateExK, SWs, CountsExK),
-   maplist(posterior(add), Prior, CountsExK, PostExK),
-   maplist(expectation, PostExK, ProbsExK),
+   sw_posteriors(Prior, CountsExK, PostExK),
+   sw_expectations(PostExK, ProbsExK),
    mht_goal(TK_O, GoalK), call(SampleGoal, ProbsExK, GoalK, TreeK),
    mht_make(SWs, GoalK, TreeK, TK_P),
    maplist(tree_acceptance_weight(SWs, PostExK, ProbsExK), [TK_O, TK_P], [W_O, W_P]),
-   (W_P>=W_O -> Accept=1; PA is exp(W_P-W_O), bernoulli(PA, Accept)),
+   (W_P>=W_O -> Accept=1; call(bernoulli*exp, W_P-W_O, Accept)),
    (Accept=0 -> State2=State1; mhs_rebuild(TK_P, StateExK, State2)).
 
 make_nat_sampler(N, cctab:uniform(Ks)) :- numlist(1,N,Ks).
@@ -529,20 +538,11 @@ sample_goal(P0, IGraph0, P1, Goal, Tree) :-
 
 tree_acceptance_weight(SWs, Prior, Params, Tree, W) :- 
    mht_counts(SWs, Tree, Counts), 
-   map_sum(params_log_prob,     Params, Counts, LP),
-   map_sum(prior_log_post_part, Prior,  Counts, LZ),
+   sw_posteriors(Prior, Counts, Post),
+   map_sum_sw(log_partition_dirichlet, Post, LZ),
+   map_sum_sw(map_sum(log_mul), Params, Counts, LP),
    W is LZ - LP.
-
-params_log_prob(SW-Probs, SW-Counts, LP) :- map_sum(log_mul,Probs,Counts,LP).
 log_mul(Prob, N, X) :- X is N*log(Prob).
-
-prior_log_post_part(SW-Prior, SW-Counts, LP) :-
-   maplist(add,Prior,Counts,Posterior),
-   log_partition_dirichlet(Posterior,LP).
-
-bernoulli(P1,X) :- P0 is 1-P1, dist([P0-0,P1-1],X).
-dirichlet(As,Ps) :- sample(pure(dirichlet(As),Ps)).
-map_sum(P,X,Y,Sum) :- maplist(P,X,Y,Z), when(ground(Z), sumlist(Z,Sum)).
 
 sws_tree_stats(SWs,Tree,Stats) :- accum_stats(tree_stats(Tree),SWs,Stats).
 sws_trees_stats(SWs,Trees,Stats) :- accum_stats(tree_stats(_-Trees),SWs,Stats).
@@ -555,10 +555,10 @@ mhs_init(SWs, VTree, Totals-Map) :-
    
 mhs_extract(K, G-C, Totals-Map, dmhs(K,CountsExK,MapExK)) :-
    rb_delete(Map, K, G-C, MapExK),
-   maplist(fsnd3(maplist(sub)), C, Totals, CountsExK).
+   map_swc(sub, C, Totals, CountsExK).
 
 mhs_rebuild(G-C, dmhs(K,CountsExK,MapExK), Totals-Map) :- 
-   maplist(posterior(add), C, CountsExK, Totals),
+   sw_posteriors(C, CountsExK, Totals),
    rb_insert_new(MapExK, K, G-C, Map).
 
 mhs_dcounts(dmhs(_,CountsExK,_), _, CountsExK).
