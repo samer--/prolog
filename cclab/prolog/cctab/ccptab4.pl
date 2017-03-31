@@ -4,8 +4,8 @@
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
                  , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
-                 , learn/4, learn/5, iterate/4, gibbs/3, mh_stream/3, mh_perplexity/3
-                 , strand/0, strand/1, iterate/4, unfold_machine/2, iterator/3 % reexport for clients to use
+                 , converge/5, learn/4, learn/5, gibbs/3, mh_stream/3, mh_perplexity/3
+                 , strand/0, strand/1, unfold/2  % reexport for clients to use
                  ]).
 
 /** <module> Continuation based probabilistic inference.
@@ -26,11 +26,11 @@
    maximum a posterior, variational Bayes, and (to come, probably) Viterbi learning.
 
    @tbd
-      - Add lazy list versions of learning, with convergence test
       - Log scaling for all learning methods and entropy
       - Alternate Gibbs sampler
       - Test perplexity using all three MCMC methods
       - Goal subsumption in tabling lookup
+      - Speed up nb_state by factorising state 
       - Grammar with integer states instead of difference lists
       - Automatic differentiation for counts?
       - Modularise!
@@ -53,7 +53,7 @@
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_state/3, set/1, get/1]).
 :- use_module(library(rbutils),     [rb_fold/4, rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
-:- use_module(library(machines),    [iterate/4, iterator/3, unfold_machine/2, moore/5, mapper/3, scan0/4, (>>)/3]).
+:- use_module(library(machines),    [unfold/2, unfolder/3, moore/5, mapper/3, scan0/4, (>>)/3]).
 :- use_module(library(lambda2)).
 :- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, pow/3, log_e/2, surp/2, lse/3, stoch/2
                         , patient/4, patient/3, lazy/4, map_sum/3, map_sum/4]).
@@ -447,6 +447,21 @@ mul_add(1,X,Y,Z) :- !, when(ground(Y), Z is X+Y).
 mul_add(K,X,Y,Z) :- when(ground(Y), Z is X+K*Y).
 unify3(PStats,LP,P1,P2) :- copy_term(PStats, t(P1,P2,LP)).
 
+% --- convergence ---
+:- meta_predicate converge(+,1,-,+,-).
+converge(Test, Setup, [X0|History], S0, SFinal) :-
+   call(Setup, Step),
+   call(Step, X0, S0, S1),
+   converge_x(Test, Step, X0, History, S1, SFinal).
+converge_x(Test, Step, X0, [X1|History], S1, SFinal) :-
+   call(Step, X1, S1, S2),
+   (  converged(Test, X0, X1) -> History=[], SFinal=S2
+   ;  converge_x(Test, Step, X1, History, S2, SFinal)
+   ).
+
+converged(abs(Eps), X1, X2) :- abs(X1-X2) =< Eps.
+converged(rel(Del), X1, X2) :- abs((X1-X2)/(X1+X2)) =< Del.
+
 % ---- Gibbs sampler -----------------
 gibbs(Prior, Graph, cctab:gstep(Prior,P0,IG)) :- 
    graph_inside(Graph, P0, IG).
@@ -460,15 +475,14 @@ gstep(Prior,P0,IG,LP,P1,P2) :-
 
 % ---- Metropolis Hastings sampler ----
 mh_perplexity(Graph, Prior, Stream) :-
-   length(LPs, 10),
-   iterate(learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
+   converge(rel(1e-6), learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
    sw_expectations(VBPost, VBProbs), 
    call(log*fst*top_value*graph_inside(Graph), VBProbs, LogPDataGivenVBProbs),
    sw_log_prob(Prior, VBProbs, LogPVBProbs),
    LogPDataVBProbs is LogPDataGivenVBProbs + LogPVBProbs,
-   unfold_machine(mh_machine(Graph, Prior, VBProbs) 
-                  >> mapper(p_params_given_mhs(Prior,VBProbs)) >> mean 
-                  >> mapper(sub(LogPDataVBProbs)*log), Stream).
+   unfold(mh_machine(Graph, Prior, VBProbs) 
+          >> mapper(p_params_given_mhs(Prior,VBProbs)) >> mean 
+          >> mapper(sub(LogPDataVBProbs)*log), Stream).
 
 p_params_given_mhs(Prior,Probs,Counts-_,P) :-
    sw_posteriors(Prior,Counts,Post),
@@ -481,11 +495,11 @@ mm_out(N-S,M) :- divby(N,S,M).
 
 mh_stream(Graph, Prior, States) :-
    length(LPs, 10),
-   iterate(learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
+   converge(rel(1e-6), learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
    sw_expectations(VBPost, VBProbs), 
-   unfold_machine(mh_machine(Graph,Prior,VBProbs), States).
+   unfold(mh_machine(Graph,Prior,VBProbs), States).
 
-mh_machine(Graph, Prior, Probs0, unfolder(scan0(Stepper), State)) :-
+mh_machine(Graph, Prior, Probs0, M) :-
    insist(top_value(Graph, [_])),
    graph_viterbi(Graph, Probs0, VTree, _), 
    length(VTree,N),
@@ -493,7 +507,7 @@ mh_machine(Graph, Prior, Probs0, unfolder(scan0(Stepper), State)) :-
    mhs_init(SWs, VTree, State),
    make_tree_sampler(Graph, SampleGoal),
    make_nat_sampler(N, SampleK), 
-   Stepper=cctab:mh_step(SampleK, SampleGoal, SWs, Prior).
+   unfolder(scan0(mh_step(SampleK, SampleGoal, SWs, Prior)), State, M).
 
 % one step, takes state to next state, uses sampling effect
 mh_step(SampleK, SampleGoal, SWs, Prior, State1, State2) :-

@@ -1,11 +1,13 @@
-:- module(machines, [iterate/4, iterator/3, scanner/3, scan0/4, unfold_machine/2, (>>)/3, mapper/3, moore/5 ]).
+:- module(machines, [ iterate/4, unfold/2, unfold_finite/2, scanner/3, scan0/4
+                    , (>>)/3, iterator/3, unfolder/3, mapper/3, moore/5, progress/2]).
 
 :- use_module(library(dcg_progress), [seqmap_with_progress//3]).
-:- use_module(library(lazy),         [lazy_unfold/4]).
+:- use_module(library(lazy),         [lazy_unfold/4, lazy_unfold_finite/4]).
 
 % running machines
-:- meta_predicate unfold_machine(1,-), iterate(1,?,+,-).
-unfold_machine(MakeMachine, Stream) :- call(MakeMachine,unfolder(T,S)), lazy_unfold(T,Stream,S,_).
+:- meta_predicate unfold(1,-), unfold_finite(1,-), iterate(1,?,+,-).
+unfold(MakeMachine, Stream) :- call(MakeMachine,unfolder(T,S)), lazy_unfold(T,Stream,S,_).
+unfold_finite(MakeMachine, Stream) :- call(MakeMachine,unfolder(T,S)), lazy_unfold_finite(T,Stream,S,_).
 iterate(Setup, LPs) --> {call(Setup, Step)}, seqmap_with_progress(1,Step,LPs).
 
 % bulding unfolding predicates
@@ -19,7 +21,10 @@ scan0(Trans,S1,S1,S2)   :- call(Trans,S1,S2).
 >>(U,T,M) :- call(U, Unfolder), call(T, Unfolder, M).
 
 % some predicates for building machings
-:- meta_predicate mapper(2,+,-), moore(3,2,?,+,-), iterator(1,+,-).
+:- meta_predicate unfolder(3,?,-), mapper(2,+,-), moore(3,2,?,+,-), iterator(1,+,-).
+
+%% unfolder(+T:pred(-X,+S,-S), S0:S, -G:unfolder(X,S)) is det.
+unfolder(T,S,unfolder(T,S)).
 
 %% mapper(+F:pred(+X,-Y), +G:unfolder(X,S), -T:unfolder(Y,S)) is det.
 mapper(F, unfolder(TA,SA), unfolder(machines:map_step(TA,F), SA)).
@@ -33,4 +38,6 @@ moore_step(TA,TB,OB, Out, SA1-SB1, SA2-SB2) :- call(TA,OA,SA1,SA2), call(TB,OA,S
 iterator(Setup, S0, unfolder(machines:it_step(Step),S0)) :- call(Setup,Step).
 it_step(Step,X-S1,S1,S2) :- call(Step,X,S1,S2).
 
+progress(M1,M2) :- moore(prog_step,snd,0-_,M1,M2).
+prog_step(X,I-_,J-X) :- J is I+1, format('~d: ~w\n',[J,X]).
 
