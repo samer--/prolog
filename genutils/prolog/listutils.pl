@@ -69,7 +69,7 @@ int(N)     :- var(N), (N=0; (between(1,inf,M), (N=M; N is -M))).
 %% enumerate(-L:list(A), -NL:list(pair(natural,A))) is nondet.
 enumerate(X,Y) :- enumerate(X,0,Y).
 enumerate([],_,[]).
-enumerate([X|Xs],I,[I-X|IXs]) :- J is I+1, enumerate(Xs,J,IXs).
+enumerate([X|Xs],I,[J-X|IXs]) :- J is I+1, enumerate(Xs,J,IXs).
 
 %% print_list( +L:list) is det.
 %
