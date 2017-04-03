@@ -1,10 +1,10 @@
-:- module(cctab, [ run_with_tables/2, run_tab_expl/2
-                 , run_sampling//2, uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
-                 , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/2, fallback_sampler//4
+:- module(cctab, [ run_with_tables/2, run_tab_expl/2, run_sampling//2
+                 , uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
+                 , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/2
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
                  , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
-                 , converge/5, learn/4, learn/5, gibbs/3, mh_stream/3, mh_perplexity/3
+                 , converge/5, learn/4, learn/5, mc_perplexity/4, mc_machine/5, gibbs_posterior_machine/4
                  , strand/0, strand/1, unfold/2  % reexport for clients to use
                  ]).
 
@@ -27,7 +27,6 @@
 
    @tbd
       - Log scaling for all learning methods and entropy
-      - Alternate Gibbs sampler
       - Test perplexity using all three MCMC methods
       - Goal subsumption in tabling lookup
       - Speed up nb_state by factorising state 
@@ -37,6 +36,7 @@
 */
 
 :- use_module(library(apply_macros)).
+:- use_module(library(insist)).
 :- use_module(library(typedef)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
@@ -403,6 +403,7 @@ add_sw_val(SW,Val,N) --> rb_app(SW:=Val,add(N)) -> []; rb_add(SW:=Val,N).
 
 sw_posteriors(Prior,Eta,Post) :- map_swc(add,Eta,Prior,Post).
 sw_expectations(Alphas,Probs) :- map_sw(stoch,Alphas,Probs).
+sw_samples(Alphas,Probs)      :- map_sw(dirichlet,Alphas,Probs).
 sw_log_prob(Alphas,Probs,LP)  :- map_sum_sw(log_prob_dirichlet,Alphas,Probs,LP).
 
 graph_counts(io, Graph, P1, LP-Eta) :-
@@ -462,104 +463,101 @@ converge_x(Test, Step, X0, [X1|History], S1, SFinal) :-
 converged(abs(Eps), X1, X2) :- abs(X1-X2) =< Eps.
 converged(rel(Del), X1, X2) :- abs((X1-X2)/(X1+X2)) =< Del.
 
-% ---- Gibbs sampler -----------------
-gibbs(Prior, Graph, cctab:gstep(Prior,P0,IG)) :- 
-   graph_inside(Graph, P0, IG).
+% -------------- MCMC methods -----------------
 
-gstep(Prior,P0,IG,LP,P1,P2) :-
-   copy_term(P0-IG,P1-IG1),
-   igraph_sample_tree(IG1,Tree,LP),
-   tree_stats(Tree, Counts),
-   sw_posteriors(Prior, Counts, Post),
-   map_sw(dirichlet, Post, P2).
-
-% ---- Metropolis Hastings sampler ----
-mh_perplexity(Graph, Prior, Stream) :-
-   converge(rel(1e-6), learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
+mc_perplexity(Method, Graph, Prior, Stream) :-
+   converge(rel(1e-6), learn(vb(Prior), io, Graph), _, Prior, VBPost),
    sw_expectations(VBPost, VBProbs), 
    call(log*fst*top_value*graph_inside(Graph), VBProbs, LogPDataGivenVBProbs),
-   sw_log_prob(Prior, VBProbs, LogPVBProbs),
-   LogPDataVBProbs is LogPDataGivenVBProbs + LogPVBProbs,
-   unfold(mh_machine(Graph, Prior, VBProbs) 
-          >> mapper(p_params_given_mhs(Prior,VBProbs)) >> mean 
+   call(add(LogPDataGivenVBProbs)*sw_log_prob(Prior), VBProbs, LogPDataVBProbs),
+   method_machine_mapper(Method, Prior, Machine, Mapper),
+   unfold(call(Machine, Graph, Prior, VBProbs) 
+          >> mapper(p_params_given_post(VBProbs)*Mapper) >> mean
           >> mapper(sub(LogPDataVBProbs)*log), Stream).
 
-p_params_given_mhs(Prior,Probs,Counts-_,P) :-
-   sw_posteriors(Prior,Counts,Post),
-   sw_log_prob(Post,Probs,LP), P is exp(LP).
+p_params_given_post(Probs,Post,P) :- sw_log_prob(Post,Probs,LP), P is exp(LP).
 
-% mean machine
-mean(In,Out) :- moore(mm_step, mm_out, 0-0, In, Out).
-mm_step(X) --> succ <\> add(X).
-mm_out(N-S,M) :- divby(N,S,M).
+method_machine_mapper(all_gibbs,   _,     cctab:gibbs_posterior_machine, =).
+method_machine_mapper(one(Method), Prior, mc_machine(Method), cctab:sw_posteriors(Prior)*mcs_counts).
 
-mh_stream(Graph, Prior, States) :-
-   length(LPs, 10),
-   converge(rel(1e-6), learn(vb(Prior), io, Graph), LPs, Prior, VBPost),
-   sw_expectations(VBPost, VBProbs), 
-   unfold(mh_machine(Graph,Prior,VBProbs), States).
+gibbs_posterior_machine(Graph, Prior, P1, M) :-
+   graph_inside(Graph, P0, IG),
+   unfolder(scan0(gstep(Prior,P0,IG)*sw_samples), P1, M).
 
-mh_machine(Graph, Prior, Probs0, M) :-
-   insist(top_value(Graph, [_])),
+gstep(Prior,P0,IG,P1,Post) :-
+   copy_term(P0-IG,P1-IG1),
+   igraph_sample_tree(IG1,Tree,_),
+   tree_stats(Tree, Counts),
+   sw_posteriors(Prior, Counts, Post).
+
+mc_machine(Method, Graph, Prior, Probs0, M) :-
+   insist(top_value(Graph, [_])), % must be a single conjunction
    graph_viterbi(Graph, Probs0, VTree, _), 
-   length(VTree,N),
    maplist(fst,Prior,SWs),
-   mhs_init(SWs, VTree, State),
+   mcs_init(SWs, VTree, Info, State),
    make_tree_sampler(Graph, SampleGoal),
-   make_nat_sampler(N, SampleK), 
-   unfolder(scan0(mh_step(SampleK, SampleGoal, SWs, Prior)), State, M).
+   unfolder(scan0(mc_step(Method, Info, SampleGoal, SWs, Prior)), State, M).
 
-% one step, takes state to next state, uses sampling effect
-mh_step(SampleK, SampleGoal, SWs, Prior, State1, State2) :-
-   call(SampleK, K),
-   mhs_extract(K, TK_O, State1, StateExK),
-   mhs_dcounts(StateExK, SWs, CountsExK),
-   sw_posteriors(Prior, CountsExK, PostExK),
-   sw_expectations(PostExK, ProbsExK),
-   mht_goal(TK_O, GoalK), call(SampleGoal, ProbsExK, GoalK, TreeK),
-   mht_make(SWs, GoalK, TreeK, TK_P),
-   maplist(tree_acceptance_weight(SWs, PostExK, ProbsExK), [TK_O, TK_P], [W_O, W_P]),
-   (W_P>=W_O -> Accept=1; call(bernoulli*exp, W_P-W_O, Accept)),
-   (Accept=0 -> State2=State1; mhs_rebuild(TK_P, StateExK, State2)).
+mc_sample(SampleGoal, SWs, Probs, T1, T2) :- 
+   mct_goal(T1, Goal), call(SampleGoal, Probs, Goal, Tree),
+   mct_make(SWs, Goal, Tree, T2).
 
-make_nat_sampler(N, cctab:uniform(Ks)) :- numlist(1,N,Ks).
 make_tree_sampler(G, cctab:sample_goal(P,IG)) :- graph_inside(G, P, IG).
 sample_goal(P0, IGraph0, P1, Goal, Tree) :-
    prune_graph(snd, Goal, IGraph0, ISubGraph0),
    copy_term(P0-ISubGraph0, P1-ISubGraph), 
    igraph_sample_tree(ISubGraph, Goal, _-Tree, _).
 
-tree_acceptance_weight(SWs, Prior, Params, Tree, W) :- 
-   mht_counts(SWs, Tree, Counts), 
+mc_step(gibbs, Info, SampleGoal, SWs, Prior, State1, State2) :-
+   mcs_random_select(Info, TK_O, State1, StateExK),
+   mcs_dcounts(StateExK, CountsExK),
+   sw_posteriors(Prior, CountsExK, PostExK),
+   sw_samples(PostExK, ProbsExK),
+   mc_sample(SampleGoal, SWs, ProbsExK, TK_O, TK_P),
+   mcs_rebuild(TK_P, StateExK, State2).
+
+mc_step(mh, Info, SampleGoal, SWs, Prior, State1, State2) :-
+   mcs_random_select(Info, TK_O, State1, StateExK),
+   mcs_dcounts(StateExK, CountsExK),
+   sw_posteriors(Prior, CountsExK, PostExK),
+   sw_expectations(PostExK, ProbsExK),
+   mc_sample(SampleGoal, SWs, ProbsExK, TK_O, TK_P),
+   maplist(tree_acceptance_weight(PostExK, ProbsExK), [TK_O, TK_P], [W_O, W_P]),
+   (W_P>=W_O -> Accept=1; call(bernoulli*exp, W_P-W_O, Accept)),
+   (Accept=0 -> State2=State1; mcs_rebuild(TK_P, StateExK, State2)).
+
+tree_acceptance_weight(Prior, Params, Tree, W) :- 
+   mct_counts(Tree, Counts), 
    sw_posteriors(Prior, Counts, Post),
    map_sum_sw(log_partition_dirichlet, Post, LZ),
    map_sum_sw(map_sum(log_mul), Params, Counts, LP),
    W is LZ - LP.
 log_mul(Prob, N, X) :- X is N*log(Prob).
 
-sws_tree_stats(SWs,Tree,Stats) :- accum_stats(tree_stats(Tree),SWs,Stats).
-sws_trees_stats(SWs,Trees,Stats) :- accum_stats(tree_stats(_-Trees),SWs,Stats).
+sw_tree_stats(SWs,Tree,Stats) :- accum_stats(tree_stats(Tree),SWs,Stats).
+sw_trees_stats(SWs,Trees,Stats) :- accum_stats(tree_stats(_-Trees),SWs,Stats).
 
-% MH state: rbtree to map K to tree, stash counts
-mhs_init(SWs, VTree, Totals-Map) :-
+% MCS: Monte Carlo state: rbtree to map K to tree, stash counts
+mcs_init(SWs, VTree, Ks, Totals-Map) :-
+   length(VTree,N), numlist(1,N,Ks),
    accum_stats(tree_stats(_-VTree), SWs, Totals),
-   maplist(fsnd(sws_trees_stats(SWs)), VTree, GoalsCounts),
-   call(list_to_rbtree*enumerate, GoalsCounts, Map).
+   maplist(fsnd(sw_trees_stats(SWs)), VTree, GoalsCounts),
+   call(list_to_rbtree * maplist(pair,Ks), GoalsCounts, Map).
    
-mhs_extract(K, G-C, Totals-Map, dmhs(K,CountsExK,MapExK)) :-
+mcs_random_select(Ks, G-C, Totals-Map, dmhs(K,CountsExK,MapExK)) :-
+   uniform(Ks,K),
    rb_delete(Map, K, G-C, MapExK),
    map_swc(sub, C, Totals, CountsExK).
 
-mhs_rebuild(G-C, dmhs(K,CountsExK,MapExK), Totals-Map) :- 
+mcs_rebuild(G-C, dmhs(K,CountsExK,MapExK), Totals-Map) :- 
    sw_posteriors(C, CountsExK, Totals),
    rb_insert_new(MapExK, K, G-C, Map).
 
-mhs_dcounts(dmhs(_,CountsExK,_), _, CountsExK).
-mhs_counts(Counts-_, _, Counts).
-
-mht_goal(Goal-_, Goal).
-mht_make(SWs, Goal, T, Goal-C) :- sws_trees_stats(SWs,T,C).
-mht_counts(_,_-C,C).
+mcs_dcounts(dmhs(_,CountsExK,_), CountsExK).
+mcs_counts(Counts-_, Counts).
+mct_goal(Goal-_, Goal).
+mct_make(SWs, Goal, T, Goal-C) :- sw_trees_stats(SWs,T,C).
+mct_counts(_-C,C).
 
 % ---- tree conversion and printing ----
 print_tree(T) :- tree_to_tree(T,T1), write('  '), print_tree('  ', T1), nl.
@@ -576,6 +574,12 @@ user:portray(node(t(Data))) :- write('|'), print(Data).
 user:portray(node(p(Prob))) :- write('@'), print(Prob).
 
 % ----- misc -----
+
+% mean machine
+mean(In,Out) :- moore(mm_step, mm_out, 0-0, In, Out).
+mm_step(X) --> succ <\> add(X).
+mm_out(N-S,M) :- divby(N,S,M).
+
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
 member2(X,Y,[_|XX],[_|YY]) :- member2(X,Y,XX,YY).
