@@ -2,25 +2,15 @@
                    , run_nb_state//1
                    , set/1, get/1, app/1, upd/2
                    , app/2
-                   , run_ref/1
-                   , ref_new/2
-                   , ref_get/2
-                   , ref_set/2
-                   , ref_app/2
-                   , ref_upd/3
-
-                   , run_env/1
-                   , env_new/2
-                   , env_get/2
-                   , env_set/2
-                   , env_app/2
-                   , env_upd/3
+                   , run_ref/1, ref_new/2, ref_get/2, ref_set/2, ref_app/2, ref_upd/3
+                   , run_env/1, env_new/2, env_get/2, env_set/2, env_app/2, env_upd/3
+                   , run_nb_ref/1, nbr_app/2, nbr_app_or_new/3, nbr_dump/1
                    ]).
 
 /** <module> Stateful computation as an effect using delimited control
 
    This module provides two kinds of stateful computation, one which undoes
-   state changes on backtracking (run_state//{1,2}) and another which preserves
+   state changes on backtracking (run_state//{1,2,3}) and another which preserves
    state changes on backtracking (run_nb_state//1).
 
    On top this are built two execution contexts which provide mutable
@@ -29,13 +19,21 @@
 :- use_module(library(data/store)).
 :- use_module(library(data/env)).
 :- use_module(library(delimcc)).
+:- use_module(library(rbutils)).
 
 :- set_prolog_flag(generate_debug_info, false).
 
+% stateful operators
+:- meta_predicate app(2), app(+,2).
+get(S) :- p_shift(state,get(S)).
+set(S) :- p_shift(state,set(S)).
+app(P) :- p_shift(state,P).
+upd(S1,S2) :- p_shift(state,trans(S1,S2)).
+app(Pr,P) :- p_shift(Pr,P).
+
 % ------- stateful computation reified as DCG ----------
-:- meta_predicate run_state(0,+,-), run_state(+,0,+,-), 
-                  run_nb_state(0,+,-), 
-                  app(2), app(+,2).
+:- meta_predicate run_state(0,+,-), run_state(+,0,+,-),
+                  run_nb_state(0,+,-), run_nb_ref(0). 
 
 %% run_state(+Pr:prompt(pred(S,S)), +P:pred, +S1:S, -S2:S) is det.
 %% run_state(+P:pred, +S1:S, -S2:S) is det.
@@ -47,10 +45,10 @@
 run_state(Goal) --> run_state(state, Goal).
 run_state(Prompt, Goal) -->
    {p_reset(Prompt, Goal, Status)},
-   cont_state(Prompt, Status).
+   cont_state(Status, Prompt).
 
-cont_state(_,done) --> !, [].
-cont_state(Prompt,susp(P,Cont)) --> call(P), run_state(Prompt, Cont).
+cont_state(done,_) --> [].
+cont_state(susp(P,Cont), Prompt) --> call(P), run_state(Prompt, Cont).
 
 
 %% run_nb_state(+P:pred, +S1:S, -S2:S) is det.
@@ -63,29 +61,38 @@ cont_state(Prompt,susp(P,Cont)) --> call(P), run_state(Prompt, Cont).
 run_nb_state(Goal, S1, S2) :- 
    gensym(nbs,Key),
    setup_call_cleanup( nb_setval(Key, S1),
-                       (run_nb_state_x(state, Goal, Key), nb_getval(Key, S2)),
+                       (run_nb_state_x(Goal, Key), nb_getval(Key, S2)),
                        nb_delete(Key)).
 
-run_nb_state_x(Prompt, Goal, Key) :-
-   p_reset(Prompt, Goal, Status),
-   cont_nb_state(Status, Prompt, Key).
+run_nb_state_x(Goal, Key) :-
+   p_reset(state, Goal, Status),
+   cont_nb_state(Status, Key).
 
-cont_nb_state(done, _, _).
-cont_nb_state(susp(P,Cont), Prompt, Key) :-
-   handle_nb_state(P,Key), run_nb_state_x(Prompt, Cont, Key).
+cont_nb_state(done, _).
+cont_nb_state(susp(P,Cont), Key) :-
+   handle_nb_state(P,Key), run_nb_state_x(Cont, Key).
 
 handle_nb_state(get(S),Key) :- !, nb_getval(Key,S).
 handle_nb_state(set(S),Key) :- !, nb_setval(Key,S).
 handle_nb_state(trans(S1,S2),Key) :- !, nb_getval(Key,S1), nb_setval(Key,S2).
 handle_nb_state(P,Key) :- nb_getval(Key,S1), call(P,S1,S2), nb_setval(Key,S2).
 
-% stateful operators
-get(S) :- p_shift(state,get(S)).
-set(S) :- p_shift(state,set(S)).
-app(P) :- p_shift(state,P).
-upd(S1,S2) :- p_shift(state,trans(S1,S2)).
+%% run_nb_ref(+P:pred) is det.
+run_nb_ref(Goal) :- 
+   setup_call_cleanup( rb_empty(Empty),
+                       run_state(nbr, Goal, Empty, KeyMap),
+                       rb_map(KeyMap, nb_delete)).
 
-app(Pr,P) :- p_shift(Pr,P).
+nbr_dump(Map,KM,KM) :- rb_map(KM,nb_getval,Map).
+nbr_app(K,P,KM,KM) :- rb_lookup(K,R,KM), nb_app(P,R,R).
+nbr_app_or_new(K,P,Q) --> rb_app_or_new(K,nb_app(P),nb_new(Q)).
+nb_app(P,R,R) :- nb_getval(R,S1), call(P,S1,S2), nb_setval(R,S2).
+nb_new(Q,R)   :- gensym(nbr,R),   call(Q,S2),    nb_setval(R,S2).
+
+% effects for run_nb_ref
+nbr_dump(M) :- p_shift(nbr, nbr_dump(M)).
+nbr_app(K,P) :- p_shift(nbr, nbr_app(K,P)).
+nbr_app_or_new(K,P,Q) :- p_shift(nbr, nbr_app_or_new(K,P,Q)).
 
 % --------- stateful references ----------------------
 :- meta_predicate run_ref(0), ref_app(+,2).
