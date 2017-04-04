@@ -29,7 +29,6 @@
       - Log scaling for all learning methods and entropy
       - Test perplexity using all three MCMC methods
       - Goal subsumption in tabling lookup
-      - Speed up nb_state by factorising state 
       - Grammar with integer states instead of difference lists
       - Automatic differentiation for counts?
       - Modularise!
@@ -127,15 +126,15 @@ run_tab(Goal, Ans)    :- p_reset(tab, Goal, Status), cont_tab(Status, Ans).
 
 cont_tab(done, _).
 cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
-   term_variables(Head,Y), K= (\\Y`Ans`Cont),
+   term_variables(Head,Y), K = (\\Y`Ans`Cont),
    term_to_ground(TableAs, Variant),
-   nbr_app_or_new(Variant, new_consumer(K,Res), new_producer(TableAs,Res)),
-   ( Res = solns(Solns) -> rb_gen(Y,_,Solns), run_tab(Cont, Ans)
-   ; Res = new_producer -> run_tab(producer(Variant, \\Y`Head, K, Ans), Ans)
+   nbr_app_or_new(Variant, new_consumer(Res,K), new_producer(Res,TableAs)),
+   (  Res=solns(Solns) -> rb_gen(Y, _, Solns), run_tab(Cont, Ans)
+   ;  Res=new_producer -> run_tab(producer(Variant, \\Y`Head, K, Ans), Ans)
    ).
 
-new_consumer(K, solns(Solns), tab(V,Solns,Ks), tab(V,Solns,[K|Ks])).
-new_producer(V, new_producer, tab(V,Solns,[])) :- rb_empty(Solns).
+new_consumer(solns(Solns), K, tab(V,Solns,Ks), tab(V,Solns,[K|Ks])).
+new_producer(new_producer, V, tab(V,Solns,[])) :- rb_empty(Solns).
 
 producer(Variant, Generate, KP, Ans) :-
    run_prob(expl, call(Generate, Y1), E, []),
@@ -143,9 +142,9 @@ producer(Variant, Generate, KP, Ans) :-
    Res=new(Ks), member(K,[KP|Ks]), call(K,Y1,Ans).
 
 new_soln(Y1, E, Res, tab(V,Solns1,Ks), tab(V,Solns2,Ks)) :-
-   rb_app_or_new(Y1, old_soln(E,Res), new_soln(E,Ks,Res), Solns1, Solns2).
-new_soln(E,Ks,new(Ks),[E]).
-old_soln(E,old,Es,[E|Es]).
+   rb_app_or_new(Y1, old_soln(Res,E), new_soln(Res,Ks,E), Solns1, Solns2).
+new_soln(new(Ks),Ks,E,[E]).
+old_soln(old,E,Es,[E|Es]).
 
 % ----------- mapping tables to graphs --------------
 
