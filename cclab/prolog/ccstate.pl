@@ -21,7 +21,7 @@
 :- use_module(library(delimcc)).
 :- use_module(library(rbutils)).
 
-:- set_prolog_flag(generate_debug_info, false).
+% :- set_prolog_flag(generate_debug_info, false).
 
 % stateful operators
 :- meta_predicate app(2), app(+,2).
@@ -79,17 +79,29 @@ handle_nb_state(P,Key) :- nb_getval(Key,S1), call(P,S1,S2), nb_setval(Key,S2).
 
 %% run_nb_ref(+P:pred) is det.
 run_nb_ref(Goal) :- 
-   setup_call_cleanup( rb_empty(Empty),
-                       run_state(nbr, Goal, Empty, KeyMap),
-                       rb_map(KeyMap, nb_delete)).
+   gensym(nbrkm,R0), rb_empty(Empty),
+   setup_call_cleanup(nb_setval(R0,Empty), run_nbr(Goal,R0), nbr_cleanup(R0)).
+                    
+nbr_cleanup(R0) :-
+   writeln('*** cleanup ***'),
+   nb_getval(R0, KeyMap),
+   rb_map(KeyMap, nb_delete),
+   nb_delete(R0).
 
-nbr_dump(Map,KM,KM) :- rb_map(KM,nb_getval,Map).
-nbr_app(K,P,KM,KM) :- rb_lookup(K,R,KM), nb_app(P,R,R).
-nbr_app_or_new(K,P,Q) --> rb_app_or_new(K,nb_app(P),nb_new(Q)).
-nb_app(P,R,R) :- nb_getval(R,S1), call(P,S1,S2), nb_setval(R,S2).
-nb_new(Q,R)   :- gensym(nbr,R),   call(Q,S2),    nb_setval(R,S2).
+run_nbr(Goal,R0) :- p_reset(nbr,Goal,Status), cont_nbr(Status,R0).
+cont_nbr(done, _).
+cont_nbr(susp(P,Cont),R0) :- nb_getval(R0,M), call(P,R0,M), run_nbr(Cont,R0).
+
+nbr_dump(Map,_,M) :- rb_map(M,nb_getval,Map).
+nbr_app(K,P,_,M) :- rb_lookup(K,R,M), nb_getval(R,X), call(P,X,Y), nb_setval(R,Y).
+nbr_app_or_new(K,P,Q,R0,M1) :- 
+   rb_upd_or_ins(K,Action,M1,M2),
+   (  Action=insert(R)   -> call(Q,X), gensym(nbr,R), nb_setval(R0,M2), nb_setval(R,X)
+   ;  Action=update(R,R) -> nb_getval(R,X), call(P,X,Y), nb_setval(R,Y)
+   ).
 
 % effects for run_nb_ref
+:- meta_predicate nbr_app(+,2), nbr_app_or_new(+,2,1).
 nbr_dump(M) :- p_shift(nbr, nbr_dump(M)).
 nbr_app(K,P) :- p_shift(nbr, nbr_app(K,P)).
 nbr_app_or_new(K,P,Q) :- p_shift(nbr, nbr_app_or_new(K,P,Q)).
