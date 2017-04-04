@@ -83,7 +83,6 @@ run_nb_ref(Goal) :-
    setup_call_cleanup(nb_setval(R0,Empty), run_nbr(Goal,R0), nbr_cleanup(R0)).
                     
 nbr_cleanup(R0) :-
-   writeln('*** cleanup ***'),
    nb_getval(R0, KeyMap),
    rb_map(KeyMap, nb_delete),
    nb_delete(R0).

@@ -314,8 +314,12 @@ add_to_set(X,S1,[X|S1]) :- \+memberchk(X,S1).
 empty_set([]).
 
 % ---------- inside and viterbi probs, explanation trees -----------
-graph_inside(Graph, Params, IGraph)  :- 
+graph_inside(Graph, Params, IGraph)  :- graph_inside(lin, Graph, Params, IGraph). 
+
+graph_inside(lin, Graph, Params, IGraph)  :- 
    semiring_graph_fold(ann(r(=,mul,add)), Graph, Params, IGraph).
+graph_inside(log, Graph, Params, IGraph)  :- 
+   semiring_graph_fold(ann(r(log_e,add,lse)), Graph, Params, IGraph).
 graph_viterbi(Graph, Params, Tree, LP) :- 
    semiring_graph_fold(best, Graph, Params, VGraph), top_value(VGraph, LP-Tree).
 graph_nviterbi(Graph, Params, Tree, LP) :-
