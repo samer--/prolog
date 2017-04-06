@@ -8,9 +8,6 @@
 :- use_module(library(ccmacros2)).
 :- use_module(library(callutils), [(*)/4]).
 :- use_module(library(listutils), [take/3]).
-:- use_module(library(dcg_core), [rep//2]).
-
-:- initialization debug(cctab), module(ptabled).
 
 :- op(1200,xfx,~~>).
 :- op(1150,xfx,~>).
@@ -66,11 +63,6 @@ pp --> +p, np.
 
 biased_sampler(fallback_sampler(LU,uniform_sampler)) :-
    make_lookup_sampler([(ptabled:nom)-[0.8,0.2], (ptabled:np)-[0.3,0.6,0.1]],LU).
-make_dataset(N,XX) :-
-   length(XX,N),
-   biased_sampler(SS),
-   strand(run_sampling(SS, maplist(phrase(s), XX))).
-mcmc(G) :- strand(run_sampling(uniform_sampler,G)).
 
 :- cctable toss//0, flip//1, result//1.
 flip(X,[X|T],T) :- dist([0.6,0.4],[heads,tails],X).
@@ -90,10 +82,11 @@ n   | [dog,telescope,man,cat,mat,cake,box,floor,face,pie,moose,pyjamas,park].
 p   | [with,on,under,in,without,by].
 
 die | iota(4).
-:- cctable three_dice/1, two_dice/2.
+die(_) | iota(3).
+:- cctable three_dice/1, two_dice/2, two_dice/1.
 three_dice(X) :- length(Xs,3), maplist(:=(die), Xs), sumlist(Xs,X).
-
 two_dice(X1,X2) :- die := X1, die := X2.
+two_dice(X) :- die(1) := D1, die(2) := D2, X is D1+D2.
 
 :- cctable dice/2.
 dice(0,0).
@@ -107,7 +100,3 @@ test(Y,Z) :- (X=1;X=2;X=3), ssucc(A,Y), A=X, ssucc(_,Z).
 iota(0,L,L) :- !.
 iota(N,L3,L1) :- succ(M,N), iota(M,L3,[N|L1]).
 
-user:portray(X) :- float(X), !, format('~5g',[X]).
-user:portray(rbtree(T)) :- !,
-   rb_visit(T,TT),
-   write('<rbtree|'), print_term(TT,[]), write('>').
