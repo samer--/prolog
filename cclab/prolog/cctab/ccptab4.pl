@@ -2,9 +2,10 @@
                  , uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
                  , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/2
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
-                 , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_stats/3 
+                 , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_inside/4, graph_stats/3 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
-                 , converge/5, learn/4, learn/5, mc_perplexity/4, mc_machine/5, gibbs_posterior_machine/4
+                 , converge/5, learn/4, learn/5, mc_perplexity/4, mc_machine/5, gibbs_posterior_machine/5
+                 , mean/2, mean/5
                  , strand/0, strand/1, unfold/2  % reexport for clients to use
                  ]).
 
@@ -26,12 +27,12 @@
    maximum a posterior, variational Bayes, and (to come, probably) Viterbi learning.
 
    @tbd
-      - Log scaling for all learning methods and entropy
-      - Test perplexity using all three MCMC methods
-      - Goal subsumption in tabling lookup
-      - Grammar with integer states instead of difference lists
-      - Automatic differentiation for counts?
+      - Test perplexity using all three MCMC methods [ P(counts|alphas) = Z(alphas+counts)/Z(alphas) ]
       - Modularise!
+      - Automatic differentiation for counts?
+      - Grammar with integer states instead of difference lists
+      - Log scaling for all learning methods and entropy
+      - Goal subsumption in tabling lookup
 */
 
 :- use_module(library(apply_macros)).
@@ -39,19 +40,19 @@
 :- use_module(library(typedef)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
-:- use_module(library(dcg_core),    [rep//2]).
 :- use_module(library(lazy),        [lazy_maplist/3, lazy_unfold_finite/4]).
 :- use_module(library(math),        [stoch/3, divby/3, gammaln/2, exp/2]).
 :- use_module(library(listutils),   [cons//1, enumerate/2, foldr/4, split_at/4]).
 :- use_module(library(callutils),   [mr/5, (*)/4, const/3]).
 :- use_module(library(data/pair),   [pair/3, fst/2, fsnd/3, snd/2]).
 :- use_module(library(data/tree),   [print_tree/2]).
-:- use_module(library(plrand),      [log_prob_dirichlet/3, mean_log_dirichlet/2, log_partition_dirichlet/2, kldiv_dirichlet/3]).
+:- use_module(library(plrand),      [ log_prob_dirichlet/3, mean_log_dirichlet/2
+                                    , log_partition_dirichlet/2, kldiv_dirichlet/3]).
 :- use_module(library(prob/strand), [pure//2, strand/1, strand/0]).
 :- use_module(library(prob/tagged), [discrete//3, uniform//2, dirichlet//2]).
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_ref/1, nbr_app/2, nbr_app_or_new/3, nbr_dump/1]).
-:- use_module(library(rbutils),     [rb_app_or_new/5, rb_fold/4, rb_gen/3, rb_add//2, rb_trans//3, rb_app//2, rb_get//2]).
+:- use_module(library(rbutils),     [rb_app_or_new/5, rb_fold/4, rb_gen/3, rb_add//2, rb_app//2, rb_get//2]).
 :- use_module(library(machines),    [unfold/2, unfolder/3, moore/5, mapper/3, scan0/4, (>>)/3]).
 :- use_module(library(lambda2)).
 :- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, pow/3, log_e/2, surp/2, lse/3, stoch/2
@@ -109,7 +110,6 @@ uniform_sampler(SW,X) --> {call(SW,_,Xs,[])}, pure(uniform(Xs),X).
 lookup_sampler(Map,SW,X) --> {call(SW,ID,Xs,[]), rb_lookup(ID,Ps,Map)}, pure(discrete(Xs,Ps),X).
 make_lookup_sampler(Params,cctab:lookup_sampler(Map)) :- list_to_rbtree(Params, Map).
 fallback_sampler(S1, S2, SW,X) --> call(S1,SW,X) -> []; call(S2,SW,X).
-
 
 % -------- handlers for tabled explanation graph building -----------
 :- meta_predicate run_with_tables(0,-), run_tab(0,?), run_tab_expl(0,-).
@@ -192,6 +192,7 @@ sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform_probs(Vals,Params).
 sw_init(unit,SW,SW-Params)    :- call(SW,_,Vals,[]), maplist(const(1),Vals,Params).
 sw_init(random,SW,SW-Params)  :- call(SW,_,Vals,[]), random_probs(Vals,Params).
 sw_init(K*Spec,SW,SW-Params)  :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
+sw_init(S1+S2,SW,SW-Params)   :- sw_init(S1,SW,SW-P1), sw_init(S2,SW,SW-P2), maplist(add, P1, P2, Params).
 
 uniform_probs(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
 random_probs(Vals,Probs)  :- maplist(const(1),Vals,Ones), dirichlet(Ones,Probs).
@@ -404,6 +405,12 @@ sw_posteriors(Prior,Eta,Post) :- map_swc(add,Eta,Prior,Post).
 sw_expectations(Alphas,Probs) :- map_sw(stoch,Alphas,Probs).
 sw_samples(Alphas,Probs)      :- map_sw(dirichlet,Alphas,Probs).
 sw_log_prob(Alphas,Probs,LP)  :- map_sum_sw(log_prob_dirichlet,Alphas,Probs,LP).
+sw_marg_log_prob(Prior,Eta,LP):- map_sum_sw(marg_log_prob,Prior,Eta,LP).
+
+marg_log_prob(Prior,Eta,LP) :-
+   maplist(add,Prior,Eta,Post),
+   maplist(log_partition_dirichlet,[Prior,Post],[Bot,Top]),
+   LP is Top - Bot.
 
 graph_counts(io, Graph, P1, LP-Eta) :-
    graph_stats(Graph, P1, [log_prob(LP), grad(Grad)]), 
@@ -476,18 +483,22 @@ mc_perplexity(Method, Graph, Prior, Stream) :-
 
 p_params_given_post(Probs,Post,P) :- sw_log_prob(Post,Probs,LP), P is exp(LP).
 
-method_machine_mapper(all_gibbs,   _,     cctab:gibbs_posterior_machine, =).
+method_machine_mapper(all_gibbs,   _,     cctab:gibbs_posterior_machine(posterior), =).
 method_machine_mapper(one(Method), Prior, mc_machine(Method), cctab:sw_posteriors(Prior)*mcs_counts).
 
-gibbs_posterior_machine(Graph, Prior, P1, M) :-
+gibbs_posterior_machine(Rot, Graph, Prior, P1, M) :-
    graph_inside(Graph, P0, IG),
-   unfolder(scan0(gstep(Prior,P0,IG)*sw_samples), P1, M).
+   rotation(Rot, sw_posteriors(Prior), gstep(P0,IG), sw_samples, Step),
+   unfolder(scan0(Step), P1, M).
 
-gstep(Prior,P0,IG,P1,Post) :-
+rotation(posterior,Post,Step,Sample,Post*Step*Sample).
+rotation(counts,   Post,Step,Sample,Step*Sample*Post).
+rotation(params,   Post,Step,Sample,Sample*Post*Step).
+
+gstep(P0,IG,P1,Counts) :-
    copy_term(P0-IG,P1-IG1),
    igraph_sample_tree(IG1,Tree,_),
-   tree_stats(Tree, Counts),
-   sw_posteriors(Prior, Counts, Post).
+   tree_stats(Tree, Counts).
 
 mc_machine(Method, Graph, Prior, Probs0, M) :-
    insist(top_value(Graph, [_])), % must be a single conjunction
@@ -507,6 +518,16 @@ sample_goal(P0, IGraph0, P1, Goal, Tree) :-
    copy_term(P0-ISubGraph0, P1-ISubGraph), 
    igraph_sample_tree(ISubGraph, Goal, _-Tree, _).
 
+% this works, but mixing may be slow?
+mc_step(gibbs2, Info, SampleGoal, SWs, Prior, State1, State2) :-
+   mcs_random_select(Info, TK_O, State1, StateExK),
+   mcs_counts(State1, Counts),
+   sw_posteriors(Prior, Counts, Post),
+   sw_samples(Post, Probs),
+   mc_sample(SampleGoal, SWs, Probs, TK_O, TK_P),
+   mcs_rebuild(TK_P, StateExK, State2).
+   
+% broken - wrong distribution
 mc_step(gibbs, Info, SampleGoal, SWs, Prior, State1, State2) :-
    mcs_random_select(Info, TK_O, State1, StateExK),
    mcs_dcounts(StateExK, CountsExK),
@@ -514,7 +535,7 @@ mc_step(gibbs, Info, SampleGoal, SWs, Prior, State1, State2) :-
    sw_samples(PostExK, ProbsExK),
    mc_sample(SampleGoal, SWs, ProbsExK, TK_O, TK_P),
    mcs_rebuild(TK_P, StateExK, State2).
-
+   
 mc_step(mh, Info, SampleGoal, SWs, Prior, State1, State2) :-
    mcs_random_select(Info, TK_O, State1, StateExK),
    mcs_dcounts(StateExK, CountsExK),
@@ -578,6 +599,10 @@ user:portray(node(p(Prob))) :- write('@'), print(Prob).
 mean(In,Out) :- moore(mm_step, mm_out, 0-0, In, Out).
 mm_step(X) --> succ <\> add(X).
 mm_out(N-S,M) :- divby(N,S,M).
+
+mean(Zero,Add,DivBy,In,Out) :- call(Zero,Z), moore(mm_step(Add), mm_out(DivBy), 0-Z, In, Out).
+mm_step(Add,X) --> succ <\> call(Add,X).
+mm_out(DivBy,N-S,M) :- call(DivBy,N,S,M).
 
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
