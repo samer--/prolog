@@ -1,7 +1,8 @@
-:- module(lazymath, [ add/3, sub/3, mul/3, max/3, min/3, stoch/2, log_e/2, surp/2, lse/3, pow/3
+:- module(lazymath, [ add/3, sub/3, mul/3, max/3, min/3, stoch/2, log_e/2, surp/2, lse/3, pow/3, lse_list/2
                     , patient/3, patient/4, lazy/4, map_sum/3, map_sum/4]).
 
 :- use_module(library(math), [stoch/3]).
+:- use_module(library(callutils)).
 :- use_module(library(insist)).
 
 % lazy arithmetic predicates
@@ -21,6 +22,17 @@ log_sum_exp(-inf,Y,Y) :- !.
 log_sum_exp(X,-inf,X) :- !.
 log_sum_exp(X,Y,Z) :- M is max(X,Y), Z is M + log(exp(X-M) + exp(Y-M)).
 
+lse_list(Xs,Z) :- when(ground(Xs), log_sum_exp_list(Xs,Z)).
+
+log_sum_exp_list([X],X) :- !.
+log_sum_exp_list(Xs,Y) :-
+   max_list(Xs,M),
+   call(add_log(M)*sum_list*maplist(exp_sub(M)),Xs,Y).
+exp_sub(M,X,Y) :- Y is exp(X-M).
+add_log(M,X,Y) :- Y is M+log(X).
+
+add_exp_sub(M,X,S1,S2) :- S2 is S1 + exp(X-M).
+
 :- meta_predicate lazy(3,?,?,-), patient(2,?,-), patient(3,?,?,-).
 lazy(P,X,Y,Z) :- freeze(Z,call(P,X,Y,Z)).
 patient(P,X,Y) :- when(ground(X),call(P,X,Y)).
@@ -30,7 +42,7 @@ user:goal_expansion(patient(P,X,Y), when(ground(X),call(P,X,Y))).
 user:goal_expansion(patient(P,X,Y,Z), when(ground(X-Y),call(P,X,Y,Z))).
 
 :- meta_predicate map_sum(2,+,-), map_sum(3,+,+,-).
-map_sum(P,X,Y,Sum) :- maplist(P,X,Y,Z), sumlist(Z,Sum).
-map_sum(P,X,Sum) :- maplist(P,X,Y), sumlist(Y,Sum).
-user:goal_expansion(map_sum(P,X,Sum), (maplist(P,X,Y), sumlist(Y,Sum))).
-user:goal_expansion(map_sum(P,X,Y,Sum), (maplist(P,X,Y,Z), sumlist(Z,Sum))).
+map_sum(P,X,Y,Sum) :- maplist(P,X,Y,Z), sum_list(Z,Sum).
+map_sum(P,X,Sum) :- maplist(P,X,Y), sum_list(Y,Sum).
+user:goal_expansion(map_sum(P,X,Sum), (maplist(P,X,Y), sum_list(Y,Sum))).
+user:goal_expansion(map_sum(P,X,Y,Sum), (maplist(P,X,Y,Z), sum_list(Z,Sum))).
