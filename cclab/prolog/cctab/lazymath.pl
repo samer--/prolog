@@ -1,4 +1,4 @@
-:- module(lazymath, [ add/3, sub/3, mul/3, max/3, min/3, stoch/2, log_e/2, surp/2, lse/3, pow/3, lse_list/2
+:- module(lazymath, [ add/3, sub/3, mul/3, max/3, min/3, stoch/2, log_e/2, surp/2, lse/2, pow/3
                     , patient/3, patient/4, lazy/4, map_sum/3, map_sum/4]).
 
 :- use_module(library(math), [stoch/3]).
@@ -14,18 +14,13 @@ mul(X,Y,Z) :- when(ground(X-Y), Z is X*Y). %{Z=X*Y}.
 stoch(X,Y) :- when(ground(X),   insist(stoch(X,Y,_))).
 log_e(X,Y) :- when(ground(X),   Y is log(X)).
 surp(P,LP) :- when(ground(P),   LP is -log(P)).
-lse(X,Y,Z) :- when(ground(X-Y), log_sum_exp(X,Y,Z)).
 pow(1,X,X) :- !.
 pow(B,X,Y) :- when(ground(X), Y is X^B).
 
-log_sum_exp(-inf,Y,Y) :- !.
-log_sum_exp(X,-inf,X) :- !.
-log_sum_exp(X,Y,Z) :- M is max(X,Y), Z is M + log(exp(X-M) + exp(Y-M)).
+lse(Xs,Z) :- when(ground(Xs), log_sum_exp(Xs,Z)).
 
-lse_list(Xs,Z) :- when(ground(Xs), log_sum_exp_list(Xs,Z)).
-
-log_sum_exp_list([X],X) :- !.
-log_sum_exp_list(Xs,Y) :-
+log_sum_exp([X],X) :- !.
+log_sum_exp(Xs,Y) :-
    max_list(Xs,M),
    call(add_log(M)*sum_list*maplist(exp_sub(M)),Xs,Y).
 exp_sub(M,X,Y) :- Y is exp(X-M).

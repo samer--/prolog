@@ -54,8 +54,8 @@
 :- use_module(library(rbutils),     [rb_app_or_new/5, rb_fold/4, rb_gen/3, rb_add//2, rb_app//2, rb_get//2]).
 :- use_module(library(machines),    [unfold/2, unfolder/3, moore/5, mapper/3, scan0/4, (>>)/3]).
 :- use_module(library(lambda2)).
-:- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, pow/3, log_e/2, surp/2, stoch/2
-                        , lse_list/2, patient/4, patient/3, lazy/4, map_sum/3, map_sum/4]).
+:- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, pow/3, log_e/2, surp/2, lse/2, stoch/2
+                        , patient/4, patient/3, lazy/4, map_sum/3, map_sum/4]).
 :- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
@@ -276,13 +276,6 @@ sr_unit(kbest,    [0-[]]).
 sr_unit(ann(SR),  U-[])  :- sr_unit(SR,U).
 sr_unit(R1-R2,    U1-U2) :- sr_unit(R1,U1), sr_unit(R2,U2).
 
-sr_inj(log_io,    _, P, X) :- log_e(P,X).
-sr_proj(log_io,   _, X, Y, Y) :- lse_list(X,Y).
-sr_times(log_io,  X) --> add(X).
-sr_plus(log_io,   X) --> cons(X).
-sr_unit(log_io,   0).
-sr_zero(log_io,  []).
-
 m_zero(add,0).
 m_zero(mul,1).
 m_zero(max,-inf).
@@ -326,7 +319,7 @@ graph_inside(Graph, Params, IGraph)  :- graph_inside(lin, Graph, Params, IGraph)
 graph_inside(lin, Graph, Params, IGraph)  :- 
    semiring_graph_fold(ann(r(=,=,mul,add)), Graph, Params, IGraph).
 graph_inside(log, Graph, Params, IGraph)  :- 
-   semiring_graph_fold(ann(r(log_e,lse_list,add,cons)), Graph, Params, IGraph).
+   semiring_graph_fold(ann(r(log_e,lse,add,cons)), Graph, Params, IGraph).
 graph_viterbi(Graph, Params, Tree, LP) :- 
    semiring_graph_fold(best, Graph, Params, VGraph), top_value(VGraph, LP-Tree).
 graph_nviterbi(Graph, Params, Tree, LP) :-
