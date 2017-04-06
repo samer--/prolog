@@ -518,24 +518,6 @@ sample_goal(P0, IGraph0, P1, Goal, Tree) :-
    copy_term(P0-ISubGraph0, P1-ISubGraph), 
    igraph_sample_tree(ISubGraph, Goal, _-Tree, _).
 
-% this works, but mixing may be slow?
-mc_step(gibbs2, Info, SampleGoal, SWs, Prior, State1, State2) :-
-   mcs_random_select(Info, TK_O, State1, StateExK),
-   mcs_counts(State1, Counts),
-   sw_posteriors(Prior, Counts, Post),
-   sw_samples(Post, Probs),
-   mc_sample(SampleGoal, SWs, Probs, TK_O, TK_P),
-   mcs_rebuild(TK_P, StateExK, State2).
-   
-% broken - wrong distribution
-mc_step(gibbs, Info, SampleGoal, SWs, Prior, State1, State2) :-
-   mcs_random_select(Info, TK_O, State1, StateExK),
-   mcs_dcounts(StateExK, CountsExK),
-   sw_posteriors(Prior, CountsExK, PostExK),
-   sw_samples(PostExK, ProbsExK),
-   mc_sample(SampleGoal, SWs, ProbsExK, TK_O, TK_P),
-   mcs_rebuild(TK_P, StateExK, State2).
-   
 mc_step(mh, Info, SampleGoal, SWs, Prior, State1, State2) :-
    mcs_random_select(Info, TK_O, State1, StateExK),
    mcs_dcounts(StateExK, CountsExK),
