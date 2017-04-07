@@ -1,4 +1,4 @@
-:- module(lazymath, [ add/3, sub/3, mul/3, max/3, min/3, stoch/2, log_e/2, surp/2, lse/2, pow/3
+:- module(lazymath, [ add/3, sub/3, mul/3, max/3, min/3, stoch/2, exp/2, log_e/2, surp/2, lse/2, pow/3, log_stoch/2
                     , patient/3, patient/4, lazy/4, map_sum/3, map_sum/4]).
 
 :- use_module(library(math), [stoch/3]).
@@ -13,9 +13,15 @@ sub(X,Y,Z) :- when(ground(X-Y), Z is Y-X). %{Z=X-Y}.
 mul(X,Y,Z) :- when(ground(X-Y), Z is X*Y). %{Z=X*Y}.
 stoch(X,Y) :- when(ground(X),   insist(stoch(X,Y,_))).
 log_e(X,Y) :- when(ground(X),   Y is log(X)).
+exp(X,Y)   :- when(ground(X),   Y is exp(X)).
 surp(P,LP) :- when(ground(P),   LP is -log(P)).
 pow(1,X,X) :- !.
 pow(B,X,Y) :- when(ground(X), Y is X^B).
+log_stoch(X,Y) :- when(ground(X), log_stoch_strict(X,Y)).
+
+log_stoch_strict(Weights,LogProbs) :-
+   call(log*sum_list, Weights, LogTotal),
+   maplist((math:sub(LogTotal))*log, Weights, LogProbs).
 
 lse(Xs,Z) :- when(ground(Xs), log_sum_exp(Xs,Z)).
 
