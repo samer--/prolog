@@ -2,7 +2,7 @@
                  , uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
                  , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/2
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
-                 , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_counts/4 
+                 , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_counts/5 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
                  , converge/5, learn/4, learn/5, mc_perplexity/4, mc_machine/5, gibbs_posterior_machine/5
                  , mean/2, mean/5
@@ -194,7 +194,7 @@ graph_sw(G,SW) :- member(_-Es,G), member(E,Es), member(SW:=_,E).
 sw_init(uniform,Vs, Params) :- uniform_probs(Vs,Params).
 sw_init(unit,   Vs, Params) :- maplist(const(1),Vs,Params).
 sw_init(random, Vs, Params) :- random_probs(Vs,Params).
-sw_init(K*Spec, Vs, Params) :- sw_init(Spec,Vs,P0), maplist(mul(K), P0, Params).
+sw_init(F*Spec, Vs, Params) :- sw_init(Spec,Vs,P0), maplist(F, P0, Params).
 sw_init(S1+S2,  Vs, Params) :- sw_init(S1,Vs,P1), sw_init(S2,Vs,P2), maplist(add,P1,P2,Params).
 
 uniform_probs(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
@@ -245,37 +245,38 @@ sr_param(SR,F,X,P) :- sr_inj(SR,F,P,X).
 
 % --------- semirings ---------
 sr_inj(r(I,_,_,_),  _, P, X)     :- call(I,P,X).
-sr_inj(best,      F, P, Q-F)   :- log_e(P,Q).
+sr_inj(best(log), F, P, P-F).
+sr_inj(best(lin), F, P, Q-F)   :- log_e(P,Q).
 sr_inj(kbest,     F, P, [Q-F]) :- surp(P,Q).
 sr_inj(ann(SR),   F, P, Q-F)   :- sr_inj(SR,F,P,Q).
 sr_inj(R1-R2,     F, P, Q1-Q2) :- sr_inj(R1,F,P,Q1), sr_inj(R2,F,P,Q2).
 
 sr_proj(r(_,P,_,_), _, X, Y, Y) :- call(P,X,Y).
-sr_proj(best,     G, X-E, X-E, X-(G-E)).
+sr_proj(best(_),  G, X-E, X-E, X-(G-E)).
 sr_proj(kbest,    G, X, X, Y)         :- freeze(Y,lazy_maplist(k_tag(G),X,Y)).
 sr_proj(ann(SR),  G, X-Z, W-Z, Y-G)     :- sr_proj(SR,G,X,W,Y).
 sr_proj(R1-R2,    G, X1-X2, Z1-Z2, Y1-Y2) :- sr_proj(R1,G,X1,Z1,Y1), sr_proj(R2,G,X2,Z2,Y2).
 
 sr_plus(r(_,_,_,O), X) --> call(O,X).
-sr_plus(best,     X) --> v_max(X).
+sr_plus(best(_),  X) --> v_max(X).
 sr_plus(kbest,    X) --> lazy(k_min,X).
 sr_plus(ann(SR),  X-Expl) --> sr_plus(SR,X) <\> cons(X-Expl).
 sr_plus(R1-R2,    X1-X2) --> sr_plus(R1,X1) <\> sr_plus(R2,X2).
 
 sr_times(r(_,_,O,_), X) --> call(O,X).
-sr_times(best,     X-F) --> add(X) <\> cons(F).
+sr_times(best(_),  X-F) --> add(X) <\> cons(F).
 sr_times(kbest,    X) --> lazy(k_mul,X).
 sr_times(ann(SR),  X-F) --> sr_times(SR,X) <\> cons(X-F).
 sr_times(R1-R2,    X1-X2) --> sr_times(R1,X1) <\> sr_times(R2,X2).
 
 sr_zero(r(_,_,_,O), I) :- m_zero(O,I).
-sr_zero(best,     Z-_)   :- m_zero(max,Z).
+sr_zero(best(_),  Z-_)   :- m_zero(max,Z).
 sr_zero(kbest,    []).
 sr_zero(ann(SR),  Z-[])  :- sr_zero(SR,Z).
 sr_zero(R1-R2,    Z1-Z2) :- sr_zero(R1,Z1), sr_zero(R2,Z2).
 
 sr_unit(r(_,_,O,_), I) :- m_zero(O,I).
-sr_unit(best,     0-[]).
+sr_unit(best(_),  0-[]).
 sr_unit(kbest,    [0-[]]).
 sr_unit(ann(SR),  U-[])  :- sr_unit(SR,U).
 sr_unit(R1-R2,    U1-U2) :- sr_unit(R1,U1), sr_unit(R2,U2).
@@ -321,7 +322,7 @@ empty_set([]).
 graph_inside(Graph, Params, IGraph)  :- 
    semiring_graph_fold(ann(r(=,=,mul,add)), Graph, Params, IGraph).
 graph_viterbi(Graph, Params, Tree, LP) :- 
-   semiring_graph_fold(best, Graph, Params, VGraph), top_value(VGraph, LP-Tree).
+   semiring_graph_fold(best(lin), Graph, Params, VGraph), top_value(VGraph, LP-Tree).
 graph_nviterbi(Graph, Params, Tree, LP) :-
    semiring_graph_fold(kbest, Graph, Params, VGraph), top_value(VGraph, Expls),
    member(LP-Tree,Expls).
@@ -356,26 +357,34 @@ factor_entropy(M:Head) --> !, pmap(M:Head,H) <\> add(H).
 factor_entropy(_) --> []. 
 
 % --------- outside probabilities, ESS ----------------
-graph_counts(vit, Graph, P1, LP-Eta) :-
-   graph_viterbi(Graph, P1, Tree, LP),
+graph_counts(vit, PScaling, Graph, P1, LP-Eta) :-
+   call(top_value * semiring_graph_fold(best(PScaling),Graph), P1, LP-Tree),
    when(ground(LP), tree_stats(_-Tree, Eta)).
 
-graph_counts(io/Scaling, Graph, P1, LP-Eta) :-
-   scaling_info(Scaling, SR, Extract, TopBeta, TopAlpha, LP),
+graph_counts(io(IScaling), PScaling, Graph, P1, LP-Eta) :-
+   i_scaling_info(IScaling, Min, TopBeta, TopAlpha, LP),
+   scaling_info(IScaling/PScaling, SR, MakeCounts),
    semiring_graph_fold(ann(SR), Graph, P1, InsideG),
    top_value(InsideG, TopBeta-_), 
    foldl(soln_edges, InsideG, QCs, []), 
-   call(group_pairs_by_key*keysort, QCs, InvGraph),
-   rb_empty(Empty), 
-   pmap(top:'$top$', TopAlpha, Empty, Map1),
-   foldl(q_alpha(Scaling), InvGraph, Map1, Map2),
-   maplist(pmap_collate(Extract,=(0),Map2)*fst, P1, Grad),
-   map_swc(mul, Grad, P1, Eta).
+   call(group_pairs_by_key * keysort, QCs, InvGraph),
+   call(rb_empty >> pmap(top:'$top$',TopAlpha), Map1),
+   foldl(q_alpha(IScaling), InvGraph, Map1, Map2),
+   maplist(pmap_collate(right,=(Min),Map2)*fst, P1, Grad),
+   map_swc(MakeCounts, P1, Grad, Eta).
 right(_,X,X).
-exp_right(_,X,Y) :- exp(X,Y).
 
-scaling_info(lin,r(=,=,mul,add),right,Pin,1/Pin,LP) :- log_e(Pin,LP). 
-scaling_info(log,r(log_e,lse,add,cons),exp_right,LP,-LP,LP).
+i_scaling_info(lin, 0,    Pin, 1/Pin, LP) :- log_e(Pin,LP).
+i_scaling_info(log, -inf, LP, -LP, LP).
+
+scaling_info(lin/lin, r(=,=,mul,add),        mul).
+scaling_info(lin/log, r(exp,=,mul,add),      mul_exp1).
+scaling_info(log/lin, r(log_e,lse,add,cons), mul_exp2).
+scaling_info(log/log, r(=,lse,add,cons),     exp_add).
+
+exp_add(X,Y,Z) :- when(ground(X-Y), Z is exp(X+Y)).
+mul_exp1(X,Y,Z) :- when(ground(X-Y), Z is exp(X)*Y).
+mul_exp2(X,Y,Z) :- when(ground(X-Y), Z is X*exp(Y)).
 
 opt(Opts, Opt) :- option(Opt, Opts, _).
 soln_edges(P-(_-Expls)) --> foldl(expl_edges(P),Expls).
@@ -427,12 +436,12 @@ marg_log_prob(Prior,Eta,LP) :-
 learn(Method,Stats,Graph,Step) :- learn(Method,Stats,1,Graph,Step).
 
 learn(ml, Stats, ITemp, Graph, cctab:unify3(t(P1,P2,LL))) :-
-   graph_counts(Stats, Graph, PP, LL-Eta),
+   graph_counts(Stats, lin, Graph, PP, LL-Eta),
    map_swc(pow(ITemp), P1, PP),
    map_sw(stoch, Eta, P2).
 
 learn(map(Prior), Stats, ITemp, Graph, cctab:unify3(t(P1,P2,LL+LP))) :-
-   graph_counts(Stats, Graph, PP, LL-Eta),
+   graph_counts(Stats, lin, Graph, PP, LL-Eta),
    patient(mul(ITemp)*sw_log_prob(Prior), P1, LP),
    sw_posteriors(Prior, Eta, Post),
    map_swc(pow(ITemp), P1, PP),
@@ -443,13 +452,13 @@ learn(vb(Prior), Stats, ITemp, Graph, cctab:unify3(t(A1,A2,LL-Div))) :-
    map_swc(mul_add(ITemp,1-ITemp), Prior, EffPrior),
    map_sum_sw(log_partition_dirichlet, Prior, LogZPrior),
    patient(vb_helper(ITemp, LogZPrior, EffPrior), A1, Pi - Div),
-   graph_counts(Stats, Graph, Pi, LL-Eta),
+   graph_counts(Stats, log, Graph, Pi, LL-Eta),
    map_swc(mul_add(ITemp), EffPrior, Eta, A2).
 
 vb_helper(ITemp, LogZPrior, EffPrior, A, Pi - Div) :- 
    map_sw(mean_log_dirichlet, A, PsiA),
    map_swc(math:sub, EffPrior, A, Delta),
-   map_swc((math:exp)*mul(ITemp), PsiA, Pi),
+   map_swc(mul(ITemp), PsiA, Pi),
    map_sum_sw(log_partition_dirichlet, A, LogZA),
    map_sum_sw(map_sum(math:mul), PsiA, Delta, Diff),
    Div is Diff - LogZA + ITemp*LogZPrior.
@@ -476,7 +485,7 @@ converged(rel(Del), X1, X2) :- abs((X1-X2)/(X1+X2)) =< Del.
 % -------------- MCMC methods -----------------
 
 mc_perplexity(Method, Graph, Prior, Stream) :-
-   converge(rel(1e-6), learn(vb(Prior), io/lin, Graph), _, Prior, VBPost),
+   converge(rel(1e-6), learn(vb(Prior), io(lin,lin), Graph), _, Prior, VBPost),
    sw_expectations(VBPost, VBProbs), 
    call(log*fst*top_value*graph_inside(Graph), VBProbs, LogPDataGivenVBProbs),
    call(add(LogPDataGivenVBProbs)*sw_log_prob(Prior), VBProbs, LogPDataVBProbs),
@@ -487,17 +496,17 @@ mc_perplexity(Method, Graph, Prior, Stream) :-
 
 p_params_given_post(Probs,Post,P) :- sw_log_prob(Post,Probs,LP), P is exp(LP).
 
-method_machine_mapper(all_gibbs,   _,     cctab:gibbs_posterior_machine(posterior), =).
-method_machine_mapper(one(Method), Prior, mc_machine(Method), cctab:sw_posteriors(Prior)*mcs_counts).
+method_machine_mapper(gibbs, _,     cctab:gibbs_posterior_machine(posterior), =).
+method_machine_mapper(mh,    Prior, mc_machine(mh), cctab:sw_posteriors(Prior)*mcs_counts).
 
 gibbs_posterior_machine(Rot, Graph, Prior, P1, M) :-
    graph_inside(Graph, P0, IG),
    rotation(Rot, sw_posteriors(Prior), gstep(P0,IG), sw_samples, Step),
    unfolder(scan0(Step), P1, M).
 
-rotation(posterior,Post,Step,Sample,Post*Step*Sample).
-rotation(counts,   Post,Step,Sample,Step*Sample*Post).
-rotation(params,   Post,Step,Sample,Sample*Post*Step).
+rotation(posterior,Post, Step, Sample, Post*Step*Sample).
+rotation(counts,   Post, Step, Sample, Step*Sample*Post).
+rotation(params,   Post, Step, Sample, Sample*Post*Step).
 
 gstep(P0,IG,P1,Counts) :-
    copy_term(P0-IG,P1-IG1),
