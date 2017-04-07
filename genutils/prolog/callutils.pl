@@ -1,12 +1,11 @@
-:- module(callutils, [ (*)/4
-							, (*)//4
-							, (*:)//3
-                     , const/3
-							, constf//3
+:- module(callutils, [ (*)/4, (*)//4, (*:)//3
+                     , const/3 , constf//3
 							, pairf//3
                      , mr/5
 							, op(600,yfx,*:)
                      , flip/3
+                     , true2/2, true1/1
+                     , fail2/2, fail1/1
 					    	]).
 
 /** <module> High-order utility predicates
@@ -69,3 +68,7 @@ expand_call(Head, Args, G) :-
    append(Bound, Args, AllArgs),
    G =.. [Pred | AllArgs].
 
+true1(_).
+true2(_,_).
+fail1(_) :- fail.
+fail2(_,_) :- fail.
