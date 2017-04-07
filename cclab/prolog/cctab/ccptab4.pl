@@ -1,6 +1,6 @@
-:- module(cctab, [ run_with_tables/2, run_tab_expl/2, run_sampling//2
+:- module(cctab, [ run_with_tables/2, run_tab_expl/2, run_sampling//2, ccstore/2
                  , uniform_sampler//2, make_lookup_sampler/2, fallback_sampler//4
-                 , cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/2
+                 , ccstored/1, cctabled/2, uniform/2, dist/2, dist/3, (:=)/2, sample/2
                  , goal_graph/2, tables_graph/2, graph_params/3, semiring_graph_fold/4
                  , graph_viterbi/4, graph_nviterbi/4, graph_inside/3, graph_counts/5 
                  , igraph_sample_tree/3, top_value/2, tree_stats/2 , print_tree/1
@@ -30,7 +30,6 @@
       - Modularise!
       - CLP R/Q
       - Automatic differentiation for counts?
-      - Grammar with integer states instead of difference lists
       - Goal subsumption in tabling lookup
       - lazy explanation search, ccbeam etc
 */
@@ -72,7 +71,7 @@ fsnd3(P,A-X,A-Y,A-Z) :- call(P,X,Y,Z).
 user:goal_expansion(fsnd3(P,SX,SY,SZ),(SX=S-X, SY=S-Y, SZ=S-Z, call(P,X,Y,Z))).
 
 % ------------- effects -----------
-:- meta_predicate :=(3,-), cctabled(0,0), sample(3,-).
+:- meta_predicate :=(3,-), ccstored(:), cctabled(0,0), sample(3,-).
 
 bernoulli(P1,X) :- P0 is 1-P1, dist([P0-0,P1-1],X).
 dirichlet(As,Ps) :- sample(pure(dirichlet(As)),Ps).
@@ -85,6 +84,8 @@ SW := X       :- p_shift(prob,sw(SW,X)).
 
 sw_values(SW,Values) :- call(SW,_,Values,[]).
 
+ccstored(Head) :- 
+   p_shift(tab, tab(Head,throw(not_stored(Head)),_)). 
 cctabled(TableAs,Head) :- 
    p_shift(tab, tab(TableAs,Head,Inject)), 
    call(Inject).
@@ -128,7 +129,7 @@ run_tab(Goal, Ans)    :- p_reset(tab, Goal, Status), cont_tab(Status, Ans).
 
 cont_tab(done, _).
 cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
-   term_variables(Head,Y), K = (\\Y`Ans`Cont),
+   term_variables(TableAs, Y), K = (\\Y`Ans`Cont),
    term_to_ground(TableAs, Variant),
    nbr_app_or_new(Variant, new_consumer(Res,K), new_producer(Res,TableAs)),
    (  Res=solns(Solns) -> rb_gen(Y, _, Solns), run_tab(Cont, Ans)
@@ -147,6 +148,15 @@ new_soln(Y1, E, Res, tab(V,Solns1,Ks), tab(V,Solns2,Ks)) :-
    rb_app_or_new(Y1, old_soln(Res,E), new_soln(Res,Ks,E), Solns1, Solns2).
 new_soln(new(Ks),Ks,E,[E]).
 old_soln(old,E,Es,[E|Es]).
+
+:- meta_predicate ccstore(:,0).
+ccstore(Query,Soln) :- copy_term(Query-Soln,Q-S), p_shift(tab, tab(Q,once(S),_)).
+
+% :- meta_predicate ccstore(:,+).
+% ccstore(Query,Y) :-
+%    term_to_ground(Query, Variant),
+%    nbr_app_or_new(Variant, fail2, new_store(Query,Y)).
+% new_store(V, Y, tab(V,Solns,[])) :- call(rb_empty >> rb_add(Y,[[]]), Solns).
 
 % ----------- mapping tables to graphs --------------
 
@@ -607,5 +617,6 @@ mm_out(DivBy,N-S,M) :- call(DivBy,N,S,M).
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
 member2(X,Y,[_|XX],[_|YY]) :- member2(X,Y,XX,YY).
+fail2(_,_) :- !, fail.
 true2(_,_).
 true1(_).

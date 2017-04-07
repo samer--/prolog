@@ -19,9 +19,10 @@ pow(1,X,X) :- !.
 pow(B,X,Y) :- when(ground(X), Y is X^B).
 log_stoch(X,Y) :- when(ground(X), log_stoch_strict(X,Y)).
 
-log_stoch_strict(Weights,LogProbs) :-
-   call(log*sum_list, Weights, LogTotal),
-   maplist((math:sub(LogTotal))*log, Weights, LogProbs).
+log_stoch_strict([_],[0]) :- !.
+log_stoch_strict(LogWeights,LogProbs) :-
+   log_sum_exp(LogWeights, LogTotal),
+   maplist((math:sub(LogTotal)), LogWeights, LogProbs).
 
 lse(Xs,Z) :- when(ground(Xs), log_sum_exp(Xs,Z)).
 
