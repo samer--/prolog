@@ -1,7 +1,7 @@
 :- module(pair,
           [ ffst/3, ffst//3
           , fsnd/3, fsnd//3
-          , pair/3, fst/2, snd/2
+          , dup/2, pair/3, fst/2, snd/2
           , select_key_value/4
           , select_key_default_value/5
           , map_select_key_value/5
@@ -20,6 +20,9 @@
 
 %% pair(X:A, Y:B, Z:pair(A,B)) is det.
 pair(X, Y, X-Y).
+
+%% dup(X:A, Y:pair(A,A)) is det.
+dup(X, X-X).
 
 %% fst(X:pair(A,B), Y:A) is det.
 fst(X-_, X).
