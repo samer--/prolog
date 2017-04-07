@@ -31,7 +31,6 @@
       - CLP R/Q
       - Automatic differentiation for counts?
       - Grammar with integer states instead of difference lists
-      - Log scaling for all learning methods and entropy
       - Goal subsumption in tabling lookup
       - lazy explanation search, ccbeam etc
 */
@@ -339,19 +338,25 @@ sample_subexpl_tree(_, P-(SW:=Val), SW:=Val, LP) :- !, LP is log(P).
 sample_subexpl_tree(_, P-const,     const,   LP) :- LP is log(P).
 
 % ---- explanation entropy ----
-inside_graph_entropy(IGraph, GoalEntropies) :- 
+inside_graph_entropy(Scaling, IGraph, GoalEntropies) :- 
    rb_empty(E), 
-   foldl(goal_entropy, IGraph, GoalEntropies, E, Map), 
+   foldl(goal_entropy(Scaling), IGraph, GoalEntropies, E, Map), 
    rb_visit(Map, GoalEntropies).
 
-goal_entropy(Goal-(_ - WeightedExpls), Goal-Entropy) -->
+goal_entropy(Scaling, Goal-(_ - WeightedExpls), Goal-Entropy) -->
    pmap(Goal,Entropy),
-   {maplist(pair, Ws, Es, WeightedExpls), stoch(Ws, Ps)},
-   run_right(foldl(expl_entropy,Ps,Es), 0, Entropy).
+   {maplist(pair, Ws, Es, WeightedExpls), scaling_stoch(Scaling, Ws, Ps)},
+   run_right(foldl(expl_entropy(Scaling),Ps,Es), 0, Entropy).
 
-expl_entropy(Pe, Expl) --> 
-   {when(ground(FactorEntropies-Pe), ExplEntropy is Pe*(FactorEntropies - log(Pe)))},
-   run_right(foldl(mr(snd,factor_entropy),Expl), 0, FactorEntropies) <\> add(ExplEntropy). 
+scaling_stoch(lin,X,Y) :- stoch(X,Y).
+scaling_stoch(log,X,Y) :- log_stoch(X,Y).
+
+expl_entropy(Scaling, Pe, Expl) --> 
+   {when(ground(FactorsEntropy-Pe), expl_entropy(Scaling, Pe, FactorsEntropy, ExplEntropy))},
+   run_right(foldl(mr(snd,factor_entropy),Expl), 0, FactorsEntropy) <\> add(ExplEntropy). 
+
+expl_entropy(lin, Pe, HFactors, HE) :- HE is Pe*(HFactors - log(Pe)).
+expl_entropy(log, Pe, HFactors, HE) :- HE is exp(Pe)*(HFactors - Pe).
 
 factor_entropy(M:Head) --> !, pmap(M:Head,H) <\> add(H).
 factor_entropy(_) --> []. 
