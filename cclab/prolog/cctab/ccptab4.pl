@@ -152,12 +152,6 @@ old_soln(old,E,Es,[E|Es]).
 :- meta_predicate ccstore(:,0).
 ccstore(Query,Soln) :- copy_term(Query-Soln,Q-S), p_shift(tab, tab(Q,once(S),_)).
 
-% :- meta_predicate ccstore(:,+).
-% ccstore(Query,Y) :-
-%    term_to_ground(Query, Variant),
-%    nbr_app_or_new(Variant, fail2, new_store(Query,Y)).
-% new_store(V, Y, tab(V,Solns,[])) :- call(rb_empty >> rb_add(Y,[[]]), Solns).
-
 % ----------- mapping tables to graphs --------------
 
 :- meta_predicate goal_graph(0,-).
