@@ -100,3 +100,13 @@ test(Y,Z) :- (X=1;X=2;X=3), ssucc(A,Y), A=X, ssucc(_,Z).
 iota(0,L,L) :- !.
 iota(N,L3,L1) :- succ(M,N), iota(M,L3,[N|L1]).
 
+% grammar system avoiding difference lists
+:- cctable c//1.
+c(T, S-I, S-J) :- ccstored(sequence(S,Ts)), nth0(I,Ts,T), succ(I,J).
+phr(NT,S) :- ccstored(sequence(S,Ts)),length(Ts,N), call_dcg(NT,S-0,S-N).
+
+coin | iota(2).
+:- cctable np2//0, nom2//0.
+np2 --> coin ~> c(the), nom2
+              ; c(a), nom2.
+nom2 --> die ~> c(cat); c(mat); c(dog); c(frog).

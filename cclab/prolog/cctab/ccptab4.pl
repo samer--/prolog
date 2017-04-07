@@ -42,7 +42,7 @@
 :- use_module(library(lazy),        [lazy_maplist/3, lazy_unfold_finite/4]).
 :- use_module(library(math),        [stoch/3, divby/3, gammaln/2]).
 :- use_module(library(listutils),   [cons//1, enumerate/2, foldr/4, split_at/4]).
-:- use_module(library(callutils),   [mr/5, (*)/4, const/3]).
+:- use_module(library(callutils),   [mr/5, (*)/4, const/3, true1/1, true2/2, fail2/2]).
 :- use_module(library(data/pair),   [pair/3, fst/2, fsnd/3, snd/2]).
 :- use_module(library(data/tree),   [print_tree/2]).
 :- use_module(library(plrand),      [ log_prob_dirichlet/3, mean_log_dirichlet/2
@@ -380,20 +380,16 @@ graph_counts(io(IScaling), PScaling, Graph, P1, LP-Eta) :-
    call(rb_empty >> pmap(top:'$top$',TopAlpha), Map1),
    foldl(q_alpha(IScaling), InvGraph, Map1, Map2),
    maplist(pmap_collate(right,=(Min),Map2)*fst, P1, Grad),
-   map_swc(MakeCounts, P1, Grad, Eta).
+   map_swc(patient(MakeCounts), P1, Grad, Eta).
 right(_,X,X).
 
 i_scaling_info(lin, 0,    Pin, 1/Pin, LP) :- log_e(Pin,LP).
 i_scaling_info(log, -inf, LP, -LP, LP).
 
-scaling_info(lin/lin, r(=,=,mul,add),        mul).
-scaling_info(lin/log, r(exp,=,mul,add),      mul_exp1).
-scaling_info(log/lin, r(log_e,lse,add,cons), mul_exp2).
-scaling_info(log/log, r(=,lse,add,cons),     exp_add).
-
-exp_add(X,Y,Z) :- when(ground(X-Y), Z is exp(X+Y)).
-mul_exp1(X,Y,Z) :- when(ground(X-Y), Z is exp(X)*Y).
-mul_exp2(X,Y,Z) :- when(ground(X-Y), Z is X*exp(Y)).
+scaling_info(lin/lin, r(=,=,mul,add),        math:mul).
+scaling_info(lin/log, r(exp,=,mul,add),      \\X`Y`Z`(Z is exp(X)*Y)).
+scaling_info(log/lin, r(log_e,lse,add,cons), \\X`Y`Z`(Z is X*exp(Y))).
+scaling_info(log/log, r(=,lse,add,cons),     \\X`Y`Z`(Z is exp(X+Y))).
 
 opt(Opts, Opt) :- option(Opt, Opts, _).
 soln_edges(P-(_-Expls)) --> foldl(expl_edges(P),Expls).
@@ -600,10 +596,7 @@ user:portray(node(p(Prob))) :- write('@'), print(Prob).
 % ----- misc -----
 
 % mean machine
-mean(In,Out) :- moore(mm_step, mm_out, 0-0, In, Out).
-mm_step(X) --> succ <\> add(X).
-mm_out(N-S,M) :- divby(N,S,M).
-
+mean(In,Out) :- mean(=(0), math:add, divby, In, Out).
 mean(Zero,Add,DivBy,In,Out) :- call(Zero,Z), moore(mm_step(Add), mm_out(DivBy), 0-Z, In, Out).
 mm_step(Add,X) --> succ <\> call(Add,X).
 mm_out(DivBy,N-S,M) :- call(DivBy,N,S,M).
@@ -611,6 +604,3 @@ mm_out(DivBy,N-S,M) :- call(DivBy,N,S,M).
 term_to_ground(T1, T2) :- copy_term_nat(T1,T2), numbervars(T2,0,_).
 member2(X,Y,[X|_],[Y|_]).
 member2(X,Y,[_|XX],[_|YY]) :- member2(X,Y,XX,YY).
-fail2(_,_) :- !, fail.
-true2(_,_).
-true1(_).
