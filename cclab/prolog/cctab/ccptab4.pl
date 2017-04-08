@@ -39,6 +39,7 @@
 :- use_module(library(typedef)).
 :- use_module(library(dcg_pair)).
 :- use_module(library(dcg_macros)).
+:- use_module(library(lambda2)).
 :- use_module(library(lazy),        [lazy_maplist/3, lazy_unfold_finite/4]).
 :- use_module(library(math),        [stoch/3, divby/3, gammaln/2]).
 :- use_module(library(listutils),   [cons//1, enumerate/2, foldr/4, split_at/4]).
@@ -52,10 +53,10 @@
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_ref/1, nbr_app/2, nbr_app_or_new/3, nbr_dump/1]).
 :- use_module(library(rbutils),     [rb_app_or_new/5, rb_fold/4, rb_gen/3, rb_add//2, rb_app//2, rb_get//2]).
-:- use_module(library(machines),    [unfold/2, unfolder/3, moore/5, mapper/3, scan0/4, (>>)/3]).
-:- use_module(library(lambda2)).
-:- use_module(lazymath, [ max/3, min/3, add/3, sub/3, mul/3, pow/3, exp/2, log_e/2, surp/2
-                        , lse/2, stoch/2, log_stoch/2, map_sum/3, map_sum/4, patient/4, patient/3, lazy/4]).
+:- use_module(machines,             [unfold/2, unfolder/3, moore/5, mapper/3, scan0/4, (>>)/3]).
+:- use_module(lazymath,             [ max/3, min/3, add/3, sub/3, mul/3, pow/3, exp/2, log_e/2, surp/2
+                                    , lse/2, stoch/2, log_stoch/2, map_sum/3, map_sum/4
+                                    , patient/4, patient/3, lazy/4]).
 :- use_module(ptabled, []).
 
 :- set_prolog_flag(back_quotes, symbol_char).
