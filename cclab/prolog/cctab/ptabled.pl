@@ -6,8 +6,11 @@
 
 :- use_module(library(tabling)).
 :- use_module(library(ccmacros2)).
+:- use_module(library(lambda2)).
 :- use_module(library(callutils), [(*)/4]).
 :- use_module(library(listutils), [take/3]).
+
+:- set_prolog_flag(back_quotes, symbol_char).
 
 :- op(1200,xfx,~~>).
 :- op(1150,xfx,~>).

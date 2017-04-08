@@ -71,7 +71,7 @@ fsnd3(P,A-X,A-Y,A-Z) :- call(P,X,Y,Z).
 user:goal_expansion(fsnd3(P,SX,SY,SZ),(SX=S-X, SY=S-Y, SZ=S-Z, call(P,X,Y,Z))).
 
 % ------------- effects -----------
-:- meta_predicate :=(3,-), ccstored(:), cctabled(0,0), sample(3,-).
+:- meta_predicate :=(3,-), ccstore(:,0), ccstored(:), cctabled(:,0), sample(3,-).
 
 bernoulli(P1,X) :- P0 is 1-P1, dist([P0-0,P1-1],X).
 dirichlet(As,Ps) :- sample(pure(dirichlet(As)),Ps).
@@ -84,11 +84,9 @@ SW := X       :- p_shift(prob,sw(SW,X)).
 
 sw_values(SW,Values) :- call(SW,_,Values,[]).
 
-ccstored(Head) :- 
-   p_shift(tab, tab(Head,throw(not_stored(Head)),_)). 
-cctabled(TableAs,Head) :- 
-   p_shift(tab, tab(TableAs,Head,Inject)), 
-   call(Inject).
+ccstored(Head)      :- p_shift(tab, tab(Head,throw(not_stored(Head)),_)).
+cctabled(Head,Work) :- p_shift(tab, tab(Head,Work,Inj)), call(Inj).
+ccstore(Head,Work)  :- copy_term(Head-Work,H-W), p_shift(tab, tab(H,once(W),_)).
 
 :- meta_predicate run_prob(3,0,?,?).
 run_prob(Handler,Goal) --> {p_reset(prob, Goal, Status)}, cont_prob(Status,Handler).
@@ -128,12 +126,12 @@ expl(uniform(Xs,X)) --> {length(Xs,N), P is 1/N, member(X,Xs)}, [@P].
 run_tab(Goal, Ans)    :- p_reset(tab, Goal, Status), cont_tab(Status, Ans).
 
 cont_tab(done, _).
-cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
+cont_tab(susp(tab(TableAs,Work,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
    term_variables(TableAs, Y), K = (\\Y`Ans`Cont),
    term_to_ground(TableAs, Variant),
    nbr_app_or_new(Variant, new_consumer(Res,K), new_producer(Res,TableAs)),
    (  Res=solns(Solns) -> rb_gen(Y, _, Solns), run_tab(Cont, Ans)
-   ;  Res=new_producer -> run_tab(producer(Variant, \\Y`Head, K, Ans), Ans)
+   ;  Res=new_producer -> run_tab(producer(Variant, \\Y`Work, K, Ans), Ans)
    ).
 
 new_consumer(solns(Solns), K, tab(V,Solns,Ks), tab(V,Solns,[K|Ks])).
@@ -148,9 +146,6 @@ new_soln(Y1, E, Res, tab(V,Solns1,Ks), tab(V,Solns2,Ks)) :-
    rb_app_or_new(Y1, old_soln(Res,E), new_soln(Res,Ks,E), Solns1, Solns2).
 new_soln(new(Ks),Ks,E,[E]).
 old_soln(old,E,Es,[E|Es]).
-
-:- meta_predicate ccstore(:,0).
-ccstore(Query,Soln) :- copy_term(Query-Soln,Q-S), p_shift(tab, tab(Q,once(S),_)).
 
 % ----------- mapping tables to graphs --------------
 
