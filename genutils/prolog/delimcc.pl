@@ -31,8 +31,9 @@ and Functional Programming, pages 99–107, 2004.
 */
 
 :- use_module(library(typedef)).
-:- use_module(library(lambda1)).
+:- use_module(library(lambda2)).
 
+:- set_prolog_flag(back_quotes, symbol_char).
 :- set_prolog_flag(generate_debug_info, false).
 
 :- type cont(A) ---> done; susp(A,pred).
@@ -92,7 +93,7 @@ pr_reset(Prompt, Pred, Result) :-
 %% pr_cont(+S:cont(handler(A)), +Pr:prompt(handler(A)), X:A, Y:A).
 pr_cont(done, _, X, X).
 pr_cont(susp(Handler, K), Prompt, X, Result) :-
-   pr_reset(Prompt, call(Handler, delimcc:(\X^K)), Result).
+   pr_reset(Prompt, call(Handler, delimcc:(\\X`K)), Result).
 
 %% pr_shift(Pr:prompt(handler(A)), +H:handler(A)) is det.
 %
