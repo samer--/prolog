@@ -20,16 +20,17 @@
 :- use_module(library(data/env)).
 :- use_module(library(delimcc)).
 :- use_module(library(rbutils)).
+:- use_module(library(dcg_core), [get//1, set//1, trans//2]).
 
 % :- set_prolog_flag(generate_debug_info, false).
 
 % stateful operators
 :- meta_predicate app(2), app(+,2).
-get(S) :- p_shift(state,get(S)).
-set(S) :- p_shift(state,set(S)).
-app(P) :- p_shift(state,P).
-upd(S1,S2) :- p_shift(state,trans(S1,S2)).
-app(Pr,P) :- p_shift(Pr,P).
+get(S)     :- app(get(S)).
+set(S)     :- app(get(S)).
+upd(S1,S2) :- app(trans(S1,S2)).
+app(P)     :- p_shift(state,P).
+app(Pr,P)  :- p_shift(Pr,P).
 
 % ------- stateful computation reified as DCG ----------
 :- meta_predicate run_state(0,+,-), run_state(+,0,+,-),
