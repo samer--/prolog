@@ -20,17 +20,18 @@
 :- use_module(library(data/env)).
 :- use_module(library(delimcc)).
 :- use_module(library(rbutils)).
-:- use_module(library(dcg_core), [get//1, set//1, trans//2]).
 
-% :- set_prolog_flag(generate_debug_info, false).
+:- set_prolog_flag(generate_debug_info, false).
 
 % stateful operators
 :- meta_predicate app(2), app(+,2).
-get(S)     :- app(get(S)).
-set(S)     :- app(get(S)).
-upd(S1,S2) :- app(trans(S1,S2)).
-app(P)     :- p_shift(state,P).
-app(Pr,P)  :- p_shift(Pr,P).
+get(S)     :- p_shift(state, get(S)).
+set(S)     :- p_shift(state, set(S)).
+app(Pr,P)  :- p_shift(Pr,app(P)).
+upd(S1,S2) :- app(upd(S1,S2)).
+app(P)     :- app(state,P).
+
+upd(S1,S2,S1,S2).
 
 % ------- stateful computation reified as DCG ----------
 :- meta_predicate run_state(0,+,-), run_state(+,0,+,-),
@@ -49,8 +50,11 @@ run_state(Prompt, Goal) -->
    cont_state(Status, Prompt).
 
 cont_state(done,_) --> [].
-cont_state(susp(P,Cont), Prompt) --> call(P), run_state(Prompt, Cont).
+cont_state(susp(R,Cont), Prompt) --> handle_state(R), run_state(Prompt, Cont).
 
+handle_state(get(S),S,S).
+handle_state(set(S),_,S).
+handle_state(app(P),S1,S2) :- call(P,S1,S2).
 
 %% run_nb_state(+P:pred, +S1:S, -S2:S) is det.
 %
@@ -75,8 +79,7 @@ cont_nb_state(susp(P,Cont), Key) :-
 
 handle_nb_state(get(S),Key) :- !, nb_getval(Key,S).
 handle_nb_state(set(S),Key) :- !, nb_setval(Key,S).
-handle_nb_state(trans(S1,S2),Key) :- !, nb_getval(Key,S1), nb_setval(Key,S2).
-handle_nb_state(P,Key) :- nb_getval(Key,S1), call(P,S1,S2), nb_setval(Key,S2).
+handle_nb_state(app(P),Key) :- nb_getval(Key,S1), call(P,S1,S2), nb_setval(Key,S2).
 
 %% run_nb_ref(+P:pred) is det.
 run_nb_ref(Goal) :- 
@@ -116,11 +119,11 @@ run_ref(Goal) :-
    store_new(S),
    run_state(ref, Goal, S, _).
 
-ref_new(X,R) :- p_shift(ref, store_add(X,R)).
-ref_get(R,X) :- p_shift(ref, store_get(R,X)).
-ref_set(R,X) :- p_shift(ref, store_set(R,X)).
-ref_app(R,P) :- p_shift(ref, store_apply(R,P)).
-ref_upd(R,X,Y) :- p_shift(ref, store_upd(R,X,Y)).
+ref_new(X,R) :- app(ref, store_add(X,R)).
+ref_get(R,X) :- app(ref, store_get(R,X)).
+ref_set(R,X) :- app(ref, store_set(R,X)).
+ref_app(R,P) :- app(ref, store_apply(R,P)).
+ref_upd(R,X,Y) :- app(ref, store_upd(R,X,Y)).
 
 % --------- stateful environment ---------------------
 :- meta_predicate run_env(0), env_app(+,2).
@@ -132,8 +135,8 @@ run_env(Goal) :-
    init_env(_,S),
    run_state(env, Goal, S, _).
 
-env_new(R,X) :- p_shift(env, ins_key(R,X)).
-env_get(R,X) :- p_shift(env, get_key(R,X)).
-env_set(R,X) :- p_shift(env, set_key(R,X)).
-env_app(R,P) :- p_shift(env, upd_key(R,X,Y)), call(P,X,Y).
-env_upd(R,X,Y) :- p_shift(env, upd_key(R,X,Y)).
+env_new(R,X) :- app(env, ins_key(R,X)).
+env_get(R,X) :- app(env, get_key(R,X)).
+env_set(R,X) :- app(env, set_key(R,X)).
+env_app(R,P) :- app(env, upd_key(R,X,Y)), call(P,X,Y).
+env_upd(R,X,Y) :- app(env, upd_key(R,X,Y)).
