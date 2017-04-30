@@ -23,6 +23,7 @@
 	[	natural/1		% test or enumerate natural numbers
 	,	int/1				% test or enumerate integers
    ,  enumerate/2    % pair list items with 1-based positon
+   ,  measure/2      % list with same length list of naturals
 	,	take/3, takec/3, take_while/3
 	,	drop/3, dropc/3, drop_while/3
    ,  map_filter/3
@@ -70,6 +71,13 @@ int(N)     :- var(N), (N=0; (between(1,inf,M), (N=M; N is -M))).
 enumerate(X,Y) :- enumerate(X,0,Y).
 enumerate([],_,[]).
 enumerate([X|Xs],I,[J-X|IXs]) :- J is I+1, enumerate(Xs,J,IXs).
+
+%% measure(+L:list(_), -N:list(natural)) is det.
+%% measure(-L:list(_), -N:list(natural)) is nondet.
+%  True when L and N are the same lenght and N is a sequence of integers starting at 1.
+measure(Xs,Ns) :- measure(Xs,Ns,0).
+measure([],[],_).
+measure([_|Xs],[N|Ns],M) :- M is N+1, measure(Xs,Ns,M).
 
 %% print_list( +L:list) is det.
 %
