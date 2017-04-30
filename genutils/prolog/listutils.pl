@@ -77,7 +77,7 @@ enumerate([X|Xs],I,[J-X|IXs]) :- J is I+1, enumerate(Xs,J,IXs).
 %  True when L and N are the same lenght and N is a sequence of integers starting at 1.
 measure(Xs,Ns) :- measure(Xs,Ns,0).
 measure([],[],_).
-measure([_|Xs],[N|Ns],M) :- M is N+1, measure(Xs,Ns,M).
+measure([_|Xs],[N|Ns],N) :- M is N+1, measure(Xs,Ns,M).
 
 %% print_list( +L:list) is det.
 %
