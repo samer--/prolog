@@ -43,10 +43,10 @@ and Functional Programming, pages 99–107, 2004.
 %% reset(+G:pred, -C:cont(_)) is det.
 %  Calls goal G as in reset/3, but combines the result into a single
 %  algebraic data type =|cont(_)|=.
-reset(G,S) :- reset(G,B,C), continue(B,C,S).
+reset(G,S) :- reset(G,B,C), continue(C,B,S).
 
-continue(0,0,done) :- !.
-continue(Sig,Cont,susp(Sig,Cont)).
+continue(0,_,done) :- !.
+continue(Cont,Sig,susp(Sig,Cont)).
 
 % --------------------------------------------------
 % Multiprompt control
@@ -62,7 +62,7 @@ p_reset(Prompt, Goal, Result) :-
    reset(Goal, Ball, Cont),
    p_cont(Cont, Ball, Prompt, Result).
 
-p_cont(0, 0, _, done) :- !.
+p_cont(0, _, _, done) :- !.
 p_cont(Cont, Prompt-Signal, Prompt, susp(Signal, Cont)) :- !.
 p_cont(Cont, Prompt1-Signal1, Prompt, Result) :-
    shift(Prompt1-Signal1),
