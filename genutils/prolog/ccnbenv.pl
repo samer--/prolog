@@ -1,4 +1,4 @@
-:- module(ccnbenv, [ run_nb_env/1, env_get/2, env_app/2, env_app_or_new/3, env_dump/1 ]).
+:- module(ccnbenv, [ run_nb_env/1, nb_get/2, nb_app/2, nb_app_or_new/3, nb_dump/1 ]).
 
 :- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 :- use_module(library(rbutils)).
@@ -26,8 +26,8 @@ app_or_new(K,Upd,New,R0,M1) :-
    ;  What=insert(R)   -> gensym(nbenv,R), call(New,X), nb_setval(R0,M2), nb_setval(R,X)
    ).
 
-:- meta_predicate env_app(+,2), env_app_or_new(+,2,1).
-env_get(K,X) :- p_shift(nbenv, get(K,X)).
-env_app(K,P) :- p_shift(nbenv, app(K,P)).
-env_app_or_new(K,P,Q) :- p_shift(nbenv, app_or_new(K,P,Q)).
-env_dump(M) :- p_shift(nbenv, dump(M)).
+:- meta_predicate nb_app(+,2), nb_app_or_new(+,2,1).
+nb_get(K,X) :- p_shift(nbenv, get(K,X)).
+nb_app(K,P) :- p_shift(nbenv, app(K,P)).
+nb_app_or_new(K,P,Q) :- p_shift(nbenv, app_or_new(K,P,Q)).
+nb_dump(M) :- p_shift(nbenv, dump(M)).
