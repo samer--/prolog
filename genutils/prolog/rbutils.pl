@@ -1,4 +1,4 @@
-:- module(rbutils, [rb_fold/4, rb_get/4, rb_gen/3, rb_trans/5, rb_app/4, rb_add/4, rb_upd_or_ins/4, rb_app_or_new/5]).
+:- module(rbutils, [rb_fold/4, rb_get/4, rb_trans/5, rb_app/4, rb_add/4, rb_upd_or_ins/4, rb_app_or_new/5]).
 :- use_module(library(rbtrees)).
 :- reexport(library(rbtrees)).
 
