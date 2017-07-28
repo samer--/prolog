@@ -16,7 +16,7 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-:- module( env,
+:- module(env,
 		[	init_env//0
 		,	key//1
 		,	key_val//2
@@ -40,69 +40,69 @@
 
 This module provides DCG compatible rules for managing a state
 variable which consistists of an environment, which contains
-a set of key-value mappings.
-
-Implementations uses rbtrees.pl
+a set of key-value mappings. The predicates do a number of checks
+to ensure safe and consistant use.
 */
 
 :- use_module(library(dcg_core)).
+:- use_module(library(rbtrees)).
 
-user:goal_expansion( no_fail(K,S,G), (G -> true; check(K,S), throw(failed(G)))).
+user:goal_expansion(no_fail(K,S,G), (G -> true; check(K,S), throw(failed(G)))).
 user:portray(t(_,_)) :- write('<rbtree/2>').
 
 %% init_env// is det.
 %  Set state to empty environment.
 init_env --> set_with(rb_empty).
 
-%% key( ?Key, ?Val)// is nondet.
+%% key(?Key, ?Val)// is nondet.
 %  Enumerate all keys in environment.
 key(K,S,S) :- rb_in(K,_,S).
 
-%% key_val( ?Key, ?Val)// is nondet.
+%% key_val(?Key, ?Val)// is nondet.
 %  Enumerate all keys and associated values.
 key_val(K,V,S,S) :- rb_in(K,V,S).
 
-%% get_key( +Key, +Default, ?Val)// is det.
+%% get_key(+Key, +Default, ?Val)// is det.
 %  Unify Val with value associated with Key or Default if not present.
-get_key(K,V,D,S,S) :- ( rb_lookup(K,V,S) -> true; V=D).
+get_key(K,V,D,S,S) :- (rb_lookup(K,V,S) -> true; V=D).
 
-%% get_key( +Key, ?Val)// is det.
+%% get_key(+Key, ?Val)// is det.
 %  Unify Val with value associated with Key.
-get_key(K,V,S,S)       :- no_fail( K, S, rb_lookup(K,V,S)).
+get_key(K,V,S,S)       :- no_fail(K, S, rb_lookup(K,V,S)).
 
-%% set_key( +Key, ?Val)// is det.
+%% set_key(+Key, ?Val)// is det.
 %  Set value associated with Key to Val.
-set_key(K,V,S1,S2)     :- no_fail( K, S1, rb_update(S1,K,V,S2)).
+set_key(K,V,S1,S2)     :- no_fail(K, S1, rb_update(S1,K,V,S2)).
 
-%% upd_key( +Key, ?Val1, ?Val2)// is det.
+%% upd_key(+Key, ?Val1, ?Val2)// is det.
 %  Unify Val1 with value associated with Key and set new value to Val2.
-upd_key(K,V1,V2,S1,S2) :- no_fail( K, S1, rb_update(S1,K,V1,V2,S2)).
+upd_key(K,V1,V2,S1,S2) :- no_fail(K, S1, rb_update(S1,K,V1,V2,S2)).
 
-%% del_key( +Key)// is det.
+%% del_key(+Key)// is det.
 %  Remove Key from environment.
-del_key(K,S1,S2)       :- no_fail( K, S1, rb_delete(S1,K,S2)).
+del_key(K,S1,S2)       :- no_fail(K, S1, rb_delete(S1,K,S2)).
 
-%% sel_key( +Key, ?Val)// is det.
+%% sel_key(+Key, ?Val)// is det.
 %  Remove Key from environment and unify Val with its value.
-sel_key(K,V,S1,S2)     :- no_fail( K, S1, rb_delete(S1,K,V,S2)).
+sel_key(K,V,S1,S2)     :- no_fail(K, S1, rb_delete(S1,K,V,S2)).
 
-%% ins_key( +Key, ?Val)// is det.
-%% ins_key( +Key)// is det.
+%% ins_key(+Key, ?Val)// is det.
+%% ins_key(+Key)// is det.
 %
 %  Add Key to environment with given value or unbound if no value given.
 ins_key(K,S1,S2) :- ins_key(K,_,S1,S2).
 ins_key(K,V,S1,S2) :- 
 	(	var(K) -> throw(instantiation_error('environment key'))
 	;	rb_in(K,_,S1) -> throw(error(key_exists(K)))
-	;	no_fail( K, S1, rb_insert_new(S1,K,V,S2))
+	;	no_fail(K, S1, rb_insert_new(S1,K,V,S2))
 	).
 
-%% with_key( +Key, :Phrase)// is nondet.
+%% with_key(+Key, :Phrase)// is nondet.
 %  Use Phrase to compute new value of key from old.
 with_key(K,P,S1,S2)    :- check(K,S1), rb_apply(S1,K,call_dcg(P),S2).
 
 
-%% with_env( :Phrase) is nondet.
+%% with_env(:Phrase) is nondet.
 %  Run phrase with initial state equal to an empty environment.
 with_env(G) :- init_env(_,E), call_dcg(G,E,_).
 
