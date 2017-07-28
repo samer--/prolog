@@ -1,10 +1,5 @@
-:- module(ccstate, [ run_state//1, run_state//2
-                   , run_nb_state//1
-                   , set/1, get/1, app/1, upd/2
-                   , app/2
-                   , run_ref/1, ref_new/2, ref_get/2, ref_set/2, ref_app/2, ref_upd/3
-                   , run_env/1, env_new/2, env_get/2, env_set/2, env_app/2, env_upd/3
-                   , run_nb_ref/1, nbr_app/2, nbr_app_or_new/3, nbr_dump/1
+:- module(ccstate, [ run_state//1, run_state//2 , run_nb_state//1
+                   , set/1, set/2, get/1, get/2, app/1, app/2, upd/2
                    ]).
 
 /** <module> Stateful computation as an effect using delimited control
@@ -16,33 +11,33 @@
    On top this are built two execution contexts which provide mutable
    references (run_ref/1) and a mutable environment (run_env/1).
 */
-:- use_module(library(data/store)).
-:- use_module(library(data/env)).
-:- use_module(library(delimcc)).
-:- use_module(library(rbutils)).
+:- use_module(library(delimcc), [p_reset/3, p_shift/2]).
 
 :- set_prolog_flag(generate_debug_info, false).
 
 % stateful operators
 :- meta_predicate app(2), app(+,2).
-get(S)     :- p_shift(state, get(S)).
-set(S)     :- p_shift(state, set(S)).
-app(Pr,P)  :- p_shift(Pr,app(P)).
+app(Pr,P)  :- p_shift(Pr, app(P)).
+get(Pr,S)  :- p_shift(Pr, get(S)).
+set(Pr,S)  :- p_shift(Pr, set(S)).
+
+app(P)     :- app(state, P).
+get(S)     :- get(state, S).
+set(S)     :- set(state, S).
 upd(S1,S2) :- app(upd(S1,S2)).
-app(P)     :- app(state,P).
 
 upd(S1,S2,S1,S2).
 
 % ------- stateful computation reified as DCG ----------
-:- meta_predicate run_state(0,+,-), run_state(+,0,+,-),
-                  run_nb_state(0,+,-), run_nb_ref(0). 
+:- meta_predicate run_state(0,?,?), run_state(+,0,?,?),
+                  run_nb_state(0,+,-), run_nb_state(+,0,+,-).
 
-%% run_state(+Pr:prompt(pred(S,S)), +P:pred, +S1:S, -S2:S) is det.
-%% run_state(+P:pred, +S1:S, -S2:S) is det.
+%% run_state(+Pr:prompt, +P:pred, S1:S, S2:S) is det.
+%% run_state(+P:pred, S1:S, S2:S) is det.
 %
 %  Run P in an context that allows set/1 and get/1 to be used to
 %  to handle a mutable state, initially S1. The final state is unified
-%  with S2. run_state/3 uses the %  prompt =|state|=.
+%  with S2. run_state/3 uses the prompt =|state|=.
 %  State changes are undone on backtracking.
 run_state(Goal) --> run_state(state, Goal).
 run_state(Prompt, Goal) -->
@@ -50,93 +45,38 @@ run_state(Prompt, Goal) -->
    cont_state(Status, Prompt).
 
 cont_state(done,_) --> [].
-cont_state(susp(R,Cont), Prompt) --> handle_state(R), run_state(Prompt, Cont).
+cont_state(susp(R,Cont), Prompt) --> handle(R), run_state(Prompt, Cont).
 
-handle_state(get(S),S,S).
-handle_state(set(S),_,S).
-handle_state(app(P),S1,S2) :- call(P,S1,S2).
+handle(get(S),S,S).
+handle(set(S),_,S).
+handle(app(P),S1,S2) :- call(P,S1,S2).
 
+%% run_nb_state(+Pr:prompt, +P:pred, +S1:S, -S2:S) is det.
 %% run_nb_state(+P:pred, +S1:S, -S2:S) is det.
 %
 %  Run P in a context where get/1 and set/1 manipulate a mutable state,
 %  similar to run_state/3, but state changes are not undone on backtracking.
-%  Note that, to ensure preservation of state on backtracking, set/1 saves a 
+%  Note that, to ensure preservation of state on backtracking, set/1 saves a
 %  copy of the given term, not the term itself. Implementation uses nb_getval/2
-%  and nb_setval/2 with a dynamically generated key.
-run_nb_state(Goal, S1, S2) :- 
+%  and nb_setval/2 with a dynamically generated key. run_nb_state/3 uses
+%  prompt =|state|=.
+%
+%  Note that using this can be quite expensive if the state is large due to
+%  the copying that occurs whenever it is changed.
+run_nb_state(Goal) --> run_nb_state(state, Goal).
+run_nb_state(Prompt, Goal, S1, S2) :-
    gensym(nbs,Key),
    setup_call_cleanup( nb_setval(Key, S1),
-                       (run_nb_state_x(Goal, Key), nb_getval(Key, S2)),
+                       (run_nb(Prompt, Goal, Key), nb_getval(Key, S2)),
                        nb_delete(Key)).
 
-run_nb_state_x(Goal, Key) :-
-   p_reset(state, Goal, Status),
-   cont_nb_state(Status, Key).
+run_nb(Prompt, Goal, Key) :-
+   p_reset(Prompt, state, Goal, Status),
+   cont_nb_state(Status, Prompt, Key).
 
-cont_nb_state(done, _).
-cont_nb_state(susp(P,Cont), Key) :-
-   handle_nb_state(P,Key), run_nb_state_x(Cont, Key).
+cont_nb_state(done, _, _).
+cont_nb_state(susp(R,Cont), Prompt, Key) :- handle_nb(R,Key), run_nb(Prompt, Cont, Key).
 
-handle_nb_state(get(S),Key) :- !, nb_getval(Key,S).
-handle_nb_state(set(S),Key) :- !, nb_setval(Key,S).
-handle_nb_state(app(P),Key) :- nb_getval(Key,S1), call(P,S1,S2), nb_setval(Key,S2).
-
-%% run_nb_ref(+P:pred) is det.
-run_nb_ref(Goal) :- 
-   gensym(nbrkm,R0), rb_empty(Empty),
-   setup_call_cleanup(nb_setval(R0,Empty), run_nbr(Goal,R0), nbr_cleanup(R0)).
-                    
-nbr_cleanup(R0) :-
-   nb_getval(R0, KeyMap),
-   rb_map(KeyMap, nb_delete),
-   nb_delete(R0).
-
-run_nbr(Goal,R0) :- p_reset(nbr,Goal,Status), cont_nbr(Status,R0).
-cont_nbr(done, _).
-cont_nbr(susp(P,Cont),R0) :- nb_getval(R0,M), call(P,R0,M), run_nbr(Cont,R0).
-
-nbr_dump(Map,_,M) :- rb_map(M,nb_getval,Map).
-nbr_app(K,P,_,M) :- rb_lookup(K,R,M), nb_getval(R,X), call(P,X,Y), nb_setval(R,Y).
-nbr_app_or_new(K,P,Q,R0,M1) :- 
-   rb_upd_or_ins(K,Action,M1,M2),
-   (  Action=insert(R)   -> call(Q,X), gensym(nbr,R), nb_setval(R0,M2), nb_setval(R,X)
-   ;  Action=update(R,R) -> nb_getval(R,X), call(P,X,Y), nb_setval(R,Y)
-   ).
-
-% effects for run_nb_ref
-:- meta_predicate nbr_app(+,2), nbr_app_or_new(+,2,1).
-nbr_dump(M) :- p_shift(nbr, nbr_dump(M)).
-nbr_app(K,P) :- p_shift(nbr, nbr_app(K,P)).
-nbr_app_or_new(K,P,Q) :- p_shift(nbr, nbr_app_or_new(K,P,Q)).
-
-% --------- stateful references ----------------------
-:- meta_predicate run_ref(0), ref_app(+,2).
-
-%% run_ref(+P:pred) is det.
-%  Run P inside a run_state/4 with the prompt set to =|ref|=, providing
-%  a supply of mutable references using ref_new/2, ref_get/2, ref_set/3 etc.
-run_ref(Goal) :-
-   store_new(S),
-   run_state(ref, Goal, S, _).
-
-ref_new(X,R) :- app(ref, store_add(X,R)).
-ref_get(R,X) :- app(ref, store_get(R,X)).
-ref_set(R,X) :- app(ref, store_set(R,X)).
-ref_app(R,P) :- app(ref, store_apply(R,P)).
-ref_upd(R,X,Y) :- app(ref, store_upd(R,X,Y)).
-
-% --------- stateful environment ---------------------
-:- meta_predicate run_env(0), env_app(+,2).
-
-%% run_env(+P:pred) is det.
-%  Run P inside a run_state/4 with the prompt set to =|env|=, providing
-%  an environment containing mutable key-value mappings.
-run_env(Goal) :-
-   init_env(_,S),
-   run_state(env, Goal, S, _).
-
-env_new(R,X) :- app(env, ins_key(R,X)).
-env_get(R,X) :- app(env, get_key(R,X)).
-env_set(R,X) :- app(env, set_key(R,X)).
-env_app(R,P) :- app(env, upd_key(R,X,Y)), call(P,X,Y).
-env_upd(R,X,Y) :- app(env, upd_key(R,X,Y)).
+handle_nb(get(S),Key) :- nb_getval(Key,S).
+handle_nb(set(S),Key) :- nb_setval(Key,S).
+handle_nb(app(P),Key) :- nb_getval(Key,S1), call(P,S1,S2), nb_setval(Key,S2).
