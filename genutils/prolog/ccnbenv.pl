@@ -27,7 +27,7 @@ app_or_new(K,Upd,New,R0,M1) :-
    ).
 
 :- meta_predicate env_app(+,2), env_app_or_new(+,2,1).
-env_get(K,P) :- p_shift(nbenv, app(K,V)).
+env_get(K,X) :- p_shift(nbenv, get(K,X)).
 env_app(K,P) :- p_shift(nbenv, app(K,P)).
 env_app_or_new(K,P,Q) :- p_shift(nbenv, app_or_new(K,P,Q)).
 env_dump(M) :- p_shift(nbenv, dump(M)).
