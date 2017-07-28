@@ -52,7 +52,7 @@
 :- use_module(library(prob/tagged), [discrete//3, uniform//2, dirichlet//2]).
 :- use_module(library(delimcc),     [p_reset/3, p_shift/2]).
 :- use_module(library(ccstate),     [run_nb_ref/1, nbr_app/2, nbr_app_or_new/3, nbr_dump/1]).
-:- use_module(library(rbutils),     [rb_app_or_new/5, rb_fold/4, rb_gen/3, rb_add//2, rb_app//2, rb_get//2]).
+:- use_module(library(rbutils),     [rb_app_or_new/5, rb_fold/4, rb_in/3, rb_add//2, rb_app//2, rb_get//2]).
 :- use_module(machines,             [unfold/2, unfolder/3, moore/5, mapper/3, scan0/4, (>>)/3]).
 :- use_module(lazymath,             [ max/3, min/3, add/3, sub/3, mul/3, pow/3, exp/2, log_e/2, surp/2
                                     , lse/2, stoch/2, log_stoch/2, map_sum/3, map_sum/4
@@ -131,7 +131,7 @@ cont_tab(susp(tab(TableAs,Work,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
    term_variables(TableAs, Y), K = (\\Y`Ans`Cont),
    term_to_ground(TableAs, Variant),
    nbr_app_or_new(Variant, new_consumer(Res,K), new_producer(Res,TableAs)),
-   (  Res=solns(Solns) -> rb_gen(Y, _, Solns), run_tab(Cont, Ans)
+   (  Res=solns(Solns) -> rb_in(Y, _, Solns), run_tab(Cont, Ans)
    ;  Res=new_producer -> run_tab(producer(Variant, \\Y`Work, K, Ans), Ans)
    ).
 
@@ -209,7 +209,7 @@ f2sw1(P,SW-X,SW-Y,Z) :- call(P,X,Y,Z).
 
 % --------- switch-value map -----------
 pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
-pmap_sws(Map,SWs) :- setof(SW, V^X^rb_gen(SW:=V,X,Map), SWs) -> true; SWs=[].
+pmap_sws(Map,SWs) :- setof(SW, V^X^rb_in(SW:=V,X,Map), SWs) -> true; SWs=[].
 
 :- meta_predicate pmap_collate(3,1,+,+,?).
 pmap_collate(Conv,Def,Map,SW,SW-XX) :- 

@@ -23,7 +23,7 @@ cctabled(Head) :-
    head_to_variant(Head, Variant),
    get(Tabs1),
    (  rb_lookup(Variant, tab(Solns,Status), Tabs1) 
-   -> (  Status=complete -> rb_gen(Y, _, Solns)
+   -> (  Status=complete -> rb_in(Y, _, Solns)
       ;  p_shift(tab, cons(Variant, Y, Tabs1)) % active consumer
       ) 
    ;  (  rb_lookup('$tabling?', true,Tabs1)
@@ -32,7 +32,7 @@ cctabled(Head) :-
             cont_tab(susp(prod(Variant, Y, Tabs2, Head), fail), Y) 
          ;  get(Tabs2), rb_map(Tabs2, cctab:completion_map, Tabs3),
             set(Tabs3), rb_lookup(Variant, tab(Solns,_), Tabs3),
-            rb_gen(Y, _, Solns)
+            rb_in(Y, _, Solns)
          )
       )
    ).
@@ -48,7 +48,7 @@ cont_tab(done, _).
 cont_tab(susp(cons(Var,Y,Tabs1), Cont), Ans) :-
    rb_update(Tabs1, Var, tab(Solns,Ks), tab(Solns,[\Y^Ans^Cont|Ks]), Tabs2),
    set(Tabs2), 
-   rb_gen(Y, _, Solns),
+   rb_in(Y, _, Solns),
    run_tab(Cont, Ans).
 cont_tab(susp(prod(Var,Y,Tabs1,Head), Cont), Ans) :-
    rb_empty(Solns), 

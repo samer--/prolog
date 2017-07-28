@@ -45,7 +45,7 @@ cont_tab(susp(t(TableAs,Head,P), Cont), Ans) :-
    head_to_variant(TableAs, Variant),
    (  rb_update(Tabs1, Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs2) 
    -> set(Tabs2), 
-      rb_gen(Y, sol(P,_), Solns),
+      rb_in(Y, sol(P,_), Solns),
       run_tab(Cont, Ans) 
    ;  rb_empty(Solns), 
       rb_insert_new(Tabs1, Variant, tab(TableAs,Solns,[]), Tabs2),

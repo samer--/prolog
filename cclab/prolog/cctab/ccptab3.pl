@@ -93,7 +93,7 @@ cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
    term_to_ground(TableAs, Variant),
    (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
    -> set(Tabs2),          % NB. this saves a COPY of Tabs2, ...
-      rb_gen(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
+      rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
       run_tab(Cont, Ans)   % ... are instantiated when this continuation is run.
    ;  rb_empty(Solns), 
       rb_add(Variant, tab(TableAs,Solns,[]), Tabs1, Tabs2),
@@ -124,9 +124,9 @@ tables_graph(Tables, Graph) :-
    bagof(G-Es, setof(Es, Tables^tabled_solution(Tables, G, Es), [Es]), Graph).
 
 tabled_solution(Tabs, Goal, Expls1) :-
-   rb_gen(_, tab(Goal,Solns,_), Tabs),
+   rb_in(_, tab(Goal,Solns,_), Tabs),
    term_variables(Goal,Y), 
-   rb_gen(Y,Expls,Solns),
+   rb_in(Y,Expls,Solns),
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
 
@@ -159,7 +159,7 @@ random_dist(Vals,Probs) :- length(Vals,N), length(Weights,N), maplist(random,Wei
 :- type p_factor ---> const; module:head ; prim(A)->A.
 
 pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
-pmap_sw(Map,SW) :- rb_gen(SW->_,_,Map).
+pmap_sw(Map,SW) :- rb_in(SW->_,_,Map).
 pmap_collate(Def,Map,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_get(Def,Map,SW),Vals,Info).
 pmap_get(Def,Map,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
 

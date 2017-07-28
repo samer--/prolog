@@ -27,7 +27,7 @@ cont_tab(susp(Head, Cont), Ans) :-
       -> Status2=active([K|Ks]), set(Tabs2)
       ;  Status2=complete
       ),
-      rb_gen(Y, _, Solns),
+      rb_in(Y, _, Solns),
       run_tab(Cont, Ans) 
    ;  rb_empty(Solns), 
       rb_insert_new(Tabs1, Variant, tab(Solns,active([])), Tabs2),

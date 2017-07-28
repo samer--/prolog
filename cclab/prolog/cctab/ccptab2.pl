@@ -62,7 +62,7 @@ cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
    term_to_ground(TableAs, Variant),
    (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
    -> set(Tabs2),          % NB. this saves a COPY of Tabs2, ...
-      rb_gen(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
+      rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
       run_tab(Cont, Ans)   % ... are instantiated when this continuation is run.
    ;  rb_empty(Solns), 
       rb_add(Variant, tab(TableAs,Solns,[]), Tabs1, Tabs2),
@@ -104,9 +104,9 @@ tables_graph(Tables, Graph) :-
    list_to_rbtree(Trees, Graph).
 
 tabled_solution(Tabs, Goal, Expls1) :-
-   rb_gen(_, tab(Goal,Solns,_), Tabs),
+   rb_in(_, tab(Goal,Solns,_), Tabs),
    term_variables(Goal,Y), 
-   rb_gen(Y,Expls,Solns),
+   rb_in(Y,Expls,Solns),
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
 
@@ -122,7 +122,7 @@ new_children(G, F) -->
 
 % --- parameters ---
 graph_params(Spec,G,Params) :- setof(L, graph_sw(G,L), SWs), maplist(sw_init(Spec),SWs,Params).
-graph_sw(G,SW) :- rb_gen(_,Es,G), member(E,Es), member(SW->_,E).
+graph_sw(G,SW) :- rb_in(_,Es,G), member(E,Es), member(SW->_,E).
 
 sw_init(uniform,SW,SW-Params) :- call(SW,_,Vals,[]), uniform(Vals,Params).
 sw_init(K*Spec,SW,SW-Params) :- sw_init(Spec,SW,SW-P0), maplist(mul(K), P0, Params).
@@ -135,7 +135,7 @@ uniform(Vals,Probs) :- length(Vals,N), P is 1/N, maplist(const(P),Vals,Probs).
 :- type p_factor ---> const; module:head ; prim(A)->A.
 
 pmap(X,Y) --> rb_add(X,Y) -> []; rb_get(X,Y).
-pmap_sw(Map,SW) :- rb_gen(SW->_,_,Map).
+pmap_sw(Map,SW) :- rb_in(SW->_,_,Map).
 pmap_sw_collate(Get,Def,Map,SW,SW-Info) :- call(SW,_,Vals,[]), maplist(pmap_sw_lookup(Get,Def,Map,SW),Vals,Info).
 pmap_sw_lookup(Get,Def,Map,SW,Val,P) :- rb_lookup(SW->Val, I, Map) -> call(Get,I,P); call(Def,P).
 
