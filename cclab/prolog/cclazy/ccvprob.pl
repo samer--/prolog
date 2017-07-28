@@ -40,20 +40,20 @@ map_soln(Map, Y-e(Prob,Expls), Y-e(Prob1,Expls1)) :-
    maplist(maplist(pp(Map)), Expls, Expls1),
    foldl(mr(expl_prob,add), Expls1, 0, Prob1).
 
-leaf_prob(M, S:-Ex, S:-Ex2, P) :- 
+leaf_prob(M, S:-Ex, S:-Ex2, P) :-
    maplist(pp(M), Ex, Ex2),
    expl_prob(Ex2, P).
 
 pp(_, X-l(P), X-P) :- !.
 pp(Map, X-v(P), X-P1) :- memberchk(P-P1, Map).
-expl_prob(Expl, P) :- foldl(mr(snd,mul),Expl,1,P). 
+expl_prob(Expl, P) :- foldl(mr(snd,mul),Expl,1,P).
 add(X,Y,Z) :- {Z=X+Y}.
 mul(X,Y,Z) :- {Z=X*Y}.
 
 
 %% run_ltree(+P:pred, -T:ltree(list(any))) is det.
 :- meta_predicate run_ltree(0,-).
-run_ltree(Goal,Result) :- 
+run_ltree(Goal,Result) :-
    term_variables(Goal, Ans),
    pr_reset(prob, \\leaf(Ans:-Expl)`run_state(expl, Goal, Expl, []), Result).
 
@@ -61,7 +61,7 @@ dist(Xs,PX,K,lnode(dist(Xs), ccvprob:maplist(callprob(\\PX`K),Xs))).
 fail(_,lnode(fail,=([]))).
 
 mem(Head,P,K,Tree) :-
-   term_variables(Head,Y), 
+   term_variables(Head,Y),
    head_to_variant(Head, Variant),
    KPY = (\\P-Y`K),
    upd(Tabs1, Tabs2),
@@ -70,7 +70,7 @@ mem(Head,P,K,Tree) :-
    ;  rb_empty(EmptySet),
       rb_insert_new(Tabs1, Variant, entry(EmptySet,[]), Tabs2),
       run_state(expl, call(\\Y`Head, YNew), Expl, []),
-      app(rb_trans(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
+      app(rb_upd(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
       (  rb_insert_new(Ys, YNew, e(PY,[Expl]), Ys2) % PY will be the sum of the probabilities of explanations
       -> Tree=lnode(prod(Variant,YNew), ccvprob:maplist(send_to_cont(PY-YNew),[KPY|Ks])), gensym(p,PY)
       ;  rb_update(Ys, YNew, e(PY,Expls), e(PY,[Expl|Expls]), Ys2),

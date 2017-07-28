@@ -1,8 +1,8 @@
 :- module(cctab, [ run_tabled/3, goal_graph/2
                  , run_with_tables/2, run_tab_expl/2, run_expl/2
                  , cctabled/2, dist/2, (:=)/2
-                 , tables_graph/2, graph_params/3 
-                 , graph_viterbi/3, graph_inside/3, graph_stats/4 
+                 , tables_graph/2, graph_params/3
+                 , graph_viterbi/3, graph_inside/3, graph_stats/4
                  , pgraph_tree/4, print_tree/1
                  , em_ml/3, em_map/4, em_vb/4, iterate/4
                  ]).
@@ -45,8 +45,8 @@ event(Ev) :- app(expl, out(Ev)).
 SW := X :- call(SW,ID,Xs,[]), member(X,Xs), event(ID->X).
 
 :- meta_predicate cctabled(0,0).
-cctabled(TableAs,Head) :- 
-   p_shift(tab, t(TableAs,Head)), 
+cctabled(TableAs,Head) :-
+   p_shift(tab, t(TableAs,Head)),
    copy_term(TableAs, Factor), % protect from further instantiation
    numbervars(Factor, 0, _),
    event(Factor).
@@ -60,11 +60,11 @@ cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
    term_variables(Head,Y), K= (\\Y`Ans`Cont),
    get(Tabs1),
    term_to_ground(TableAs, Variant),
-   (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
+   (  rb_upd(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2)
    -> set(Tabs2),          % NB. this saves a COPY of Tabs2, ...
       rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
       run_tab(Cont, Ans)   % ... are instantiated when this continuation is run.
-   ;  rb_empty(Solns), 
+   ;  rb_empty(Solns),
       rb_add(Variant, tab(TableAs,Solns,[]), Tabs1, Tabs2),
       set(Tabs2),
       run_tab(producer(Variant, \\Y`Head, K, Ans), Ans)
@@ -73,11 +73,11 @@ cont_tab(susp(t(TableAs,Head), Cont), Ans) :-
 producer(Variant, Generate, KP, Ans) :-
    run_state(expl, call(Generate, Y1), E, []),
    get(Tabs1),
-   rb_trans(Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs1, Tabs2),
+   rb_upd(Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs1, Tabs2),
    (  rb_add(Y1, [E], Solns1, Solns2)
    -> set(Tabs2), % see above comment about instantiation of ...
       member(K,[KP|Ks]), call(K,Y1,Ans) % ... answer variables in Y1 by K
-   ;  rb_trans(Y1, Es, [E|Es], Solns1, Solns2),
+   ;  rb_upd(Y1, Es, [E|Es], Solns1, Solns2),
       set(Tabs2), fail
    ).
 
@@ -88,11 +88,11 @@ run_expl(G, Expl)     :- run_state(expl,G,Expl,[]).
 
 %% run_tabled(+G:pred, F:maybe(list(factor)), -T:tables) is multi.
 :- meta_predicate run_tabled(0,-,-), goal_graph(0,-).
-run_tabled(Goal, St, Tables) :- 
+run_tabled(Goal, St, Tables) :-
    run_with_tables((run_tab_expl(Goal,Expl), St=just(Expl);  St=nothing),
                    Tables).
 
-goal_graph(M:Goal, Graph) :- 
+goal_graph(M:Goal, Graph) :-
    run_with_tables(run_tab(findall(E,run_expl(M:Goal,E),Es), Es), Tables),
    tables_graph(Tables, Graph0),
    rb_add(M:'$top$', Es, Graph0, Graph1),
@@ -105,7 +105,7 @@ tables_graph(Tables, Graph) :-
 
 tabled_solution(Tabs, Goal, Expls1) :-
    rb_in(_, tab(Goal,Solns,_), Tabs),
-   term_variables(Goal,Y), 
+   term_variables(Goal,Y),
    rb_in(Y,Expls,Solns),
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
@@ -114,7 +114,7 @@ tabled_solution(Tabs, Goal, Expls1) :-
 prune_graph(Top, G1, G2) :- rb_empty(E), children(G1,Top,E,G2).
 
 children(_,_->_) --> !.
-children(G,Top) --> 
+children(G,Top) -->
    {rb_lookup(Top,Expls,G)}, rb_add(Top,Expls),
    foldl(foldl(new_children(G)),Expls).
 new_children(G, F) -->
@@ -142,9 +142,9 @@ pmap_sw_lookup(Get,Def,Map,SW,Val,P) :- rb_lookup(SW->Val, I, Map) -> call(Get,I
 % inside and viterbi probs
 graph_inside(Graph, Params, PGraph)  :- graph_pgraph(add,Graph,Params,PGraph).
 graph_viterbi(Graph, Params, PGraph) :- graph_pgraph(max,Graph,Params,PGraph).
-graph_pgraph(Op, Graph, Params, PGraph) :- 
-   rb_empty(E), 
-   rb_fold(p_soln(Op), Graph, E, PGraph), 
+graph_pgraph(Op, Graph, Params, PGraph) :-
+   rb_empty(E),
+   rb_fold(p_soln(Op), Graph, E, PGraph),
    setof(SW, pmap_sw(PGraph,SW), SWs),
    maplist(pmap_sw_collate(fst,true,PGraph),SWs,Params).
 
@@ -152,7 +152,7 @@ p_soln(Op, Goal-Expls) -->
    pmap(Goal,Pin-Expls1),
    run_right(foldl(p_expl(Op), Expls, Expls1), 0, Pin).
 
-p_expl(Op, Expl, Expl1-Pe) --> run_right(foldl(p_factor, Expl, Expl1), 1, Pe) <\> call(Op,Pe). 
+p_expl(Op, Expl, Expl1-Pe) --> run_right(foldl(p_factor, Expl, Expl1), 1, Pe) <\> call(Op,Pe).
 p_factor(M:Atom, (M:Atom)-P) --> pmap(M:Atom,P-_) <\> mul(P).
 p_factor(SW->Val, (SW->Val)-P) --> pmap(SW->Val, P-[]) <\> mul(P).
 p_factor(@P, const-P) --> \> mul(P).
@@ -163,9 +163,9 @@ graph_stats(Graph,Goal,Params,Opts) :-
    maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), inverse(InvGraph), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
    rb_lookup(Goal,Pin-_,InsideG), log_e(Pin,LP),
-   rb_fold(soln_edges,InsideG,QCs,[]), 
+   rb_fold(soln_edges,InsideG,QCs,[]),
    call(group_pairs_by_key*keysort, QCs, InvGraph),
-   rb_empty(Empty), 
+   rb_empty(Empty),
    pmap(Goal,1/Pin,Empty, Map1),
    foldl(q_alpha, InvGraph, Map1, Map2),
    maplist(pmap_sw_collate((=),=(0),Map2)*fst, Params, Eta).
@@ -176,7 +176,7 @@ expl_edges(P,Expl-Pe)     --> foldl(factor_edge(Pe,P),Expl).
 factor_edge(Pe,P,Q-BetaQ) --> [Q-qc(BetaQ,Pe,P)].
 
 q_alpha(Q-QCs) --> pmap(Q, AlphaQ), run_right(foldl(qc_alpha, QCs), 0, AlphaQ).
-qc_alpha(qc(BetaQ,Pe,P)) --> 
+qc_alpha(qc(BetaQ,Pe,P)) -->
    pmap(P, AlphaP) <\> add(AlphaQC),
    % this sort of wrong, but ok, because BetaQ=0 implies that any non-zero Alpha will
    % eventually be multiplied by a zero switch probability to get a zero expected count.
@@ -184,9 +184,9 @@ qc_alpha(qc(BetaQ,Pe,P)) -->
                          ; when(ground(AlphaP-Pe), AlphaQC is AlphaP*Pe/BetaQ)
                          )) }.
 
-eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta). 
+eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta).
 estep(Graph, Goal, P1, Eta, LP) :-
-   graph_stats(Graph, Goal, P1, [log_prob(LP), grad(Grad)]), 
+   graph_stats(Graph, Goal, P1, [log_prob(LP), grad(Grad)]),
    maplist(eta, Grad, P1, Eta).
 
 :- meta_predicate em_ml(+,0,-), em_map(+,+,0,-), em_vb(+,+,0,-).
@@ -199,7 +199,7 @@ em_map(Prior, Graph, Goal, t(P1,P2,LP)) :-
    estep(Graph, Goal, P1, Eta, LP),
    maplist(posterior_mode, Prior, Eta, P2).
 
-posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :- 
+posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :-
    maplist(add,Prior,Eta,Posterior),
    mode_dirichlet(Posterior,Probs2).
 

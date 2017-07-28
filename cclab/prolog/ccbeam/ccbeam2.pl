@@ -2,7 +2,7 @@
 
 /** <module> Probabilistic choice with beam search to find most probable paths
 
-   Simple search using a priority queue to manage threads 
+   Simple search using a priority queue to manage threads
    With memoisation. No limit on number of threads.
 
 */
@@ -32,17 +32,17 @@ dist(Xs,X) :- p_shift(beam, dist(Xs,X)).
 fail_ :- p_shift(beam, dist([],_)).
 
 :- meta_predicate lazy_beam(1,-).
-lazy_beam(Pred,Stream) :- 
+lazy_beam(Pred,Stream) :-
    store_new(S1), proc_init(1,Pred,PQ1),
    lazy_unfold_finite(run_beam,Stream,S1-PQ1,_).
 
-run_beam(Ans) --> 
+run_beam(Ans) -->
    \> proc_remove(P, Thread),
    {p_reset(beam, call(Thread,Y), Status)},
    cont_beam(Status, P-Y, Ans).
 
 cont_beam(done, PrX, PrX) --> [].
-cont_beam(susp(Req, Cont), PY, Ans) --> 
+cont_beam(susp(Req, Cont), PY, Ans) -->
    handle(Req, Cont, PY),
    run_beam(Ans).
 
@@ -54,17 +54,17 @@ handle(new(R), Cont, Pr-Y) -->
 handle(mem(Pred,R,X,Z), Cont, Pr-Y) -->
    {K = (\\Z`Y`Cont)},
    \< store_upd(R,Tab,Tab1),
-   (  {rb_trans(X, entry(Ys,Conts), entry(Ys,[Pr-K|Conts]), Tab, Tab1)} 
+   (  {rb_upd(X, entry(Ys,Conts), entry(Ys,[Pr-K|Conts]), Tab, Tab1)}
    -> \> rb_fold(insert_(K,Pr),Ys)
    ;  {rb_empty(EmptyDist),
        rb_add(X, entry(EmptyDist,[Pr-K]), Tab, Tab1) },
       \> proc_insert(1,producer(Pred,R,X))
    ).
 handle(ans(R,X,Z), _, Pr-_) -->
-   \< store_apply(R, rb_trans(X, entry(Zs,Conts), entry(Zs2,Conts))),
+   \< store_apply(R, rb_upd(X, entry(Zs,Conts), entry(Zs2,Conts))),
    (  {rb_add(Z,Pr,Zs,Zs2)}
    -> \> foldl(resume(Pr,Z), Conts)
-   ;  {NewP = OldP+Pr, rb_trans(Z,OldP,NewP,Zs,Zs2)}
+   ;  {NewP = OldP+Pr, rb_upd(Z,OldP,NewP,Zs,Zs2)}
    ).
 
 producer(P,R,X,_) :- call(P,X,Y), p_shift(beam, ans(R,X,Y)).

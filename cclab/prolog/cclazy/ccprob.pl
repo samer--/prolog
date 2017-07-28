@@ -59,17 +59,17 @@ mem(P,R,P0,X,P1,Y,K,Tree) :-
    PYK = (\\P1-Y`K),
    ref_upd(R,Tab,Tab1),
    (  rb_update(Tab, X, entry(PP,Ys,Conts), entry(PP,Ys,[PC-PYK|Conts]), Tab1)
-   -> {PC = P0/PP}, 
+   -> {PC = P0/PP},
       Tree = lwnode(cons(X,Ys),ccprob:rb_fold(cons_expand1(PYK),Ys,[]))
    ;  rb_empty(EmptyDist),
       rb_insert_new(Tab, X, entry(P0,EmptyDist,[]), Tab1),
       run_state(call(P,X,YNew), P0, Prob),
-      ref_app(R, rb_trans(X, entry(_,Ys,Conts), entry(P0,Ys2,Conts))),
+      ref_app(R, rb_upd(X, entry(_,Ys,Conts), entry(P0,Ys2,Conts))),
       {PY = Prob/P0},
       (  rb_insert_new(Ys,YNew,PY,Ys2)
       -> Tree=lwnode(prod(X,YNew),ccprob:maplist(send_to_cont(PY-YNew),[1-PYK|Conts]))
-      ;  {NewP = OldP+PY}, 
-         rb_update(Ys,YNew,OldP,NewP,Ys2), 
+      ;  {NewP = OldP+PY},
+         rb_update(Ys,YNew,OldP,NewP,Ys2),
          Tree=lnode(dup(X,YNew),=([]))
       )
    ).

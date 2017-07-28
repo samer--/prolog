@@ -28,7 +28,7 @@ sanitize(Var-entry(Solns,_)) --> [Var-Expls], {rb_visit(Solns,Expls)}.
 
 %% run_ltree(+P:pred, -T:ltree(list(any))) is det.
 :- meta_predicate run_ltree(0,-).
-run_ltree(Goal,Result) :- 
+run_ltree(Goal,Result) :-
    term_variables(Goal, Ans),
    pr_reset(nondet, \leaf(Ans->Expl)^run_state(expl, Goal, Expl, []), Result).
 
@@ -36,7 +36,7 @@ choose(Xs,X,K,lnode(choice(Xs),ccvmemo:maplist(expand1(\X^K),Xs))).
 fail(_,lnode(fail,=([]))).
 
 mem(Head,K,Tree) :-
-   term_variables(Head,Y), 
+   term_variables(Head,Y),
    head_to_variant(Head, Variant),
    YK = \Y^K,
    upd(Tabs1, Tabs2),
@@ -45,8 +45,8 @@ mem(Head,K,Tree) :-
    ;  rb_empty(EmptySet),
       rb_insert_new(Tabs1, Variant, entry(EmptySet,[]), Tabs2),
       run_state(expl, call(\Y^Head, YNew), Expl, []), % !!! open tail?
-      app(rb_trans(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
-      (  rb_insert_new(Ys,YNew,[Expl],Ys2) 
+      app(rb_upd(Variant, entry(Ys,Ks), entry(Ys2,Ks))),
+      (  rb_insert_new(Ys,YNew,[Expl],Ys2)
       -> Tree=lnode(prod(Variant,YNew),ccvmemo:maplist(send_to_cont(YNew),[YK|Ks]))
       ;  rb_update(Ys,YNew,Expls,[Expl|Expls],Ys2),
          Tree=lnode(dup(Variant,YNew),=([]))

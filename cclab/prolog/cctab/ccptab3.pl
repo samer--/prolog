@@ -1,8 +1,8 @@
 :- module(cctab, [ run_with_tables/2, run_tab_expl/2
                  , run_sampling//2, uniform_sampler//2, lookup_sampler//3
                  , cctabled/2, dist/2, dist/3, (:=)/2
-                 , goal_graph/2, tables_graph/2, graph_params/3 
-                 , graph_viterbi/3, graph_nviterbi/4, graph_inside/3, graph_stats/4 
+                 , goal_graph/2, tables_graph/2, graph_params/3
+                 , graph_viterbi/3, graph_nviterbi/4, graph_inside/3, graph_stats/4
                  , pgraph_tree/4, pgraph_sample_tree/4, print_tree/1
                  , em_ml/2, em_map/3, em_vb/3, iterate/4
                  , with_rnd_state/1
@@ -47,8 +47,8 @@ SW := X    :- p_shift(prob,sw(SW,X)).
 dist(Ps,Xs,X) :- p_shift(prob,dist(Ps,Xs,X)).
 dist(Norm,X) :- maplist(pair,Ps,Xs,Norm), p_shift(prob,dist(Ps,Xs,X)).
 
-cctabled(TableAs,Head) :- 
-   p_shift(tab, tab(TableAs,Head,Inject)), 
+cctabled(TableAs,Head) :-
+   p_shift(tab, tab(TableAs,Head,Inject)),
    call(Inject).
 
 :- meta_predicate run_prob(3,0,?,?).
@@ -91,11 +91,11 @@ cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
    term_variables(Head,Y), K= (\\Y`Ans`Cont),
    get(Tabs1),
    term_to_ground(TableAs, Variant),
-   (  rb_trans(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2) 
+   (  rb_upd(Variant, tab(V,Solns,Ks), tab(V,Solns,[K|Ks]), Tabs1, Tabs2)
    -> set(Tabs2),          % NB. this saves a COPY of Tabs2, ...
       rb_in(Y, _, Solns), % ... so it's ok if any variables remaining in Y ...
       run_tab(Cont, Ans)   % ... are instantiated when this continuation is run.
-   ;  rb_empty(Solns), 
+   ;  rb_empty(Solns),
       rb_add(Variant, tab(TableAs,Solns,[]), Tabs1, Tabs2),
       set(Tabs2),
       run_tab(producer(Variant, \\Y`Head, K, Ans), Ans)
@@ -104,17 +104,17 @@ cont_tab(susp(tab(TableAs,Head,cctab:p_shift(prob,tab(TableAs))), Cont), Ans) :-
 producer(Variant, Generate, KP, Ans) :-
    run_prob(expl, call(Generate, Y1), E, []),
    get(Tabs1),
-   rb_trans(Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs1, Tabs2),
+   rb_upd(Variant, tab(V,Solns1, Ks), tab(V,Solns2, Ks), Tabs1, Tabs2),
    (  rb_add(Y1, [E], Solns1, Solns2)
    -> set(Tabs2), % see above comment about instantiation of ...
       member(K,[KP|Ks]), call(K,Y1,Ans) % ... answer variables in Y1 by K
-   ;  rb_trans(Y1, Es, [E|Es], Solns1, Solns2),
+   ;  rb_upd(Y1, Es, [E|Es], Solns1, Solns2),
       set(Tabs2), fail
    ).
 
 % ----------- mapping tables to graphs --------------
 :- meta_predicate goal_graph(0,-).
-goal_graph(Goal, Graph) :- 
+goal_graph(Goal, Graph) :-
    time(run_with_tables(run_tab(findall(E,run_prob(expl,Goal,E,[]),Es), Es), Tables)),
    time(tables_graph(Tables, Graph0)),
    time(prune_graph(top:'$top$', [(top:'$top$')-Es|Graph0], Graph)).
@@ -125,18 +125,18 @@ tables_graph(Tables, Graph) :-
 
 tabled_solution(Tabs, Goal, Expls1) :-
    rb_in(_, tab(Goal,Solns,_), Tabs),
-   term_variables(Goal,Y), 
+   term_variables(Goal,Y),
    rb_in(Y,Expls,Solns),
    numbervars(Goal-Expls, 0, _),
    sort(Expls,Expls1).
 
 prune_graph(Top, GL1, GL2) :-
-   list_to_rbtree(GL1,G1), 
+   list_to_rbtree(GL1,G1),
    rb_empty(E), children(G1,Top,E,G2),
    rb_visit(G2,GL2).
 
 children(_,_->_) --> !.
-children(G,Top) --> 
+children(G,Top) -->
    {rb_lookup(Top,Expls,G)}, rb_add(Top,Expls),
    foldl(foldl(new_children(G)),Expls).
 new_children(G, F) -->
@@ -166,9 +166,9 @@ pmap_get(Def,Map,SW,Val,P) :- rb_lookup(SW->Val, P, Map) -> true; call(Def,P).
 % inside and viterbi probs
 graph_inside(Graph, Params, PGraph)  :- graph_pgraph(add,Graph,Params,PGraph).
 graph_viterbi(Graph, Params, PGraph) :- graph_pgraph(max,Graph,Params,PGraph).
-graph_pgraph(Op, Graph, Params, PGraph) :- 
-   rb_empty(E), 
-   foldl(p_soln(Op), Graph, PGraph, E, Map), 
+graph_pgraph(Op, Graph, Params, PGraph) :-
+   rb_empty(E),
+   foldl(p_soln(Op), Graph, PGraph, E, Map),
    setof(SW, pmap_sw(Map,SW), SWs),
    maplist(pmap_collate(true1,Map),SWs,Params).
 
@@ -177,15 +177,15 @@ p_soln(Op, Goal-Expls, soln(Goal, Pin, Expls1)) -->
    pmap(Goal,Pin),
    run_right(foldl(p_expl(Op), Expls, Expls1), 0, Pin).
 
-p_expl(Op, Expl, Pe-Expl1) --> run_right(foldl(p_factor, Expl, Expl1), 1, Pe) <\> call(Op,Pe). 
+p_expl(Op, Expl, Pe-Expl1) --> run_right(foldl(p_factor, Expl, Expl1), 1, Pe) <\> call(Op,Pe).
 p_factor(M:Head, (M:Head)-P) --> pmap(M:Head,P) <\> mul(P).
 p_factor(SW->Val, (SW->Val)-P) --> pmap(SW->Val, P) <\> mul(P).
 p_factor(@P, const-P) --> \> mul(P).
 
 % ---- lazy N-Viterbi algorithm ----
 graph_nviterbi(Graph, Params, Tree, LP) :-
-   rb_empty(E), 
-   foldl(np_soln, Graph, PGraph, E, Map), 
+   rb_empty(E),
+   foldl(np_soln, Graph, PGraph, E, Map),
    setof(SW, pmap_sw(Map,SW), SWs),
    maplist(pmap_collate(true1,Map),SWs,Params),
    member(soln(top:'$top$', Expls), PGraph),
@@ -195,7 +195,7 @@ np_soln(Goal-Expls, soln(Goal, NExpls)) -->
    pmap(Goal,NExpls),
    run_right(foldl(np_expl, Expls), [], NExpls).
 
-np_expl(Expl) --> run_right(foldl(np_factor, Expl), [0-[]], Pe) <\> lazy(k_min,Pe). 
+np_expl(Expl) --> run_right(foldl(np_factor, Expl), [0-[]], Pe) <\> lazy(k_min,Pe).
 np_factor(M:Head) --> pmap(M:Head,NExpls) <\> lazy(k_prod,NExpls).
 np_factor(SW->Val) --> pmap(SW->Val, P) <\> lazy(k_prod,[LP-(SW->Val)]), {surp(P,LP)}.
 np_factor(@P) --> \> lazy(k_prod,[LP-const]), {surp(P,LP)}.
@@ -246,9 +246,9 @@ graph_stats(Graph,Goal,Params,Opts) :-
    maplist(opt(Opts),[grad(Eta), log_prob(LP), inside(InsideG), outside(Map2)]),
    graph_inside(Graph, Params, InsideG),
    memberchk(soln(Goal,Pin,_), InsideG), log_e(Pin,LP),
-   foldl(soln_edges, InsideG, QCs, []), 
+   foldl(soln_edges, InsideG, QCs, []),
    call(group_pairs_by_key*keysort, QCs, InvGraph),
-   rb_empty(Empty), 
+   rb_empty(Empty),
    pmap(Goal, 1/Pin, Empty, Map1),
    foldl(q_alpha, InvGraph, Map1, Map2),
    maplist(pmap_collate(=(0),Map2)*fst, Params, Eta).
@@ -259,15 +259,15 @@ expl_edges(P,Pe-Expl)       --> foldl(factor_edge(Pe,P),Expl).
 factor_edge(Pe,P,Q-BetaQ)   --> [Q-qc(BetaQ,Pe,P)].
 
 q_alpha(Q-QCs) --> pmap(Q, AlphaQ), run_right(foldl(qc_alpha, QCs), 0, AlphaQ).
-qc_alpha(qc(BetaQ,Pe,P)) --> 
+qc_alpha(qc(BetaQ,Pe,P)) -->
    pmap(P, AlphaP) <\> add(AlphaQC),
    % this sort of wrong, but ok, because BetaQ=0 implies that any non-zero Alpha will
    % eventually be multiplied by a zero switch probability to get a zero expected count.
    { when(ground(BetaQ), (BetaQ =:= 0 -> AlphaQC=0; mul(AlphaP,Pe/BetaQ,AlphaQC))) }.
 
-eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta). 
+eta(SW-Alphas,SW-Probs1,SW-Eta) :- maplist(mul,Alphas,Probs1,Eta).
 estep(Graph, P1, Eta, LP) :-
-   graph_stats(Graph, _:'$top$', P1, [log_prob(LP), grad(Grad)]), 
+   graph_stats(Graph, _:'$top$', P1, [log_prob(LP), grad(Grad)]),
    maplist(eta, Grad, P1, Eta).
 
 em_ml(Graph, t(P1,P2,LP)) :-
@@ -278,7 +278,7 @@ em_map(Prior, Graph, t(P1,P2,LP)) :-
    estep(Graph, P1, Eta, LP),
    maplist(posterior_mode, Prior, Eta, P2).
 
-posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :- 
+posterior_mode(SW-Prior,SW-Eta,SW-Probs2) :-
    maplist(add,Prior,Eta,Posterior),
    mode_dirichlet(Posterior,Probs2).
 

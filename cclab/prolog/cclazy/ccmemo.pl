@@ -19,7 +19,7 @@ to visualise the tree.
 :- use_module(library(ccstate), [ref_new/2, ref_get/2, ref_app/2, ref_upd/3]).
 :- use_module(library(lambda1)).
 
-% nondeterminism as lazy search tree with recursive memoisation 
+% nondeterminism as lazy search tree with recursive memoisation
 
 :- type tree(A) ---> leaf(A); node(list(tree(A))).
 :- type ltree(A) ---> leaf(A); lnode(pred(list(ltree(A)))).
@@ -57,13 +57,13 @@ fail(_,lnode(fail,=([]))).
 mem(P,R,X,Y,K,Tree) :-
    YK = \Y^K,
    ref_upd(R,Tab,Tab1),
-   (  rb_trans(X, entry(Ys,Conts), entry(Ys,[YK|Conts]), Tab, Tab1)
+   (  rb_upd(X, entry(Ys,Conts), entry(Ys,[YK|Conts]), Tab, Tab1)
    -> Tree = lnode(cons(X,Ys), ccmemo:rb_fold(cons_expand1(YK),Ys,[]))
    ;  rb_empty(EmptySet),
       rb_insert_new(Tab, X, entry(EmptySet,[]), Tab1),
       call(P,X,YNew),
-      ref_app(R, rb_trans(X, entry(Ys,Conts), entry(Ys2,Conts))),
-      (  rb_insert_new(Ys,YNew,t,Ys2) 
+      ref_app(R, rb_upd(X, entry(Ys,Conts), entry(Ys2,Conts))),
+      (  rb_insert_new(Ys,YNew,t,Ys2)
       -> Tree=lnode(prod(X,YNew),ccmemo:maplist(send_to_cont(YNew),[YK|Conts]))
       ;  Tree=lnode(dup(X,YNew),=([])), Ys2=Ys
       )

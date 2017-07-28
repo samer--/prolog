@@ -20,14 +20,14 @@ dist(Xs,X)             :- member(P-X,Xs), p_shift(beam, factor(P)).
 
 :- meta_predicate lazy_beam(0,-), lazy_beam(0,-,-,-).
 lazy_beam(Goal, Prob) :- lazy_beam(Goal, Prob, _, _).
-lazy_beam(Goal, Prob, S2, QMass) :- 
+lazy_beam(Goal, Prob, S2, QMass) :-
    term_variables(Goal, Y),
-   rb_empty(S1), pq_empty(PQ0), 
+   rb_empty(S1), pq_empty(PQ0),
    pq_insert(1,\\Y`Goal,PQ0,PQ1),
    run_beam(Prob-Y, S1-PQ1, S2-PQ2),
    pq_total(PQ2,QMass).
 
-run_beam(WeightedAns) --> 
+run_beam(WeightedAns) -->
    \> pq_remove(P, Thread),
    { findall(Stat-Ans, p_reset(beam, call(Thread,Ans), Stat), Branches),
      partition(\\done-_`true, Branches, Answers, Suspensions) },
@@ -39,20 +39,20 @@ run_beam(WeightedAns) -->
 handle(factor(P), Cont, P0-Ans) -->
    {P1 is P0*P}, \> pq_insert(P1,\\Ans`Cont).
 handle(tab(TableAs,Head), Cont, P-Ans) -->
-   { term_variables(Head,Y), 
+   { term_variables(Head,Y),
      term_to_ground(Head,Var),
      K = (\\Y`Ans`Cont) },
-   (  \< rb_trans(Var, entry(V,PYs,Conts), entry(V,PYs,[P-K|Conts])) 
+   (  \< rb_upd(Var, entry(V,PYs,Conts), entry(V,PYs,[P-K|Conts]))
    -> \> rb_fold(\\P+K|X-PX`resume(P,PX,K,X), PYs)
    ;  {rb_empty(Empty)},
       \< rb_add(Var, entry(TableAs,Empty,[P-K])),
       \> pq_insert(1,producer(Var,\\Y`Head))
    ).
 handle(ans(Var,Y), _, P-_) -->
-   \< rb_trans(Var, entry(V,Ys,Conts), entry(V,Ys2,Conts)),
+   \< rb_upd(Var, entry(V,Ys,Conts), entry(V,Ys2,Conts)),
    (  {rb_add(Y,P,Ys,Ys2)}
    -> \> foldl(\\P+Y|P0-K`resume(P0,P,K,Y), Conts)
-   ;  {rb_trans(Y,OldP,NewP,Ys,Ys2), NewP is max(OldP,P)},
+   ;  {rb_upd(Y,OldP,NewP,Ys,Ys2), NewP is max(OldP,P)},
       {debug(ccbeam, 'New solution for ~p: ~p @ ~p (prev was ~p)',[Var,Y,P,OldP])}
    ).
 
