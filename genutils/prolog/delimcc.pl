@@ -93,7 +93,7 @@ pr_reset(Prompt, Pred, Result) :-
 %% pr_cont(+S:cont(handler(A)), +Pr:prompt(handler(A)), X:A, Y:A).
 pr_cont(done, _, X, X).
 pr_cont(susp(Handler, K), Prompt, X, Result) :-
-   pr_reset(Prompt, call(Handler, delimcc:(\\X`K)), Result).
+   pr_reset(Prompt, call(Handler, delimcc:pr_reset(Prompt, \\X`K)), Result).
 
 %% pr_shift(Pr:prompt(handler(A)), +H:handler(A)) is det.
 %
