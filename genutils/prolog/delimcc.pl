@@ -33,7 +33,6 @@ and Functional Programming, pages 99–107, 2004.
 :- use_module(library(typedef)).
 :- use_module(library(lambdaki)).
 
-:- set_prolog_flag(back_quotes, symbol_char).
 :- set_prolog_flag(generate_debug_info, false).
 
 :- type cont(A) ---> done; susp(A,pred).
@@ -57,7 +56,11 @@ continue(Cont,Sig,susp(Sig,Cont)).
 %  prompt. If a p_shift/2 targets another prompt, the signal is passed
 %  up, taking care to reinstate this prompt inside the continuation
 %  that the outer reset will receive.
+
 :- meta_predicate p_reset(+,0,-).
+
+:- if((current_prolog_flag(version, VER), VER =< 70511)).
+
 p_reset(Prompt, Goal, Result) :-
    reset(Goal, Ball, Cont),
    p_cont(Cont, Ball, Prompt, Result).
@@ -67,6 +70,14 @@ p_cont(Cont, Prompt-Signal, Prompt, susp(Signal, Cont)) :- !.
 p_cont(Cont, Prompt1-Signal1, Prompt, Result) :-
    shift(Prompt1-Signal1),
    p_reset(Prompt, Cont, Result).
+
+:- else.
+
+p_reset(Prompt, Goal, Result) :-
+   reset(Goal, Prompt-Signal, Cont),
+   (Cont==0 -> Result=done; Result=susp(Signal, Cont)).
+
+:- endif.
 
 %% p_shift(Pr:prompt(A), S:A) is det.
 %  Send the term S to the inner-most p_reset/3 with a matching prompt.
