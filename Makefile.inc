@@ -22,7 +22,7 @@ packdir:
 	cp -p ../COPYING* $(PACKNAME)
 
 pack: packdir
-	tar czf $(PACKFILE) $(PACKNAME)
+	COPYFILE_DISABLE=1 tar czf $(PACKFILE) $(PACKNAME)
 	rm -rf $(PACKNAME)
 	git add $(PACKFILE)
 
