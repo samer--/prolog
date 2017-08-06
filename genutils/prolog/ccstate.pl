@@ -71,7 +71,7 @@ run_nb_state(Prompt, Goal, S1, S2) :-
                        nb_delete(Key)).
 
 run_nb(Prompt, Goal, Key) :-
-   p_reset(Prompt, state, Goal, Status),
+   p_reset(Prompt, Goal, Status),
    cont_nb_state(Status, Prompt, Key).
 
 cont_nb_state(done, _, _).
