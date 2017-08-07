@@ -8,14 +8,6 @@
  TODO: what happens if the calling hostname fails?
  */
 
-% Possibly slight overkill to use memo and fileutils...
-% :- use_module(library(fileutils)).
-% :- use_module(library(memo)).
-% :- volatile_memo(hostname(-atom)).
-% hostname(H) :- 
-% 	with_stream(S, open(pipe(hostname),read,S,[]), read_line_to_codes(S,C)),
-% 	atom_codes(H,C).
-
 user:term_expansion(hostname(_),hostname(H)) :-
    (  getenv('HOSTNAME',H) -> true
    ;  setup_call_cleanup(open(pipe('hostname -s'),read,S),
@@ -23,8 +15,6 @@ user:term_expansion(hostname(_),hostname(H)) :-
                          close(S)), 
       atom_codes(H,Codes)
    ),
-   print_message(informational, got_hostname(H)).
-
-prolog:message(got_hostname(H)) --> ['Registering hostname "~w"'-[H]].
+   debug(hostname, 'Found hostname: "~w"', [H]).
 
 hostname(_).
