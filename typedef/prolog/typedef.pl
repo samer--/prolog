@@ -54,6 +54,7 @@
 */
 
 :- multifile user_type_syn/2, user_type_def/1, user_type_constructor/2.
+:- multifile error:has_type/2.
 :- op(1150,fx,type).
 :- op(1130,xfx, --->).
 
@@ -111,7 +112,7 @@ current_type(Type) :-
 current_type_constructor(Type, Constructor) :-
     user_type_constructor(Type, Constructor).
 
-user:term_expansion(:- type(Decl), Clauses) :-
+system:term_expansion(:- type(Decl), Clauses) :-
    wants_typedef,
    (  expand_type_declaration(Decl, Clauses) -> true
    ;  throw(error(bad_type_declaration(Decl), (type)/1))
