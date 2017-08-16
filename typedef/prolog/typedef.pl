@@ -54,6 +54,7 @@
 */
 
 :- multifile user_type_syn/2, user_type_def/1, user_type_constructor/2.
+:- multifile error:has_type/2.
 :- op(1150,fx,type).
 :- op(1130,xfx, --->).
 
