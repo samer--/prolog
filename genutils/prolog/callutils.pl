@@ -61,7 +61,7 @@ user:goal_expansion(G1, G2) :-
    G1 =.. [call, Closure |Args],
    nonvar(Closure), expand_call(Closure, Args, G2).
 
-expand_call(Mod:Head, Args, Mod:G) :-
+expand_call(Mod:Head, Args, Mod:G) :- !,
    nonvar(Head), expand_call(Head, Args, G).
 expand_call(Head, Args, G) :-
    Head =.. [Pred|Bound],
