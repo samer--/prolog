@@ -61,15 +61,20 @@ confirm_halt :-
 	;	fail
 	).
 
-:- dynamic persistent_history_file/1.
+:- dynamic persistent_history_stream_file/2.
 
 %% persistent_history(+File:text, +Opts:options) is det.
 %
-%  This disables SWIs built-in persistent command line history mechanism and replaces
-%  it with one that saves the history in an arbitrary file. This can be useful if the
+%  This disables SWIs built-in persistent command line history mechanism if it is
+%  enabled and replaces it with one that saves the history in an arbitrary file. This can be useful if the
 %  history file is in a directory that is kept synchronised among many computers, stored,
 %  or backed up in some other way. This history includes comment lines that give show
 %  the command line arguments given to swipl each time it is started. 
+%
+%  If called during SWI Prolog initialisation (ie in the ~/.swiplrc file, in a command
+%  line -g goal, or in a program loaded with -s on the command line) then the line editor
+%  and history mechanisms will not have been initialised yet, so you must load whichever
+%  line editor library you like (readline or editline) first.
 %
 %  Valid options are:
 %     *  interval(+Interval:number)
@@ -82,6 +87,8 @@ confirm_halt :-
 % persistent_history :-
 %    hostname(Hostname),
 %    atom_concat('.swipl_history.',Hostname,HistFile),
+%    load_files(library(readline), [if(not_loaded)]),
+%    set_prolog_flag(readline, readline), % work around bug in readline foreign library
 %    persistent_history(HistFile,[interval(60)]).
 % ==
 % This means that any program can call persistent_history/0 to get a host specific
@@ -89,12 +96,15 @@ confirm_halt :-
 % several machines.
 
 persistent_history(H,Opts) :- 
-	(	persistent_history_file(H) -> true
-	;	persistent_history_file(H1) -> throw(persistent_history_mismatch(H1,H))
+   current_input(S),
+	(	persistent_history_stream_file(S,H) -> true
+	;	persistent_history_stream_file(S,H1) -> throw(persistent_history_mismatch(H1,H))
 	;	print_message(information, rcutils:history_using_file(H)),
-		prolog_history(disable),
-		(exists_file(H) -> rl_read_history(H); true),
-		assert(persistent_history_file(H)),
+		(  current_prolog_flag(save_history,true) -> prolog_history(disable)
+      ;  set_prolog_flag(save_history, false)
+      ),
+		(exists_file(H) -> prolog:history(S, load(H)); true),
+		assert(persistent_history_stream_file(S,H)),
 		current_prolog_flag(os_argv,ARGV),
 		atomics_to_string(ARGV," ",Command),
 		history_event('Start: ~s',[Command]),
@@ -102,25 +112,25 @@ persistent_history(H,Opts) :-
       (  option(interval(Interval),Opts)
       -> print_message(information, rcutils:history_save_interval(Interval)), 
          periodic_save_history(Interval)
-      ;  rl_write_history(H)
+      ;  prolog:history(S, save(H))
       )
 	).
 
 history_event(Msg,Args) :-
-	persistent_history_file(H),
+	persistent_history_stream_file(S,H),
 	get_time(Now),
 	format_time(string(Time),'%+',Now),
 	format(string(Info),Msg,Args),
 	format(atom(Line),'% ~w | ~s',[Time,Info]),
 	debug(history,'History event: ~s',[Line]),
-   rl_add_history(Line),
-	rl_write_history(H).
+   prolog:history(S, add(Line)),
+	prolog:history(S, save(H)).
 
 
 periodic_save_history(Interval) :-
-	persistent_history_file(H),
+	persistent_history_stream_file(S,H),
 	debug(history,'Saving history to "~s"...',[H]),
-   rl_write_history(H),
+   prolog:history(S, save(H)),
    alarm(Interval,periodic_save_history(Interval),_,[remove(true)]).
 
 prolog:message(rcutils:history_using_file(H))    --> ['Using persistent history file: "~s"'-[H]].
