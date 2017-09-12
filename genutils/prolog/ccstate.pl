@@ -1,4 +1,4 @@
-:- module(ccstate, [ run_state//1, run_state//2 , run_nb_state//1
+:- module(ccstate, [ run_state_handler//3, run_state//1, run_state//2 , run_nb_state//1
                    , set/1, set/2, get/1, get/2, app/1, app/2, upd/2
                    ]).
 
@@ -29,8 +29,17 @@ upd(S1,S2) :- app(upd(S1,S2)).
 upd(S1,S2,S1,S2).
 
 % ------- stateful computation reified as DCG ----------
-:- meta_predicate run_state(0,?,?), run_state(+,0,?,?),
+:- meta_predicate run_state_handler(+,3,0,?,?), run_state(0,?,?), run_state(+,0,?,?),
                   run_nb_state(0,+,-), run_nb_state(+,0,+,-).
+
+%% run_state_handler(+Pr:prompt(R), +H:pred(+R,S,S), +G:pred, S1:S, S2:S) is det.
+%
+%  Run P in an context where handler H is available process requests with
+%  state threaded through DCG style.
+run_state_handler(Pr,H,G) --> {p_reset(Pr,G,Stat)}, cont_sh(Stat,Pr,H).
+
+cont_sh(susp(Req,Cont),Pr,H) --> call(H,Req), run_state_handler(Pr,H,Cont).
+cont_sh(done,_,_) --> [].
 
 %% run_state(+Pr:prompt, +P:pred, S1:S, S2:S) is det.
 %% run_state(+P:pred, S1:S, S2:S) is det.
@@ -38,7 +47,8 @@ upd(S1,S2,S1,S2).
 %  Run P in an context that allows set/1 and get/1 to be used to
 %  to handle a mutable state, initially S1. The final state is unified
 %  with S2. run_state/3 uses the prompt =|state|=.
-%  State changes are undone on backtracking.
+%  State changes are undone on backtracking. =|run_state(Pr,G,S1,S2)|= 
+%  is equivalent to =|run_state_handler(Pr,handle,Goal,S1,S2)|=.
 run_state(Goal) --> run_state(state, Goal).
 run_state(Prompt, Goal) -->
    {p_reset(Prompt, Goal, Status)},
