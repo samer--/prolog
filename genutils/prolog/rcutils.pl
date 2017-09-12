@@ -100,10 +100,16 @@ persistent_history(H,Opts) :-
 	(	persistent_history_stream_file(S,H) -> true
 	;	persistent_history_stream_file(S,H1) -> throw(persistent_history_mismatch(H1,H))
 	;	print_message(information, rcutils:history_using_file(H)),
-		(  current_prolog_flag(save_history,true) -> prolog_history(disable)
-      ;  set_prolog_flag(save_history, false)
+		(  \+current_predicate(prolog_history:prolog_history/1)
+      -> create_prolog_flag(save_history, false, [type(boolean)])
+      ;  current_prolog_flag(save_history,true) ,
+         prolog_history:history_loaded(PHFile)
+      -> prolog_history:write_history(PHFile),
+         prolog_history(disable),
+         print_message(information, rcutils:closed_prolog_history(PHFile))
+      ;  set_prolog_flag(save_history,false)
       ),
-		(exists_file(H) -> prolog:history(S, load(H)); true),
+		(exists_file(H) -> histop(S, load(H)); true),
 		assert(persistent_history_stream_file(S,H)),
 		current_prolog_flag(os_argv,ARGV),
 		atomics_to_string(ARGV," ",Command),
@@ -112,7 +118,7 @@ persistent_history(H,Opts) :-
       (  option(interval(Interval),Opts)
       -> print_message(information, rcutils:history_save_interval(Interval)), 
          periodic_save_history(Interval)
-      ;  prolog:history(S, save(H))
+      ;  histop(S, save(H))
       )
 	).
 
@@ -123,15 +129,18 @@ history_event(Msg,Args) :-
 	format(string(Info),Msg,Args),
 	format(atom(Line),'% ~w | ~s',[Time,Info]),
 	debug(history,'History event: ~s',[Line]),
-   prolog:history(S, add(Line)),
-	prolog:history(S, save(H)).
+   histop(S, add(Line)),
+	histop(S, save(H)).
 
 
 periodic_save_history(Interval) :-
 	persistent_history_stream_file(S,H),
 	debug(history,'Saving history to "~s"...',[H]),
-   prolog:history(S, save(H)),
+   histop(S, save(H)),
    alarm(Interval,periodic_save_history(Interval),_,[remove(true)]).
+
+histop(S,Op) :- once(prolog:history(S,Op)).
 
 prolog:message(rcutils:history_using_file(H))    --> ['Using persistent history file: "~s"'-[H]].
 prolog:message(rcutils:history_save_interval(I)) --> ['Will save history every ~w seconds.'-[I]].
+prolog:message(rcutils:closed_prolog_history(F)) --> ['Saved final prolog_history snapshot to ~w.'-[F]].
