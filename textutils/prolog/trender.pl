@@ -20,7 +20,7 @@
 :- use_module(library(fileutils), [ with_output_to_file/3 ]).
 :- use_module(library(listutils), [ rep/3 ]).
 :- use_module(library(speech),    [ voice/1, voice/2 ]).
-:- use_module(library(console)).
+:- use_module(library(tconsole)).
 
 :- module_transparent render/2, render_line/2.
 
