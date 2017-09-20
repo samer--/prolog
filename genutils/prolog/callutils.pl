@@ -6,6 +6,8 @@
                      , flip/3
                      , true2/2, true1/1
                      , fail2/2, fail1/1
+                     , call_with_time_limit//2
+                     , timeout/3, timeout//3
 					    	]).
 
 /** <module> High-order utility predicates
@@ -72,3 +74,20 @@ true1(_).
 true2(_,_).
 fail1(_) :- fail.
 fail2(_,_) :- fail.
+
+:- meta_predicate call_with_time_limit(+,//,?,?).
+call_with_time_limit(T,G,S1,S2) :- 
+   call_with_time_limit(T,call_dcg(G,S1,S2)).
+
+:- meta_predicate timeout(+,0,0).
+timeout(T,G,R) :- 
+   catch(call_with_time_limit(T,G),
+         time_limit_exceeded, R).
+
+:- meta_predicate timeout(+,//,//,?,?).
+timeout(T,G,R,S1,S2) :- 
+   timeout(T, call_dcg(G,S1,S2), call_dcg(R,S1,S2)).
+
+:- meta_predicate timeout_retry(+,//,//,?,?).
+timeout_retry(T,G,R) --> 
+	timeout(T,G,(R, timeout_retry(T,G,R))).
