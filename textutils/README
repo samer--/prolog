@@ -1,0 +1,11 @@
+
+This package provides tools for outputting text in various ways.
+
+
+---++++ Speech using Mac OS X synthesiser
+
+---++++ Formatted HTML using text mode browser
+
+---++++ Text renderer framework
+
+
