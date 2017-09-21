@@ -201,6 +201,7 @@ qq(X,[0'"|C],T) :- T1=[0'"|T], escape_with(0'",0'",X,C,T1).
 %  then escapes any occurrences of Q by doubling them up, e.g.,
 %  =|escape(39,"some 'text' here")|= doubles up the single quotes
 %  yielding =|"some ''text'' here"|=.
+:- meta_predicate escape(+,//,?,?).
 escape(Q,A) --> escape_with(Q,Q,A).
 
 %% escape_with(+E:C, +Q:C, +P:phrase)// is nondet.
@@ -209,6 +210,7 @@ escape(Q,A) --> escape_with(Q,Q,A).
 %  then escapes any occurrences of Q by prefixing them with E, e.g.,
 %  =|escape_with(92,39,"some 'text' here")|= escapes the single quotes
 %  with backslashes, yielding =|"some \'text\' here"|=.
+:- meta_predicate escape_with(+,+,//,?,?).
 escape_with(E,Q,Phrase,L1,L2) :-
 	phrase(Phrase,L0,L2),
 	escape_codes(E,Q,L0,L1,L2).

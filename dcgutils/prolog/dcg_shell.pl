@@ -31,11 +31,7 @@
 
 :- module_transparent 	
 		dcgshell/2, dcgshell/3, dcgshell/4,
-		dcgshell_x/6, shell_prompt/4,
-		time/3, time/4, time/5,
-		profile_phrase/3,
-		catch//3, trace//1,
-		make//0.
+		dcgshell_x/6, shell_prompt/4, make//0.
 
 
 %%	dcgshell( +Interp, +Id, ?S1, ?S2) is semidet.
@@ -136,6 +132,7 @@ help(A) --> {help(A)}.
 %
 %  Time execution of DCG phrase G. Any extra arguments are passed
 %  to G as in call/N. 
+:- meta_predicate time(//,?,?), time(3,?,?,?), time(4,?,?,?,?).
 time(G,A,B) :- time(call_dcg(G,A,B)).
 time(G,A,B,C) :- time(call(G,A,B,C)).
 time(G,A,B,C,D) :- time(call(G,A,B,C,D)).
@@ -143,14 +140,16 @@ time(G,A,B,C,D) :- time(call(G,A,B,C,D)).
 %% profile_phrase( +G:phrase(_))// is semidet.
 %
 %  Profile execution of DCG phrase G. 
+:- meta_predicate profile_phrase(//,?,?).
 profile_phrase(G,A,B) :- profile(call_dcg(G,A,B)).
 
 
-
+:- meta_predicate catch(//,?,//,?,?).
 catch(Phrase,Ex,Handler,S1,S2) :-
 	catch(call_dcg(Phrase,S1,S2),
 		Ex, call_dcg(Handler,S1,S2)).
 
+:- meta_predicate trace(//,?,?).
 trace(Goal,S1,S2) :-
 	setup_call_cleanup( trace, call_dcg(Goal,S1,S2), notrace).
 
