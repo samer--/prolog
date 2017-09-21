@@ -23,11 +23,11 @@ open_output_console(Q) :-
 	thread_create(output_console_main,Q,[detached(false)]).
 
 close_output_console(Q) :-
-	output_console(Q), 
+	output_console(Q), !,
 	thread_send_message(Q,quit),
 	thread_join(Q,_).
 
-con(G) :- output_console(Q), con_exec(Q,G).
+con(G) :- output_console(Q), !, con_exec(Q,G).
 con_exec(Q,G) :- context_module(M), thread_send_message(Q,exec(M:G)).
 con_push(Q,G) :- context_module(M), thread_send_message(Q,push(M:G)).
 con_pop(Q) :- thread_send_message(Q,pop).
@@ -36,9 +36,9 @@ output_console_main :-
 	attach_console,
 	thread_self(Id),
 	setup_call_cleanup(
-      assert(output_console(Id)),
+      asserta(output_console(Id)),
 		output_console_loop(true),
-		_, retract(output_console(Id))).
+		retract(output_console(Id))).
 
 output_console_loop(Pref) :-
 	thread_get_message(Msg),
