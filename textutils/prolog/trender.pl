@@ -80,7 +80,7 @@ render(async(A),Lines) :- thread_create(render(A,Lines), _,[detatched(true)]).
 render(map(Action),[X|T]) :- render_line(Action,X), render(map(Action),T).
 render(write_to(File,Opts,A),Lines) :- with_output_to_file( File, render(A,Lines), Opts).
 
-render(con(M),Lines) :- con(render(M,Lines)).
+render(con(M),Lines) :- ensure_output_console, con(render(M,Lines)).
 
 render_line(A>>B,X) :- !, render_line(A,X), render_line(B,X).
 render_line(A&&B,X) :- !, concurrent(2,[render_line(A,X), render_line(B,X)],[]).
