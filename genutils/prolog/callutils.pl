@@ -8,6 +8,8 @@
                      , fail2/2, fail1/1
                      , call_with_time_limit//2
                      , timeout/3, timeout//3
+                     , timeout_retry//3
+                     , bt_call/2
 					    	]).
 
 /** <module> High-order utility predicates
@@ -91,3 +93,20 @@ timeout(T,G,R,S1,S2) :-
 :- meta_predicate timeout_retry(+,//,//,?,?).
 timeout_retry(T,G,R) --> 
 	timeout(T,G,(R, timeout_retry(T,G,R))).
+
+%! bt_call( :Do, :Undo) is nondet.
+%
+%  Creates a backtrackable operation from a non-backtrackable Do
+%  operation and a corresponding operation to undo it. Do can
+%  be non-deterministic, in which case bt_call(Do,Undo) will also
+%  have multiple solutions. Undo is called inside once/1.
+%  bt_call is a valid debug topic - you can trace all do and undo
+%  operations by issuing debug(bt_call).
+:- meta_predicate bt_call(0,0).
+bt_call(Do,Undo)  :-
+   debug(bt_call,'doing: ~p.\n',[Do]),
+   Do,
+   (  true
+   ;  debug(bt_call,'undoing: ~p.\n',[Undo]),
+      once(Undo), fail
+   ).
