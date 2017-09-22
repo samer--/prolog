@@ -27,6 +27,7 @@
    ,  ask/3
    ,  get_key/2
    ,  userchk/1
+   ,  termcap/2
    ]).
       
 :- meta_predicate with_status_line(0).
@@ -103,3 +104,18 @@ read_char_echo(C) :-
 %  userchk succeeds if if the keypress was y and fails if it was n.
 userchk(T) :- prompt_for_key(T,[y,n],y).
 
+%! termcap(-Cap:atom,-Type:atom) is nondet.
+%  Extracts two character termcap capabilities and types from TERMCAP environment variable.
+%  These can be used with tty_get_capability/3.
+termcap(Cap,Type) :-
+   getenv('TERMCAP',TERMCAP),
+   atom_codes(TERMCAP, Codes),
+   phrase((any,cap(CapCodes,Type)),Codes,_),
+   atom_codes(Cap,CapCodes).
+
+any --> []; [_], any.
+cap([C1,C2],Type) --> ":", gr(C1), gr(C2), delim(Type).
+gr(C) --> [C], {code_type(C,graph)}.
+delim(bool) --> ":".
+delim(string) --> "=".
+delim(number) --> "#".
