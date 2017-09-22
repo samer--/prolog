@@ -33,6 +33,7 @@
 		dcgshell/2, dcgshell/3, dcgshell/4,
 		dcgshell_x/6, shell_prompt/4, make//0.
 
+:- use_module(library(termutils), [get_key/2]).
 
 %%	dcgshell( +Interp, +Id, ?S1, ?S2) is semidet.
 %%	dcgshell( +Id, ?S1, ?S2) is semidet.
@@ -199,30 +200,3 @@ write_bindings(Opts,[N=V,X|T]) :-
 	;	true
 	),
 	write_bindings(Opts,[X|T]).
-	
-% ----------------------------- Extract from utils.pl ------------------------
-
-%% get_key( +Valid:list(char), -C:char) is det.
-%
-%  Get and validate a key press from the user. The character
-%  must be one of the ones listed in Valid, otherwise, an
-%  error message is printed and the user prompted again.
-get_key(Valid,C) :-
-	read_char_echo(D), nl,
-	(	member(D,Valid) -> C=D
-	;	D='\n' -> get_key(Valid,C) % this improves interaction with acme
-	;	format('Unknown command "~q"; valid keys are ~q.\n', [D,Valid]),
-		write('Command? '),
-		get_key(Valid,C)).
-
-
-%% read_char_echo( -C:atom) is det.
-%
-%  Read a single character from the current input,
-%  echo it to the output.
-read_char_echo(C) :-
-	get_single_char(Code), 
-	put_code(Code), flush_output,
-	char_code(C,Code). 
-
-
