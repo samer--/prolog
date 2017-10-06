@@ -1,10 +1,10 @@
-:- module(ccref, [ run_ref/1, ref_new/2, ref_get/2, ref_set/2, ref_app/2, ref_upd/3 ]).
+:- module(ccref, [ run_ref/1, ref_new/2, ref_get/2, ref_set/2, ref_app/2, ref_app_ref/2, ref_upd/3 ]).
 /** <module> Delimited context providing mutable references */
 
 :- use_module(library(ccstate), [run_state/4, app/2]).
 :- use_module(library(data/store)).
 
-:- meta_predicate run_ref(0), ref_app(+,2).
+:- meta_predicate run_ref(0), ref_app(+,2), ref_app_ref(+,2).
 
 %% run_ref(+P:pred) is det.
 %  Run P inside a run_state/4 with the prompt set to =|ref|=, providing
@@ -18,3 +18,9 @@ ref_get(R,X) :- app(ref, store_get(R,X)).
 ref_set(R,X) :- app(ref, store_set(R,X)).
 ref_app(R,P) :- app(ref, store_apply(R,P)).
 ref_upd(R,X,Y) :- app(ref, store_upd(R,X,Y)).
+ref_app_ref(R,P) :- app(ref, lifted_apply(R,P)).
+
+lifted_apply(R,P) -->
+   store_get(R,X1),
+   run_state(ref, call(P,X1,X2)),
+   store_set(R,X2).
