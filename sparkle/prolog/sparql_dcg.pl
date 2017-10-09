@@ -180,13 +180,13 @@ expr(X) --> {number(X)}, at(X).
 expr(X) --> object(X).
 
 % https://www.w3.org/TR/sparql11-query/#pp-language
-property(oneOrMore(R)) --> resource(R),"+".
-property(zeroOrMore(R)) --> resource(R),"*".
-property(zeroOrOne(R)) --> resource(R),"?".
-property(inverse(R)) --> "^", resource(R).
-property(\+R) --> "!(", resource(R), ")".
-property(R1/R2) --> "(",resource(R1),"/",resource(R2),")".
-property(R1|R2) --> "(",resource(R1),"|",resource(R2),")".
+property(oneOrMore(R)) --> property(R),"+".
+property(zeroOrMore(R)) --> property(R),"*".
+property(zeroOrOne(R)) --> property(R),"?".
+property(inverse(R)) --> "^", property(R).
+property(\+R) --> "!(", property(R), ")".
+property(R1/R2) --> "(",property(R1),"/",property(R2),")".
+property(R1|R2) --> "(",property(R1),"|",property(R2),")".
 
 property(R) --> resource(R).
 
