@@ -137,9 +137,11 @@ goal(conj(GS)) --> seqmap_with_sep(" , ",goal,GS).
 goal(rdf(S,P,O)) -->
    { rdf_global_object(O,OO) },
    resource(S), " ",
-   resource(P), " ",
+   property(P), " ",
    object(OO).
 
+goal(rdf(S,P,O,G)) --> "GRAPH ", resource(G), brace(goal(rdf(S,P,O))).
+    
 goal(filter(Cond)) --> "FILTER ", cond(Cond).
 
 :- op(1150,fx,p).
@@ -176,6 +178,17 @@ expr(X*Y) --> p expr(X), " * ", expr(Y).
 expr(X/Y) --> p expr(X), " / ", expr(Y).
 expr(X) --> {number(X)}, at(X).
 expr(X) --> object(X).
+
+% https://www.w3.org/TR/sparql11-query/#pp-language
+property(oneOrMore(R)) --> resource(R),"+".
+property(zeroOrMore(R)) --> resource(R),"*".
+property(zeroOrOne(R)) --> resource(R),"?".
+property(inverse(R)) --> "^", resource(R).
+property(\+R) --> "!(", resource(R), ")".
+property(R1/R2) --> "(",resource(R1),"/",resource(R2),")".
+property(R1|R2) --> "(",resource(R1),"|",resource(R2),")".
+
+property(R) --> resource(R).
 
 resource(R) --> variable(R).
 resource(R) --> {rdf_global_id(R,RR)}, uri(RR).

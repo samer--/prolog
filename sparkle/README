@@ -33,6 +33,40 @@ queries can be written to the right of it without parentheses.
 ?- dbp ?? rdf(A,rdf:type,dbont:'Photographer'); rdf(A, rdf:type, dbont:'MusicalArtist').
 ==
 
+
+---++++ Clause expansion
+
+If the following clause is defined:
+
+==
+cls(Class) :-
+        rdf(Class,rdf:type,owl:'Class').
+==
+
+Then cls/1 can be used in queries, e.g.
+
+==
+?-  dbp ?? cls(X).
+==
+
+The cls/1 goal will be expanded.
+
+More complex goals can be defined; for example, this queries for existential restrictions:
+
+==
+subclass_of(C,D) :- rdf(C,rdfs:subClassOf,Restr).
+svf_edge(C,P,D) :-
+        subclass_of(C,Restr),
+        rdf(Restr,owl:onProperty,P),
+        rdf(Restr,owl:someValuesFrom,D).
+==
+
+Only a subset of prolog can be expanded in this way. Conjunction,
+disjunction (or multiple clauses), negation are supported. Terminals
+rdf/3, rdf/4, and some predicates from the rdfs library are
+supported. In future a wider set of constructs may be supported,
+e.g. setof/3.
+
 ---++++ Change log
 
 	0.0.8: concurrent_or/3 moved to separate module, fixes to concurrent_or/3.

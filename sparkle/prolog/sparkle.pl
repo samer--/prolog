@@ -82,14 +82,63 @@ sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 %  the setting sparkle:select_options. See query_goal/3 for details.
 %  IF EP is unbound on entry, it is bound to the endpoint from which
 %  the current bindings were obtained.
-??(EP,Spec) :- 
-   spec_goal_opts(Spec,Goal,Opts),
+??(EP,Spec) :-
+   rewrite_goal(Spec,SpecRewrite),
+   spec_goal_opts(SpecRewrite,Goal,Opts),
    setting(select_options,Opts0),
    merge_options(Opts,Opts0,Opts1),
    query_goal(EP,Goal,Opts1).
 
 spec_goal_opts(Opts ?? Goal, Goal, Opts) :- !.
 spec_goal_opts(Goal,Goal,[]).
+
+rewrite_goal(In,Out) :- rewrite_goal(In,Out,1).
+
+% terminals
+rewrite_goal(T, T,_) :- T=rdf(_,_,_), !.
+rewrite_goal(T, T,_) :- T=rdf(_,_,_,_), !.
+rewrite_goal(filter(A), filter(A),_) :- !.
+
+% rdfs terminals
+rewrite_goal(rdfs_subclass_of(C,P), rdf(C,oneOrMore(rdfs:subClassOf),P),_) :- !.
+rewrite_goal(rdfs_subproperty_of(C,P), rdf(C,oneOrMore(rdfs:subPropertyOf),P),_) :- !.
+rewrite_goal(rdfs_individual_of(I,C), (rdf(I,rdf:type,X),rdf(X,zeroOrMore(rdfs:subClassOf),C)),_) :- !.
+
+% non-terminals
+rewrite_goal((A,B),(A2,B2),D) :-
+        !,
+        rewrite_goal(A,A2,D),
+        rewrite_goal(B,B2,D).
+
+rewrite_goal((A;B),(A2;B2),D) :-
+        !,
+        rewrite_goal(A,A2,D),
+        rewrite_goal(B,B2,D).
+rewrite_goal(\+A, \+A2, D) :-
+        !,
+        rewrite_goal(A,A2,D).
+
+rewrite_goal(A,A2,D) :-
+        increase_depth(D,D2),
+        setof(Clause,clause(A,Clause),Clauses),
+        list_to_disj(Clauses,X),
+        rewrite_goal(X,A2,D2).
+
+list_to_disj([X],X) :- !.
+list_to_disj([X|T],(X;T2)) :- list_to_disj(T,T2).
+
+
+increase_depth(D,_) :-
+        D > 10,
+        !,
+        throw(error(max_depth_exceeded(D))).
+increase_depth(D,D2) :-
+        D2 is D+1.
+
+        
+        
+        
+
 
 /*
  * Assert/declare a new sparql end point
@@ -102,13 +151,18 @@ spec_goal_opts(Goal,Goal,[]).
 %  No options are defined at the moment.
 sparql_endpoint(EP,Url) :- sparql_endpoint(EP,Url,[]).
 sparql_endpoint(EP,Url,Options) :-
-   url_endpoint(Url,Host,Port,Path), 
-   (  sparql_endpoint(EP,Host,Port,Path,_)
-   -> format('% WARNING: Updating already registered SPARQL end point ~w.\n',[Url]),
-      retractall(sparql_endpoint(EP,Host,Port,Path,_))
-   ),
+   url_endpoint(Url,Host,Port,Path),
+   !,
+   retract_declared_endpoint(EP,Url),     
    debug(sparkle,'Asserting SPARQL end point ~w: ~w ~w ~w ~w.',[EP,Host,Port,Path,Options]),
    assert(sparql_endpoint(EP,Host,Port,Path,Options)).
+
+retract_declared_endpoint(EP,Url) :-
+   sparql_endpoint(EP,Host,Port,Path,_),
+   format('% WARNING: Updating already registered SPARQL end point ~w.\n',[Url]),
+   retractall(sparql_endpoint(EP,Host,Port,Path,_)),
+   !.
+retract_declared_endpoint(_,_).
 
 user:term_expansion(:-(sparql_endpoint(EP,Url)), Expanded) :- 
    endpoint_declaration(EP,Url,[],Expanded).
