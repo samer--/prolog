@@ -144,6 +144,10 @@ goal(rdf(S,P,O,G)) --> "GRAPH ", resource(G), brace(goal(rdf(S,P,O))).
     
 goal(filter(Cond)) --> "FILTER ", cond(Cond).
 
+% support for rdf_where/1 in semweb/rdf11    
+goal({Cond}) --> "FILTER ", cond(Cond).
+goal(rdf_where(Cond)) --> "FILTER ", cond(Cond).
+
 :- op(1150,fx,p).
 p(X) --> paren(X).
 
@@ -165,6 +169,7 @@ cond(uri(V))       --> "isURI(", object(V), ")".
 cond(blank(V))     --> "isBLANK(", object(V), ")".
 cond(literal(V))   --> "isLITERAL(", object(V), ")".
 
+expr('^^'(S,T))    --> "\"", at(S), "\"^^", resource(T).
 expr(str(V))       --> "STR(", object(V), ")".
 expr(lang(V))      --> "LANG(", object(V), ")".
 expr(count(X))     --> "COUNT(", expr(X), ")".

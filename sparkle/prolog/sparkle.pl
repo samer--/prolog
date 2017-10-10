@@ -84,6 +84,7 @@ sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 %  the current bindings were obtained.
 ??(EP,Spec) :-
    rewrite_goal(Spec,SpecRewrite),
+   debug(sparkle,'Rewritten goal: ~w',[SpecRewrite]),
    spec_goal_opts(SpecRewrite,Goal,Opts),
    setting(select_options,Opts0),
    merge_options(Opts,Opts0,Opts1),
@@ -100,6 +101,9 @@ rewrite_goal(T, T,_) :- T=rdf(_,_,_,_), !.
 rewrite_goal(filter(A), filter(A),_) :- !.
 
 % rdfs terminals
+rewrite_goal(rdf_where(Q), rdf_where(Q), _) :- !.
+rewrite_goal({Q}, {Q}, _) :- !.
+rewrite_goal(rdf_has(S,P,O), rdf(S,P,O),_) :- !.
 rewrite_goal(rdfs_subclass_of(C,P), rdf(C,oneOrMore(rdfs:subClassOf),P),_) :- !.
 rewrite_goal(rdfs_subproperty_of(C,P), rdf(C,oneOrMore(rdfs:subPropertyOf),P),_) :- !.
 rewrite_goal(rdfs_individual_of(I,C), (rdf(I,rdf:type,X),rdf(X,zeroOrMore(rdfs:subClassOf),C)),_) :- !.
