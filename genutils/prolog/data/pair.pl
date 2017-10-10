@@ -1,7 +1,7 @@
 :- module(pair,
           [ ffst/3, ffst//3
           , fsnd/3, fsnd//3
-          , dup/2, pair/3, fst/2, snd/2
+          , dup/2, pair/3, fst/2, snd/2, is_pair/1
           , select_key_value/4
           , select_key_default_value/5
           , map_select_key_value/5
@@ -10,13 +10,17 @@
           , op(650,xfy,&)
 			 ]).
 
-:- meta_predicate fsnd(2,?,?), 
+:- meta_predicate fsnd(2,?,?),
 						ffst(2,?,?),
-                  fsnd(4,?,?,?,?), 
+                  fsnd(4,?,?,?,?),
 						ffst(4,?,?,?,?),
                   &(2,2,?,?),
 						map_select_key_value(2,+,-,+,-),
 						map_select_key_default_value(2,+,+,-,+,-).
+
+%% is_pair(+X) is semidet.
+%  True if X is a pair.
+is_pair(_-_).
 
 %% pair(X:A, Y:B, Z:pair(A,B)) is det.
 pair(X, Y, X-Y).
@@ -51,7 +55,7 @@ fsnd(P,X-Y,X-Z) --> call(P,Y,Z).
 
 %% map_select_key_value(+P:pred(A,B), K:C, Y:B, L1:list(pair(C,A)), L2:list(pair(C,A))) is nondet.
 %  True when L2 is L1 with an element K-X removed, and P maps X to Y.
-map_select_key_value(P, K, Y, L1, L2) :- 
+map_select_key_value(P, K, Y, L1, L2) :-
 	select(K-X, L1, L2), call(P,X,Y).
 
 %% map_select_key_default_value(+P:pred(A,B), K:C, Z:B, Y:B, L1:list(pair(C,A)), L2:list(pair(C,A))) is det.
@@ -71,9 +75,9 @@ select_key_value(K, X, L1, L2) :- select(K-X, L1, L2).
 %  Otherwise unify default Z with Y.
 select_key_default_value(K, Default, X, L1, L2) :-
    map_select_key_default_value((=), K, Default, X, L1, L2).
-  
-user:goal_expansion(fsnd(P,P1,P2), (P1=X-Y1, P2=X-Y2, call(P,Y1,Y2))). 
-user:goal_expansion(ffst(P,P1,P2), (P1=X1-Y, P2=X2-Y, call(P,X1,X2))). 
+
+user:goal_expansion(fsnd(P,P1,P2), (P1=X-Y1, P2=X-Y2, call(P,Y1,Y2))).
+user:goal_expansion(ffst(P,P1,P2), (P1=X1-Y, P2=X2-Y, call(P,X1,X2))).
 user:goal_expansion(fst(P,X), P=X-_).
 user:goal_expansion(snd(P,Y), P=_-Y).
 user:goal_expansion(pair(X,Y,P), P=X-Y).
