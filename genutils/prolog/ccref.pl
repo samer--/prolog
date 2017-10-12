@@ -1,4 +1,4 @@
-:- module(ccref, [ run_ref/1, ref_new/2, ref_get/2, ref_set/2, ref_app/2, ref_app_ref/2, ref_upd/3 ]).
+:- module(ccref, [ run_ref/1, ref_new/2, ref_get/2, ref_set/2, ref_app/2, ref_app_ref/2, ref_maybe_app_ref/2, ref_upd/3 ]).
 /** <module> Delimited context providing mutable references */
 
 :- use_module(library(ccstate), [run_state/4, app/2]).
@@ -18,9 +18,19 @@ ref_get(R,X) :- app(ref, store_get(R,X)).
 ref_set(R,X) :- app(ref, store_set(R,X)).
 ref_app(R,P) :- app(ref, store_apply(R,P)).
 ref_upd(R,X,Y) :- app(ref, store_upd(R,X,Y)).
-ref_app_ref(R,P) :- app(ref, lifted_apply(R,P)).
+ref_app_ref(R,P) :- app(ref, lifted_app(R,P)).
 
-lifted_apply(R,P) -->
+lifted_app(R,P) -->
    store_get(R,X1),
    run_state(ref, call(P,X1,X2)),
    store_set(R,X2).
+
+%! ref_maybe_app_ref(+R:ref(A), +P:pred(+A,-maybe(A))) is det.
+%  Call P with contents of R, with references still in context,
+%  possibly updating R with a new value.
+ref_maybe_app_ref(R,P) :- app(ref, lifted_app_maybe(R,P)).
+
+lifted_app_maybe(R,P) -->
+   store_get(R,X1),
+   run_state(ref, call(P,X1,MX2)),
+   ({MX2 = just(X2)} -> store_set(R,X2); [])
