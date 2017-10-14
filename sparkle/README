@@ -67,6 +67,12 @@ rdf/3, rdf/4, and some predicates from the rdfs library are
 supported. In future a wider set of constructs may be supported,
 e.g. setof/3.
 
+It is also possible to use create_sparql_construct/3 and
+create_sparl_construct/4 to generate SPARQL queries for a
+limited subset of pure prolog that can be executed outside
+the prolog environment - effectively a limited prolog to SPARQL
+compiler.
+
 ---++++ Change log
 
 	0.0.8: concurrent_or/3 moved to separate module, fixes to concurrent_or/3.

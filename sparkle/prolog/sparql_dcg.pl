@@ -18,6 +18,7 @@
 
 :- module(sparql_dcg,[
       select//3
+   ,  construct//3
    ,  describe//1
    ,  describe//2
    ,  ask//1
@@ -105,6 +106,15 @@ select(Vars,Goal,Options) -->
    if_option(offset(Offs), (" OFFSET ", at(Offs)), O3,O4),
    {check_remaining_options(O4)}.
 
+construct(Head,Goal,Options) -->
+   {O1=Options},
+   "CONSTRUCT ", brace(goal(Head)), " ",
+   where(Goal),
+   if_option(order_by(OB), (" ORDER BY ", expr(OB)), O1,O2),
+   if_option(limit(Limit), (" LIMIT ", at(Limit)), O2,O3),
+   if_option(offset(Offs), (" OFFSET ", at(Offs)), O3,O4),
+   {check_remaining_options(O4)}.
+
 check_remaining_options([]) :- !.
 check_remaining_options(Opts) :- throw(unrecognised_options(Opts)).
 
@@ -133,6 +143,8 @@ goal(G1;G2)   --> brace(goal(G1)), " UNION ", brace(goal(G2)).
 goal(\+G)     --> "FILTER NOT EXISTS ", brace(goal(G)). %NB consider MINUS { ... } also
 goal((G1,G2)) --> goal(G1), " . ", goal(G2).
 goal(conj(GS)) --> seqmap_with_sep(" , ",goal,GS).
+
+goal(service(S,G)) --> "SERVICE ",resource(S)," ",brace(G).
 
 goal(rdf(S,P,O)) -->
    { rdf_global_object(O,OO) },

@@ -23,6 +23,10 @@
    ,  query_goal/3     % Endpoint, Context, Opts
    ,  query_phrase/3   % Endpoint, QueryPhrase, Result
    ,  query_sparql/3 % Endpoint,QueryText,Result
+   ,  create_sparql_select/2
+   ,  create_sparql_select/3
+   ,  create_sparql_construct/3
+   ,  create_sparql_construct/4
    ,  (??)/1
    ,  (??)/2
    ,  op(1150,fx,??)
@@ -99,6 +103,9 @@ rewrite_goal(In,Out) :- rewrite_goal(In,Out,1).
 rewrite_goal(T, T,_) :- T=rdf(_,_,_), !.
 rewrite_goal(T, T,_) :- T=rdf(_,_,_,_), !.
 rewrite_goal(filter(A), filter(A),_) :- !.
+
+% TODO: consider adding semantics
+rewrite_goal(rdf(S,P,O), rdf_has(S,P,O),_) :- !.
 
 % rdfs terminals
 rewrite_goal(rdf_where(Q), rdf_where(Q), _) :- !.
@@ -241,6 +248,56 @@ query_goal(EP,Goal,Opts) :-
       phrase_to_sparql(select(Vars,Goal,Opts1),SPARQL),
       parallel_query(Query,EPs,EP-Result)
    ).
+
+%% create_sparql_select(+Goal,-SPARQL,+Opts) is det.
+%% create_sparql_select(+Goal,-SPARQL) is det.
+%
+% Generates a sparql SELECT or ASK statement for a 
+% prolog goal without executing it.
+%
+% Goal can be any prolog goal consisting of based 
+% rdf/3 or rdf/4 statements, filters, or terms
+% that can be rewritten in this way
+create_sparql_select(Goal,SPARQL) :-
+   create_sparql_select(Goal,SPARQL,[]).
+
+create_sparql_select(Goal,SPARQL,Opts) :-
+   rewrite_goal(Goal,Goal2),
+   debug(sparkle,'Rewritten goal: ~w',[Goal2]),        
+   term_variables(Goal2,Vars),
+   (  Vars = [] % if no variables, do an ASK query, otherwise, SELECT
+   -> phrase_to_sparql(ask(Goal2),SPARQL)
+   ;  setting(limit,DefaultLimit),
+      call_dcg((  option_default_select(limit(Limit),DefaultLimit),
+                  option_default_select(autopage(Auto),true),
+                  (  {Auto=true}
+                  -> {Query = autopage_query(Limit,SPARQL)},
+                     option_default_select(offset(_),_)
+                  ;  {Query = simple_query(SPARQL)},
+                     cons(limit(Limit))
+                  ) 
+               ), Opts, Opts1),
+      phrase_to_sparql(select(Vars,Goal2,Opts1),SPARQL)).
+
+%% create_sparql_construct(+Head,+Goal,-SPARQL,+Opts) is det.
+%% create_sparql_construct(+Head,+Goal,-SPARQL) is det.
+%
+% Generates a sparql CONSTRUCT statement for a 
+% prolog goal without executing it.
+%
+% Goal or Head can be any prolog goal consisting of based 
+% rdf/3 or rdf/4 statements, filters, or terms
+% that can be rewritten in this way
+%
+% the Head forms the head part of the CONSTRUCT
+create_sparql_construct(Head,Goal,SPARQL) :-
+   create_sparql_construct(Head,Goal,SPARQL,[]).
+create_sparql_construct(Head,Goal,SPARQL,Opts) :-
+   rewrite_goal(Goal,Goal2),
+   rewrite_goal(Head,Head2),
+   debug(sparkle,'Rewritten: ~w <- ~w',[Head2,Goal2]),        
+   phrase_to_sparql(construct(Head2,Goal2,Opts),SPARQL).
+
 
 cons(X,T,[X|T]).
 option_default_select(Opt,Def,O1,O2) :- select_option(Opt,O1,O2,Def).
