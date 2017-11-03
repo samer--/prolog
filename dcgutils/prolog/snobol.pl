@@ -1,6 +1,6 @@
 /* Part of dcgutils
 	Copyright 2012-2015 Samer Abdallah (Queen Mary University of London; UCL)
-	 
+
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU Lesser General Public License
 	as published by the Free Software Foundation; either version 2
@@ -19,7 +19,7 @@
 :- module(snobol, [
 		any//1
    ,  notany//1
-   ,  arb//0 
+   ,  arb//0
    ,  arbno//1
    ,  bal//1
 	,	span//1
@@ -33,8 +33,8 @@
 
 /** <module> SNOBOL-inspired DCG operators
 
-   NB. 
-   FAIL is just {fail} or dcg_core:fail 
+   NB.
+   FAIL is just {fail} or dcg_core:fail
    SUCCEED is {repeat} or dcg_core:repeat.
    FENCE is ! (cut).
 
@@ -45,8 +45,8 @@
    ancestral cut operator. Instead abort//0 just throws an exception
    which you must arrange to catch yourself.
 
-   POS, RPOS, TAB and RTAB are not context-free rules and can only be 
-   implemented in paired-state DCG which counts the current position in 
+   POS, RPOS, TAB and RTAB are not context-free rules and can only be
+   implemented in paired-state DCG which counts the current position in
    the string.
 */
 
@@ -61,9 +61,14 @@
 
 
 %% Phrase $ List is nondet.
-%  True when Phrase is true an List is the sequence of
+%  True when Phrase is true and List is the sequence of
 %  terminals matched by it.
-$(P,L,S1,S2) :- phrase(P,S1,S2), append(L,S2,S1).
+$(P,L,S1,S2) :- phrase(P,S1,S2), dlist(L,S1,S2).
+
+% need to be careful with difference lists...
+dlist(Cs,L1,L2) :- is_list(Cs), !, append(Cs,L2,L1).
+dlist([],L1,L2) :- L1==L2, !.
+dlist([C|Cs],L1,L3) :- must_be(nonvar,L1), L1=[C|L2], dlist(Cs,L2,L3).
 
 %% rem// is det.
 rem(_,[]).
@@ -103,14 +108,14 @@ break(L), [N] --> notany(L), [N], {member(N,L)}.
 %% len(+N:natural)// is det.
 %% len(-N:natural)// is nondet.
 %  Matches any N symbols.
-len(0)    --> []. 
-len(N)    --> [_], ({var(N)} -> len(M), {succ(M,N)}; {succ(M,N)}, len(M)). 
+len(0)    --> [].
+len(N)    --> [_], ({var(N)} -> len(M), {succ(M,N)}; {succ(M,N)}, len(M)).
 
 
 %% bal(+Delims:list(C))// is nondet.
-%  Matches any expression with balanced generalised parentheses. 
+%  Matches any expression with balanced generalised parentheses.
 %  The opening and closing parenthesis must be supplied as a list
-%  of terminals [Open,Close]. 
+%  of terminals [Open,Close].
 bal(Delims) --> bal_one(Delims), arbno(bal_one(Delims)).
 bal_one(Delims) --> {Delims=[O,C]}, [O], bal(Delims), [C].
 bal_one(Delims) --> notany(Delims).
