@@ -1,6 +1,6 @@
 /* Part of dcgutils
 	Copyright 2012-2015 Samer Abdallah (Queen Mary University of London; UCL)
-	 
+
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU Lesser General Public License
 	as published by the Free Software Foundation; either version 2
@@ -51,7 +51,7 @@ mk_call(C,XX,Call) :- C =.. CL, append(CL,XX,CL2), Call =.. CL2.
 
 
 /*
- * Goal expansions 
+ * Goal expansions
  */
 
 use_dcg_macros.
@@ -63,10 +63,8 @@ user:goal_expansion(G,E) :-
 cons(A,B,[A|B]).
 
 expand_seqmap_with_prefix(Sep0, Callable0, SeqmapArgs, Goal) :-
-	(   Callable0 = M:Callable
-	->  NextGoal = M:NextCall
-	;   Callable = Callable0,
-	    NextGoal = NextCall
+	(   Callable0 = M:Callable ->  NextGoal = M:NextCall, QPred = M:Pred
+	;   Callable  = Callable0,     NextGoal = NextCall,   QPred = Pred
 	),
 
 	append(Lists, [St1,St2], SeqmapArgs),
@@ -77,7 +75,7 @@ expand_seqmap_with_prefix(Sep0, Callable0, SeqmapArgs, Goal) :-
 	length(Lists, N),
 	length(Vars, N),
 	MapArity is N + 4,
-	format(atom(AuxName), '__aux_seqmap/~d_~w_~w+~d', [MapArity, Sep0, Pred, Argc]),
+	format(atom(AuxName), '__aux_seqmap/~d_~w_~w+~d', [MapArity, Sep0, QPred, Argc]),
 	build_term(AuxName, Lists, Args, St1, St2, Goal),
 
 	AuxArity is N+Argc+2,
@@ -89,7 +87,7 @@ expand_seqmap_with_prefix(Sep0, Callable0, SeqmapArgs, Goal) :-
 	    length(Anon, Argc),
 	    build_term(AuxName, BaseLists, Anon, S0, S0, BaseClause),
 
-       length(Vars,N), 
+       length(Vars,N),
 		 maplist(cons, Vars, Tails, NextArgs),
        (  Sep0=_:Sep -> true; Sep=Sep0 ),
 		 (  is_list(Sep) -> append(Sep,S2,S1), NextThing=NextGoal
@@ -98,7 +96,7 @@ expand_seqmap_with_prefix(Sep0, Callable0, SeqmapArgs, Goal) :-
 		 ),
 	    build_term(Pred,    Argv,     Vars, S2, S3, NextCall1),
 	    build_term(AuxName, Tails,    Argv, S3, S4, NextIterate),
-	    build_term(AuxName, NextArgs, Argv, S1, S4, NextHead), 
+	    build_term(AuxName, NextArgs, Argv, S1, S4, NextHead),
 
 		 (  expansion(NextCall1,NextCall) -> true
 		 ;  NextCall1=NextCall),
@@ -136,7 +134,7 @@ expand_call_with_prefix(Sep0, Callable0, InArgs, (SepGoal,CallGoal)) :-
 	;	CallGoal1=CallGoal
 	).
 
-:- public 
+:- public
       seqmap_with_sep_first_call//3,
       seqmap_with_sep_first_call//5.
       seqmap_with_sep_first_call//7.
@@ -158,7 +156,7 @@ expand_seqmap_with_sep(Sep, Pred, SeqmapArgs, (dcg_macros:FirstCall,SeqmapCall))
 	% build_term(seqmap_with_prefix, [SMod:Sep1,CMod:Pred1], Tails, St2, St3, SeqmapCall).
 
 build_term(H,L1,L2,S1,S2,Term) :-
-	append(L2,[S1,S2],L23), 
+	append(L2,[S1,S2],L23),
 	append(L1,L23,L123),
 	Term =.. [H | L123].
 
@@ -170,13 +168,13 @@ expand_dcg(Term, Goal) :-
 	expand_seqmap_with_prefix([],Callable, Args, Goal).
 
 expand_dcg(Term, Goal) :-
-	functor(Term, seqmap_with_sep, N), N >= 5, 
+	functor(Term, seqmap_with_sep, N), N >= 5,
 	Term =.. [seqmap_with_sep, Sep, Callable | Args],
 	nonvar(Sep), callable(Callable), !,
 	expand_seqmap_with_sep(Sep, Callable, Args, Goal).
 
 expand_dcg(Term, Goal) :-
-	functor(Term, do_then_call, N), N >= 2, 
+	functor(Term, do_then_call, N), N >= 2,
 	Term =.. [do_then_call, Prefix, Callable | Args],
 	nonvar(Prefix), !,
 	expand_call_with_prefix(Prefix, Callable, Args, Goal).
