@@ -1,7 +1,8 @@
-:- module(math, 
+:- module(math,
 	[	mul/3
 	,	sub/3
 	,	add/3
+	,	neg/2
 	,	divby/3
 	,	equal/3
 	,	prodlist/2
@@ -20,6 +21,7 @@ max(X,Y,Z)   :- Z is max(X,Y).
 divby(X,Y,Z) :- Z is Y/X.
 sub(X,Y,Z)   :- Z is Y-X.
 add(X,Y,Z)   :- Z is Y+X.
+neg(X,Y)     :- Y is -X.
 mul(X,Y,Z)   :- Z is X*Y.
 equal(X,Y,V) :- X=Y -> V=1; V=0.
 recip(X,Y)   :- Y is 1/X.
@@ -29,7 +31,7 @@ exp(X,Y)     :- Y is exp(X).
 
 prodlist(L,X) :- prodlist(L,1,X).
 prodlist([],X,X) :- !.
-prodlist([A|AX],X,Z) :- Y is A*X, prodlist(AX,Y,Z). 
+prodlist([A|AX],X,Z) :- Y is A*X, prodlist(AX,Y,Z).
 
 
 %% stoch( +X:list(nonneg), -Y:list(nonneg), -Total:nonneg) is semidet.
