@@ -1,6 +1,6 @@
-/* 
+/*
 	Copyright 2012-2015 Samer Abdallah (Queen Mary University of London; UCL)
-	 
+
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU Lesser General Public License
 	as published by the Free Software Foundation; either version 2
@@ -19,7 +19,7 @@
 	Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-:- module(listutils, 
+:- module(listutils,
 	[	natural/1		% test or enumerate natural numbers
 	,	int/1				% test or enumerate integers
    ,  enumerate/2    % pair list items with 1-based positon
@@ -33,7 +33,7 @@
 	,  rep/3          % make a list of repeats of the same term
 	,  cons/3         % list constructror
 	,	decons/3       % list deconstructor
-	,	print_list/1	% writes each element on a new line 
+	,	print_list/1	% writes each element on a new line
 	,	printq_list/1	% as print_list but quotes atom as necessary
 	,	print_numbered_list/1
    ,  zip/3
@@ -94,8 +94,8 @@ printq_list([H|T]) :- writeq(H), nl, printq_list(T).
 %% print_numbered_list( +L:list) is det.
 %
 %  Print a list with numbered lines.
-print_numbered_list(L) :- 
-	length(L,Max), 
+print_numbered_list(L) :-
+	length(L,Max),
 	number_codes(Max,MC),
 	length(MC,Width),
 	print_num_list(Width,1,L).
@@ -126,8 +126,8 @@ decons(H,[H|T],T).
 % with N unbount, creates progressively longer and longer lists
 % on backtracking.
 rep(0,_,[]).
-rep(N,A,[A|X]) :- 
-	(	nonvar(N) 
+rep(N,A,[A|X]) :-
+	(	nonvar(N)
 	-> succ(M,N), rep(M,A,X)
 	; rep(M,A,X), succ(M,N)
 	).
