@@ -1,4 +1,4 @@
-:- module(ccreader, [ run_reader/3, read_/2 ]).
+:- module(ccreader, [ run_reader/3, ask/2 ]).
 
 /** <module> Essentially, direct style reader monad.
 
@@ -7,7 +7,7 @@
 
 :- set_prolog_flag(generate_debug_info, false).
 
-read_(Pr,X) :- p_shift(Pr,X).
+ask(Pr,X) :- p_shift(Pr,X).
 
 :- meta_predicate run_reader(+,0,?).
 
