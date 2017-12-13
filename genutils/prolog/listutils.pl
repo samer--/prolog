@@ -203,9 +203,10 @@ zip([X|XX],[Y|YY],[Z|ZZ]) :- Z=X-Y, zip(XX,YY,ZZ).
 
 %% map_filter(+P:pred(+A,-B), +L1:list(A), -L2:list(B)) is det.
 %  Like maplist/3, but filtering out those elements of L2 for which P fails.
-map_filter(_, [], []).
-map_filter(P, [X|Xs], [Y|Ys]) :- call(P,X,Y), !, map_filter(P, Xs, Ys).
-map_filter(P, [_|Xs], Ys) :- map_filter(P, Xs, Ys).
+map_filter(P,L1,L2) :- map_filter_(L1,L2,P).
+map_filter_([], [], _).
+map_filter_([X|Xs], [Y|Ys], P) :- call(P,X,Y), !, map_filter_(Xs, Ys, P).
+map_filter_([_|Xs], Ys, P) :- map_filter_(Xs, Ys, P).
 
 %% foldr(P:pred(A,B,B), X:list(A), S1:B, S2:B) is det.
 foldr(P,XX) --> foldr_(XX,P).
