@@ -23,6 +23,10 @@
    ,  query_goal/3     % Endpoint, Context, Opts
    ,  query_phrase/3   % Endpoint, QueryPhrase, Result
    ,  query_sparql/3 % Endpoint,QueryText,Result
+   ,  create_sparql_select/2
+   ,  create_sparql_select/3
+   ,  create_sparql_construct/3
+   ,  create_sparql_construct/4
    ,  (??)/1
    ,  (??)/2
    ,  op(1150,fx,??)
@@ -82,14 +86,70 @@ sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 %  the setting sparkle:select_options. See query_goal/3 for details.
 %  IF EP is unbound on entry, it is bound to the endpoint from which
 %  the current bindings were obtained.
-??(EP,Spec) :- 
-   spec_goal_opts(Spec,Goal,Opts),
+??(EP,Spec) :-
+   rewrite_goal(Spec,SpecRewrite),
+   debug(sparkle,'Rewritten goal: ~w',[SpecRewrite]),
+   spec_goal_opts(SpecRewrite,Goal,Opts),
    setting(select_options,Opts0),
    merge_options(Opts,Opts0,Opts1),
    query_goal(EP,Goal,Opts1).
 
 spec_goal_opts(Opts ?? Goal, Goal, Opts) :- !.
 spec_goal_opts(Goal,Goal,[]).
+
+rewrite_goal(In,Out) :- rewrite_goal(In,Out,1).
+
+% terminals
+rewrite_goal(T, T,_) :- T=rdf(_,_,_), !.
+rewrite_goal(T, T,_) :- T=rdf(_,_,_,_), !.
+rewrite_goal(filter(A), filter(A),_) :- !.
+
+% TODO: consider adding semantics
+rewrite_goal(rdf(S,P,O), rdf_has(S,P,O),_) :- !.
+
+% rdfs terminals
+rewrite_goal(rdf_where(Q), rdf_where(Q), _) :- !.
+rewrite_goal({Q}, {Q}, _) :- !.
+rewrite_goal(rdf_has(S,P,O), rdf(S,P,O),_) :- !.
+rewrite_goal(rdfs_subclass_of(C,P), rdf(C,oneOrMore(rdfs:subClassOf),P),_) :- !.
+rewrite_goal(rdfs_subproperty_of(C,P), rdf(C,oneOrMore(rdfs:subPropertyOf),P),_) :- !.
+rewrite_goal(rdfs_individual_of(I,C), (rdf(I,rdf:type,X),rdf(X,zeroOrMore(rdfs:subClassOf),C)),_) :- !.
+
+% non-terminals
+rewrite_goal((A,B),(A2,B2),D) :-
+        !,
+        rewrite_goal(A,A2,D),
+        rewrite_goal(B,B2,D).
+
+rewrite_goal((A;B),(A2;B2),D) :-
+        !,
+        rewrite_goal(A,A2,D),
+        rewrite_goal(B,B2,D).
+rewrite_goal(\+A, \+A2, D) :-
+        !,
+        rewrite_goal(A,A2,D).
+
+rewrite_goal(A,A2,D) :-
+        increase_depth(D,D2),
+        setof(Clause,clause(A,Clause),Clauses),
+        list_to_disj(Clauses,X),
+        rewrite_goal(X,A2,D2).
+
+list_to_disj([X],X) :- !.
+list_to_disj([X|T],(X;T2)) :- list_to_disj(T,T2).
+
+
+increase_depth(D,_) :-
+        D > 10,
+        !,
+        throw(error(max_depth_exceeded(D))).
+increase_depth(D,D2) :-
+        D2 is D+1.
+
+        
+        
+        
+
 
 /*
  * Assert/declare a new sparql end point
@@ -102,13 +162,18 @@ spec_goal_opts(Goal,Goal,[]).
 %  No options are defined at the moment.
 sparql_endpoint(EP,Url) :- sparql_endpoint(EP,Url,[]).
 sparql_endpoint(EP,Url,Options) :-
-   url_endpoint(Url,Host,Port,Path), 
-   (  sparql_endpoint(EP,Host,Port,Path,_)
-   -> format('% WARNING: Updating already registered SPARQL end point ~w.\n',[Url]),
-      retractall(sparql_endpoint(EP,Host,Port,Path,_))
-   ),
+   url_endpoint(Url,Host,Port,Path),
+   !,
+   retract_declared_endpoint(EP,Url),     
    debug(sparkle,'Asserting SPARQL end point ~w: ~w ~w ~w ~w.',[EP,Host,Port,Path,Options]),
    assert(sparql_endpoint(EP,Host,Port,Path,Options)).
+
+retract_declared_endpoint(EP,Url) :-
+   sparql_endpoint(EP,Host,Port,Path,_),
+   format('% WARNING: Updating already registered SPARQL end point ~w.\n',[Url]),
+   retractall(sparql_endpoint(EP,Host,Port,Path,_)),
+   !.
+retract_declared_endpoint(_,_).
 
 user:term_expansion(:-(sparql_endpoint(EP,Url)), Expanded) :- 
    endpoint_declaration(EP,Url,[],Expanded).
@@ -183,6 +248,56 @@ query_goal(EP,Goal,Opts) :-
       phrase_to_sparql(select(Vars,Goal,Opts1),SPARQL),
       parallel_query(Query,EPs,EP-Result)
    ).
+
+%% create_sparql_select(+Goal,-SPARQL,+Opts) is det.
+%% create_sparql_select(+Goal,-SPARQL) is det.
+%
+% Generates a sparql SELECT or ASK statement for a 
+% prolog goal without executing it.
+%
+% Goal can be any prolog goal consisting of based 
+% rdf/3 or rdf/4 statements, filters, or terms
+% that can be rewritten in this way
+create_sparql_select(Goal,SPARQL) :-
+   create_sparql_select(Goal,SPARQL,[]).
+
+create_sparql_select(Goal,SPARQL,Opts) :-
+   rewrite_goal(Goal,Goal2),
+   debug(sparkle,'Rewritten goal: ~w',[Goal2]),        
+   term_variables(Goal2,Vars),
+   (  Vars = [] % if no variables, do an ASK query, otherwise, SELECT
+   -> phrase_to_sparql(ask(Goal2),SPARQL)
+   ;  setting(limit,DefaultLimit),
+      call_dcg((  option_default_select(limit(Limit),DefaultLimit),
+                  option_default_select(autopage(Auto),true),
+                  (  {Auto=true}
+                  -> {Query = autopage_query(Limit,SPARQL)},
+                     option_default_select(offset(_),_)
+                  ;  {Query = simple_query(SPARQL)},
+                     cons(limit(Limit))
+                  ) 
+               ), Opts, Opts1),
+      phrase_to_sparql(select(Vars,Goal2,Opts1),SPARQL)).
+
+%% create_sparql_construct(+Head,+Goal,-SPARQL,+Opts) is det.
+%% create_sparql_construct(+Head,+Goal,-SPARQL) is det.
+%
+% Generates a sparql CONSTRUCT statement for a 
+% prolog goal without executing it.
+%
+% Goal or Head can be any prolog goal consisting of based 
+% rdf/3 or rdf/4 statements, filters, or terms
+% that can be rewritten in this way
+%
+% the Head forms the head part of the CONSTRUCT
+create_sparql_construct(Head,Goal,SPARQL) :-
+   create_sparql_construct(Head,Goal,SPARQL,[]).
+create_sparql_construct(Head,Goal,SPARQL,Opts) :-
+   rewrite_goal(Goal,Goal2),
+   rewrite_goal(Head,Head2),
+   debug(sparkle,'Rewritten: ~w <- ~w',[Head2,Goal2]),        
+   phrase_to_sparql(construct(Head2,Goal2,Opts),SPARQL).
+
 
 cons(X,T,[X|T]).
 option_default_select(Opt,Def,O1,O2) :- select_option(Opt,O1,O2,Def).

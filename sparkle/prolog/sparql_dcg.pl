@@ -18,6 +18,7 @@
 
 :- module(sparql_dcg,[
       select//3
+   ,  construct//3
    ,  describe//1
    ,  describe//2
    ,  ask//1
@@ -105,6 +106,15 @@ select(Vars,Goal,Options) -->
    if_option(offset(Offs), (" OFFSET ", at(Offs)), O3,O4),
    {check_remaining_options(O4)}.
 
+construct(Head,Goal,Options) -->
+   {O1=Options},
+   "CONSTRUCT ", brace(goal(Head)), " ",
+   where(Goal),
+   if_option(order_by(OB), (" ORDER BY ", expr(OB)), O1,O2),
+   if_option(limit(Limit), (" LIMIT ", at(Limit)), O2,O3),
+   if_option(offset(Offs), (" OFFSET ", at(Offs)), O3,O4),
+   {check_remaining_options(O4)}.
+
 check_remaining_options([]) :- !.
 check_remaining_options(Opts) :- throw(unrecognised_options(Opts)).
 
@@ -134,13 +144,21 @@ goal(\+G)     --> "FILTER NOT EXISTS ", brace(goal(G)). %NB consider MINUS { ...
 goal((G1,G2)) --> goal(G1), " . ", goal(G2).
 goal(conj(GS)) --> seqmap_with_sep(" , ",goal,GS).
 
+goal(service(S,G)) --> "SERVICE ",resource(S)," ",brace(G).
+
 goal(rdf(S,P,O)) -->
    { rdf_global_object(O,OO) },
    resource(S), " ",
-   resource(P), " ",
+   property(P), " ",
    object(OO).
 
+goal(rdf(S,P,O,G)) --> "GRAPH ", resource(G), brace(goal(rdf(S,P,O))).
+    
 goal(filter(Cond)) --> "FILTER ", cond(Cond).
+
+% support for rdf_where/1 in semweb/rdf11    
+goal({Cond}) --> "FILTER ", cond(Cond).
+goal(rdf_where(Cond)) --> "FILTER ", cond(Cond).
 
 :- op(1150,fx,p).
 p(X) --> paren(X).
@@ -163,6 +181,7 @@ cond(uri(V))       --> "isURI(", object(V), ")".
 cond(blank(V))     --> "isBLANK(", object(V), ")".
 cond(literal(V))   --> "isLITERAL(", object(V), ")".
 
+expr('^^'(S,T))    --> "\"", at(S), "\"^^", resource(T).
 expr(str(V))       --> "STR(", object(V), ")".
 expr(lang(V))      --> "LANG(", object(V), ")".
 expr(count(X))     --> "COUNT(", expr(X), ")".
@@ -176,6 +195,17 @@ expr(X*Y) --> p expr(X), " * ", expr(Y).
 expr(X/Y) --> p expr(X), " / ", expr(Y).
 expr(X) --> {number(X)}, at(X).
 expr(X) --> object(X).
+
+% https://www.w3.org/TR/sparql11-query/#pp-language
+property(oneOrMore(R)) --> property(R),"+".
+property(zeroOrMore(R)) --> property(R),"*".
+property(zeroOrOne(R)) --> property(R),"?".
+property(inverse(R)) --> "^", property(R).
+property(\+R) --> "!(", property(R), ")".
+property(R1/R2) --> "(",property(R1),"/",property(R2),")".
+property(R1|R2) --> "(",property(R1),"|",property(R2),")".
+
+property(R) --> resource(R).
 
 resource(R) --> variable(R).
 resource(R) --> {rdf_global_id(R,RR)}, uri(RR).
