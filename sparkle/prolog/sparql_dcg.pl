@@ -143,6 +143,7 @@ goal(G1;G2)   --> brace(goal(G1)), " UNION ", brace(goal(G2)).
 goal(\+G)     --> "FILTER NOT EXISTS ", brace(goal(G)). %NB consider MINUS { ... } also
 goal((G1,G2)) --> goal(G1), " . ", goal(G2).
 goal(conj(GS)) --> seqmap_with_sep(" , ",goal,GS).
+goal(optional(G))     --> "OPTIONAL ", brace(goal(G)).
 
 goal(service(S,G)) --> "SERVICE ",resource(S)," ",brace(G).
 
@@ -160,6 +161,10 @@ goal(filter(Cond)) --> "FILTER ", cond(Cond).
 goal({Cond}) --> "FILTER ", cond(Cond).
 goal(rdf_where(Cond)) --> "FILTER ", cond(Cond).
 
+% allow conditions not wrapped by rdf_where/1
+goal(G) --> goal(filter(G)).
+
+
 :- op(1150,fx,p).
 p(X) --> paren(X).
 
@@ -172,20 +177,32 @@ cond(X=<Y)  --> p expr(X), " <= ", expr(Y).
 cond(X>=Y)  --> p expr(X), " >= ", expr(Y).
 cond(X>Y)   --> p expr(X), " > ", expr(Y).
 cond(X<Y)   --> p expr(X), " < ", expr(Y).
+cond(X@<Y)   --> p expr(X), " < ", expr(Y).
+cond(X@=<Y)   --> p expr(X), " <= ", expr(Y).
+cond(X@>Y)   --> p expr(X), " > ", expr(Y).
+cond(X@>=Y)   --> p expr(X), " >= ", expr(Y).
 cond(between(L,U,X)) --> cond((L=<X,X=<U)).
 cond(in(X,Ys))     --> p expr(X), " in ", (p seqmap_with_sep(", ",expr,Ys)).
-cond(regex(P,V))   --> "regex(", object(V), ",", quote(at(P)), ")".
-cond(regex(P,V,F)) --> "regex(", object(V), ",", quote(at(P)),  ",", quote(at(F)), ")".
+cond(str_starts(X,Y))   --> p "strStarts(", expr(X), ",", expr(Y), ")".
+cond(regex(P,V))   --> "regex(", expr(V), ",", quote(at(P)), ")".
+cond(regex(P,V,F)) --> "regex(", expr(V), ",", quote(at(P)),  ",", quote(at(F)), ")".
+cond(regex_str(P,V))   --> "regex(", expr(str(V)), ",", quote(at(P)), ")".
+cond(regex_str(P,V,F)) --> "regex(", expr(str(V)), ",", quote(at(P)),  ",", quote(at(F)), ")".
 cond(bound(V))     --> "bound(", object(V), ")".
 cond(uri(V))       --> "isURI(", object(V), ")".
 cond(blank(V))     --> "isBLANK(", object(V), ")".
+cond(lang(V))     --> "lang(", object(V), ")".
 cond(literal(V))   --> "isLITERAL(", object(V), ")".
+cond(G)            --> {throw(cond(G))}.
+
+
 
 expr('^^'(S,T))    --> "\"", at(S), "\"^^", resource(T).
 expr(str(V))       --> "STR(", object(V), ")".
 expr(lang(V))      --> "LANG(", object(V), ")".
 expr(count(X))     --> "COUNT(", expr(X), ")".
 expr(datatype(V))  --> "DATATYPE(", object(V), ")".
+expr(quote(V))     --> quote(at(V)).
 
 expr(+X) -->  p "+ ", expr(X), ")".
 expr(-X) -->  p "- ", expr(X), ")".
