@@ -90,6 +90,7 @@ sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
    rewrite_goal(Spec,SpecRewrite),
    debug(sparkle,'Rewritten goal: ~w',[SpecRewrite]),
    spec_goal_opts(SpecRewrite,Goal,Opts),
+   debug(sparkle,'Opts: ~w',[Opts0]),
    setting(select_options,Opts0),
    merge_options(Opts,Opts0,Opts1),
    query_goal(EP,Goal,Opts1).
@@ -97,7 +98,14 @@ sandbox:safe_primitive(sparql_dcg:ask(_,_,_)).
 spec_goal_opts(Opts ?? Goal, Goal, Opts) :- !.
 spec_goal_opts(Goal,Goal,[]).
 
+:- multifile rewrite_goal_hook/2.
 rewrite_goal(In,Out) :- rewrite_goal(In,Out,1).
+
+rewrite_goal(In,Out,N) :-
+        debug(sparkle,'?tr ~q',[In]),
+        rewrite_goal_hook(In,X), !,
+        debug(sparkle,'Using hook to transform ~q -> ~q',[In,X]),
+        rewrite_goal(X,Out,N).
 
 % terminals
 rewrite_goal(T, T,_) :- T=rdf(_,_,_), !.
@@ -110,6 +118,9 @@ rewrite_goal(rdf(S,P,O), rdf_has(S,P,O),_) :- !.
 % rdfs terminals
 rewrite_goal(rdf_where(Q), rdf_where(Q), _) :- !.
 rewrite_goal({Q}, {Q}, _) :- !.
+rewrite_goal(optional(Q), optional(Q2), _) :-
+        !,
+        rewrite_goal(Q,Q2).
 rewrite_goal(rdf_has(S,P,O), rdf(S,P,O),_) :- !.
 rewrite_goal(rdfs_subclass_of(C,P), rdf(C,oneOrMore(rdfs:subClassOf),P),_) :- !.
 rewrite_goal(rdfs_subproperty_of(C,P), rdf(C,oneOrMore(rdfs:subPropertyOf),P),_) :- !.
@@ -132,8 +143,11 @@ rewrite_goal(\+A, \+A2, D) :-
 rewrite_goal(A,A2,D) :-
         increase_depth(D,D2),
         setof(Clause,clause(A,Clause),Clauses),
+        !,
         list_to_disj(Clauses,X),
         rewrite_goal(X,A2,D2).
+rewrite_goal(A,A,_).
+
 
 list_to_disj([X],X) :- !.
 list_to_disj([X|T],(X;T2)) :- list_to_disj(T,T2).
@@ -245,6 +259,7 @@ query_goal(EP,Goal,Opts) :-
                      cons(limit(Limit))
                   ) 
                ), Opts, Opts1),
+      debug(sparkle,'DCG: ~w ~w ~w',[Vars,Goal,Opts1]),
       phrase_to_sparql(select(Vars,Goal,Opts1),SPARQL),
       parallel_query(Query,EPs,EP-Result)
    ).
@@ -263,8 +278,9 @@ create_sparql_select(Goal,SPARQL) :-
 
 create_sparql_select(Goal,SPARQL,Opts) :-
    rewrite_goal(Goal,Goal2),
-   debug(sparkle,'Rewritten goal: ~w',[Goal2]),        
+   debug(sparkle,'Rewritten goal2: ~w',[Goal2]),        
    term_variables(Goal2,Vars),
+   debug(sparkle,'Vars: ~w',[Vars]),        
    (  Vars = [] % if no variables, do an ASK query, otherwise, SELECT
    -> phrase_to_sparql(ask(Goal2),SPARQL)
    ;  setting(limit,DefaultLimit),
