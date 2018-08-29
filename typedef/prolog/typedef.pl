@@ -1,6 +1,6 @@
 /* Part of typedef
 	Copyright 2014-2015 Samer Abdallah (UCL)
-	 
+
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU Lesser General Public License
 	as published by the Free Software Foundation; either version 2
@@ -18,7 +18,7 @@
 
 :- module(typedef,
     [ op(1150,fx,type)
-    , op(1120,xfx,--->)
+    , op(1130,xfx,--->)
     , (type)/1
     , current_type/1
     , current_type_constructor/2
@@ -29,7 +29,7 @@
    This module provides a way to declare new types that hook into the
    must_be/2 framework of library(error).
 
-   The type definition language is designed to be close to the one in 
+   The type definition language is designed to be close to the one in
    Tom Schrijver's type_check package, supporting type synonyms, such as
    ==
    :- type natnum == nonneg.
