@@ -1,6 +1,6 @@
 /* Part of fileutils
 	Copyright 2012-2015 Samer Abdallah (Queen Mary University of London; UCL)
-	 
+
 	This program is free software; you can redistribute it and/or
 	modify it under the terms of the GNU Lesser General Public License
 	as published by the Free Software Foundation; either version 2
@@ -18,7 +18,8 @@
 
 :- module(fileutils, [
 		read_lines/2,           % +Stream, +ListOfLists
-		with_stream/3,          % @Stream, +Opener, +Goal
+		with_stream/3,          % @Stream, +Opener, +Goal DEPRECATED
+		with_stream/2,          % +Opener, +Pred
 		with_output_to_file/2,  % +File, +Goal
 		with_output_to_file/3,  % +File, +Goal, +Opts
 		with_input_from_file/2, % +File, +Goal
@@ -35,7 +36,7 @@
       extension_in/2,
 
       with_temp_dir/2,        % @Dir, +Goal
-      in_temp_dir/1,          % +Goal          
+      in_temp_dir/1,          % +Goal
       file_modes/4            % +File, -UserClass, -Action, -Legal
 	]).
 
@@ -60,21 +61,21 @@
    expanded to a legal path. Thus, it can include wildcards "*?[]{}", environment
    variables "$var" and "~", which is equivalent to "$HOME".
    Thus, the type of expand_file_name/2 is =|pred(+pattern, -path)|=.
-   
+
    A =|spec(T)|= is a term that can be expanded by expand_file_search_path/2
    to produce an atom of type T. So, =|spec(pattern)|= expands to a pattern,
-   and =|spec(path(file))|= expands to a file name. The type of 
+   and =|spec(path(file))|= expands to a file name. The type of
    expand_file_search_path/2 is =|pred(+spec(T), -T)|=.
 
    Then, for finding files, we have:
    ==
-   findspec ---> in(spec(pattern), pattern)    
+   findspec ---> in(spec(pattern), pattern)
                ; in(spec(pattern))
-               ; under(spec(pattern), pattern) 
+               ; under(spec(pattern), pattern)
                ; under(spec(pattern))
                ; like(spec(pattern)).
    ==
-               
+
 
 
    @tbd
@@ -89,20 +90,39 @@
      path.
 */
 
-:- meta_predicate 
-		with_output_to_file(+,0), 
-		with_output_to_file(+,0,+), 
+:- meta_predicate
+		with_output_to_file(+,0),
+		with_output_to_file(+,0,+),
 		with_input_from_file(+,0),
 		with_input_from_file(+,0,+),
-		with_input_from(+,0), 
-		with_stream(-,0,0), 
+		with_input_from(+,0),
+		with_stream(-,0,0),
+		with_stream(1,1),
       with_temp_dir(-,0),
       in_temp_dir(0).
 
 :- use_module(library(filesex)).
 
+:- meta_predicate flip(2, ?, ?).
+flip(P, X, Y) :- call(P, Y, X).
+
+%% with_stream( +Opener:pred(-stream), +Goal:pred(+stream)) is semidet.
+%
+%  Base predicate for doing things with stream. Opener is a unary predicate
+%  (ie callable with call/2)
+%  which must prepare the stream. Goal is a unary predicate, called with
+%  the open stream. The stream is  guaranteed to be closed on exit.  Eg,
+%  using the lambda library to form anonymous predicates:
+%  ==
+%  with_stream(open('out.txt',write), \S^writeln(S,'Hello!')).
+%  with_stream(open('in.txt',read), \S^read(S,T)).
+%  ==
+with_stream(Opener,Goal) :-
+   setup_call_cleanup(call(O, S), call(G, S), close(S)).
+
 %% with_stream( @Stream, :Opener, :Goal) is semidet.
 %
+%  DEPRECATED due to nasty term copying.
 %  Base predicate for doing things with stream. Opener is a goal which must
 %  prepare the stream, Stream is the variable which will hold the valid
 %  stream handle, and Goal is called with the stream open. The stream is
@@ -114,7 +134,7 @@
 %  with_stream( S, open('out.txt',write,S), writeln(S,'Hello!')).
 %  with_stream( S, open('in.txt',read,S), read(S,T)).
 %  ==
-with_stream(Stream,Opener,Goal) :- 
+with_stream(Stream,Opener,Goal) :-
    replace_var(Stream,S,Opener-Goal,O-G),
    copy_term(t(FreeVars,Stream,Opener,Goal),t(FreeVars,S,O,G)),
 	setup_call_cleanup(O,G,close(S)).
@@ -133,7 +153,7 @@ remove_var(V,[X|Xs],[X|Ys]) :- remove_var(V,Xs,Ys).
 % Alternative implementation built on explicit term walk.
 % replace_var(V1,V2,T1,T2) :-
 %    (  var(T1) -> (T1==V1 -> T2=V2; T2=T1)
-%    ;  T1=..[F|A1], maplist(replace_var(V1,V2),A1,A2), 
+%    ;  T1=..[F|A1], maplist(replace_var(V1,V2),A1,A2),
 %       T2=..[F|A2] ).
 
 
@@ -153,10 +173,12 @@ remove_var(V,[X|Xs],[X|Ys]) :- remove_var(V,Xs,Ys).
       ]).
 
 with_output_to_file(File,Goal) :- with_output_to_file(File,Goal,[]).
-with_output_to_file(File,Goal,Opts) :- 
+with_output_to_file(File,Goal,Opts) :-
    maplist(check_predicate_option(with_output_to_file/3,3),Opts),
 	select_option(mode(Mode),Opts,Opts1,write),
-   with_stream(S, open(File,Mode,S,Opts1), with_output_to(S,Goal)).
+   with_stream(open(File,Mode,Opts1), flip(with_output_to, Goal)).
+
+open_opts(Name, Mode, Opts, S) :- open(Name, Mode, S, Opts).
 
 
 %% with_input_from_file( +File, :Goal) is semidet.
@@ -168,15 +190,15 @@ with_output_to_file(File,Goal,Opts) :-
 :- predicate_options(with_input_from_file/3,3,[pass_to(open/4,4)]).
 
 with_input_from_file(File,Goal) :- with_input_from_file(File,Goal,[]).
-with_input_from_file(File,Goal,Opts) :- 
-	with_stream( S, open(File,read,S,Opts), with_input_from(S,Goal)).
+with_input_from_file(File,Goal,Opts) :-
+	with_stream(open_opts(File,read,Opts), flip(with_input_from, Goal)).
 
 %% with_input_from( +Source, :Goal) is semidet.
 %
 %  Temporarily switch current input to object specified by Source while calling Goal as in once/1.
 %  Source is a term like that supplied to with_output_to/2 and can be any of:
 %  	* A stream handle or alias.
-%  	* atom(+Atom) 
+%  	* atom(+Atom)
 %  	* codes(+Codes)
 %  	* chars(+Chars)
 %  	* string(+String)
@@ -221,7 +243,7 @@ read_lines(Stream,Lines) :-
 %
 %  @deprecated Consider using find_files/3 and doing without RelPath.
 
-file_under(DirSpec,Pattern,File,RelPath) :- 
+file_under(DirSpec,Pattern,File,RelPath) :-
    expand_directory_absolute(DirSpec,Root),
 	file_under(Root,Pattern,File,RelPath,[]).
 
@@ -283,21 +305,21 @@ find_files(under(DirSpec,Pattern),File) :-
    expand_directory_absolute(DirSpec,Root),
 	file_under(Root,Pattern,File,_,[]).
 find_files(like(Spec),AbsFile) :-
-	expand_file_search_path(Spec,Pattern), 
+	expand_file_search_path(Spec,Pattern),
    expand_file(Pattern,File),
-   absolute_file_name(File,AbsFile). 
+   absolute_file_name(File,AbsFile).
 
 
 %% file_under(+Root:path(dir), +Pattern:pattern, -File:path(file))// is nondet.
 %  DCG rule common to file_under/4 and find_files/2.
-%  Finds file names matching Pattern in or under Root and matches 
+%  Finds file names matching Pattern in or under Root and matches
 %  final argument pair with difference list containing the directory names
 %  along the path from the the Root to the file.
 %  File is an absolute path to the file in question.
 :- public file_under/5.
-file_under(Root,Pattern,File,P,P) :- 
+file_under(Root,Pattern,File,P,P) :-
    file_in(Root,Pattern,File).
-file_under(Root,Pattern,File,[DirName|P1],P2)  :- 
+file_under(Root,Pattern,File,[DirName|P1],P2)  :-
    % directory_file_path(Root,'*',DirPatt),
    % expand_directory(DirPatt,Dir),
    % file_base_name(Dir,DirName),
@@ -322,7 +344,7 @@ file_under(Root,Filter,Name,Path,P1,P2) :-
 file_under_x(_,Item,ItemPath,Item,ItemPath,P1,P1) :-
    exists_file(ItemPath).
 file_under_x(Filter,Item,ItemPath,Name,Path,[Item|P1],P2) :-
-   exists_directory(ItemPath), 
+   exists_directory(ItemPath),
    call(Filter,Item,ItemPath),
    file_under(ItemPath,Filter,Name,Path,P1,P2).
 
@@ -352,7 +374,7 @@ expand_file(Pattern,File)     :- expand_pattern(Pattern,File), exists_file(File)
 %  as expand_file_name/1, except that matches are produced one by one
 %  on backtracking, instead of all together in a list. File which the current user
 %  does not have permission to read are _not_ returned.
-expand_pattern(Pattern,File) :- 
+expand_pattern(Pattern,File) :-
    expand_file_name(Pattern,Files),
    member(File,Files),
    access_file(File,read).
@@ -381,7 +403,7 @@ directory_entry(Dir,Entry) :-
 %  The predicate is case sensitive and case presevering.
 file_extension(Path,Ext) :-
    sub_atom(Path,BDot,1,_,'.'),    % find any dot
-   succ(BBDot,BDot),              % must be something before dot  
+   succ(BBDot,BDot),              % must be something before dot
    \+sub_atom(Path,BBDot,1,_,'/'), % must not be /
    succ(BDot,Dot),                % look after dot
    sub_atom(Path,Dot,_,0,Ext),     % Ext=extension exluding dot
@@ -393,8 +415,8 @@ file_extension(Path,Ext) :-
 %  True if File has one of the extensions in the list Extensions.
 %  Extensions are case insensitive. An extension is any sequence of
 %  characters following a dot in the name part of a file name.
-extension_in(Path,Exts) :- 
-   file_extension(Path,Ext), 
+extension_in(Path,Exts) :-
+   file_extension(Path,Ext),
    memberchk(Ext,Exts).
 
 
@@ -403,15 +425,15 @@ extension_in(Path,Exts) :-
 %  Calls Goal with the current
 %  directory set to a newly created directory (using
 %  with_temp_dir/2) which is deleted after the call is
-%  finished. Goal is called as =|once(Goal)|= to ensure 
+%  finished. Goal is called as =|once(Goal)|= to ensure
 %  that the working directory is restored to its original
 %  value for any subsequent goals.
 in_temp_dir(Goal) :-
    with_temp_dir(Dir,
-      setup_call_cleanup( 
+      setup_call_cleanup(
          working_directory(Old,Dir), once(Goal),
          working_directory(_,Old))).
-      
+
 
 %% with_temp_dir(@Dir:path, +Goal:callable) is nondet.
 %
