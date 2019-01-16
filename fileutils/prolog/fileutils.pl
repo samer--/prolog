@@ -106,19 +106,19 @@
 :- meta_predicate flip(2, ?, ?).
 flip(P, X, Y) :- call(P, Y, X).
 
-%% with_stream( +Opener:pred(-stream), +Goal:pred(+stream)) is semidet.
+%% with_stream( +Opener:pred(-stream), +User:pred(+stream)) is semidet.
 %
 %  Base predicate for doing things with stream. Opener is a unary predicate
 %  (ie callable with call/2)
-%  which must prepare the stream. Goal is a unary predicate, called with
+%  which must prepare the stream. User is a unary predicate, called with
 %  the open stream. The stream is  guaranteed to be closed on exit.  Eg,
 %  using the lambda library to form anonymous predicates:
 %  ==
 %  with_stream(open('out.txt',write), \S^writeln(S,'Hello!')).
 %  with_stream(open('in.txt',read), \S^read(S,T)).
 %  ==
-with_stream(Opener,Goal) :-
-   setup_call_cleanup(call(O, S), call(G, S), close(S)).
+with_stream(Opener, User) :-
+   setup_call_cleanup(call(Opener, S), call(User, S), close(S)).
 
 %% with_stream( @Stream, :Opener, :Goal) is semidet.
 %
