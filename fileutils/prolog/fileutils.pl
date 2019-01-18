@@ -176,7 +176,7 @@ with_output_to_file(File,Goal) :- with_output_to_file(File,Goal,[]).
 with_output_to_file(File,Goal,Opts) :-
    maplist(check_predicate_option(with_output_to_file/3,3),Opts),
 	select_option(mode(Mode),Opts,Opts1,write),
-   with_stream(open(File,Mode,Opts1), flip(with_output_to, Goal)).
+   with_stream(open_opts(File,Mode,Opts1), flip(with_output_to, Goal)).
 
 open_opts(Name, Mode, Opts, S) :- open(Name, Mode, S, Opts).
 
