@@ -95,22 +95,21 @@ arbno(P)  --> []; call_dcg(P), arbno(P).
 
 %% span(+L:list(_))// is nondet.
 %  Matches the longest possible sequence of symbols from L.
-span(L,A,[]) :- any(L,A,[]).
-span(L)      --> any(L), span(L).
-span(L), [N] --> any(L), [N], {maplist(dif(N),L)}.
+span(L) --> any(L), span_tail(L).
+span_tail(_, [], []).
+span_tail(L) --> span(L).
+span_tail(L, [X|T], [X|T]) :- maplist(dif(X), L).
 
 %% break(+L:list(_))// is nondet.
 %  Matches the longest possible sequence of symbols not in L.
-break(L,A,[]) :- notany(L,A,[]).
-break(L)      --> notany(L), break(L).
-break(L), [N] --> notany(L), [N], {member(N,L)}.
+break(_, [], []).
+break(L) --> notany(L), break(L).
+break(L, [X|T], [X|T]) :- member(X, L).
 
 %% len(+N:natural)// is det.
 %% len(-N:natural)// is nondet.
 %  Matches any N symbols.
-len(0)    --> [].
-len(N)    --> [_], ({var(N)} -> len(M), {succ(M,N)}; {succ(M,N)}, len(M)).
-
+len(N, L1, L2) :- length(L, N), append(L, L2, L1).
 
 %% bal(+Delims:list(C))// is nondet.
 %  Matches any expression with balanced generalised parentheses.
