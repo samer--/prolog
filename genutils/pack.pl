@@ -1,6 +1,6 @@
 name(<PACKNAME>).
 version('<VER>').
-author('Samer Abdallah','s.abdallah@ucl.ac.uk').
+author('Samer Abdallah','<EMAIL>').
 title('General miscellaneous utilities').
 download('<DOWNLOAD>').
 

@@ -1,6 +1,6 @@
 name(<PACKNAME>).
 version('<VER>').
-author('Samer Abdallah','samer.abdallah.00@gmail.com').
+author('Samer Abdallah','<EMAIL>').
 title('Tools for temporally aware programming').
 download('<DOWNLOAD>').
 requires(dcgutils).

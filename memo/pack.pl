@@ -1,6 +1,6 @@
 name(<PACKNAME>).
 version('<VER>').
-author('Samer Abdallah','s.abdallah@ucl.ac.uk').
+author('Samer Abdallah','<EMAIL>').
 title('Persistent memoisation of deterministic predicates').
 keywords([memoisation,persistency]).
 download('<DOWNLOAD>').
