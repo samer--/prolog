@@ -1,0 +1,6 @@
++++ plsc - Tools for talking to a Supercollider server from Prolog.
+
+This is rather unfinished - a minimal interface for starting, controlling
+and stopping synths is provided by sc.pl. A more complete interface
+is in progress in plsc.pl.
+
