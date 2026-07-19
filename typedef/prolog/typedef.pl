@@ -19,9 +19,11 @@
 :- module(typedef,
     [ op(1150,fx,type)
     , op(1130,xfx,--->)
+    , op(700,xfx,::)
     , (type)/1
     , current_type/1
     , current_type_constructor/2
+    , check_type/1
     ]).
 
 /** <module> Type definition framework
@@ -53,7 +55,7 @@
    - Consider extending partial(T) type.
 */
 
-:- multifile user_type_syn/2, user_type_def/1, user_type_constructor/2.
+:- multifile user_type_syn/2, user_type_def/2, user_type_constructor/3.
 :- multifile error:has_type/2.
 :- op(1150,fx,type).
 :- op(1130,xfx, --->).
@@ -66,7 +68,7 @@ wants_typedef :-
    predicate_property(Module:type(_),imported_from(typedef)).
 
 check_not_defined(Type) :-
-   (  (user_type_syn(Type,_); user_type_def(Type))
+   (  (user_type_syn(Type,_); user_type_def(Type, _))
    -> throw(error(duplicate_type(Type),(type)/1))
    ;  true
    ).
@@ -98,7 +100,7 @@ type(Spec) :- throw(error(context_error(nodirective, type(Spec)), _)).
 %      Type = foo ;
 %      Type = bar .
 current_type(Type) :-
-    user_type_def(Type).
+   user_type_def(Type, _).
 
 %% current_type_constructor(?T, ?Constructor)
 %
@@ -110,7 +112,7 @@ current_type(Type) :-
 %      C = hello ;
 %      C = goodbye .
 current_type_constructor(Type, Constructor) :-
-    user_type_constructor(Type, Constructor).
+   user_type_constructor(Type, _, Constructor).
 
 system:term_expansion(:- type(Decl), Clauses) :-
    wants_typedef,
@@ -118,35 +120,66 @@ system:term_expansion(:- type(Decl), Clauses) :-
    ;  throw(error(bad_type_declaration(Decl), (type)/1))
    ).
 
-expand_type_declaration(Type == Syn, [C1,C2]) :-
+expand_type_declaration(Type == Syn, [C1,C2]) :- !,
    % check_not_defined(Type),
    C1 = typedef:user_type_syn(Type,Syn),
    C2 = (error:has_type(Type, Value) :- error:has_type(Syn, Value)).
-expand_type_declaration((Type ---> Defs), Clauses) :-
+expand_type_declaration((Type ---> Defs), Clauses) :- !,
    % check_not_defined(Type),
-   type_def(Type,Defs,Clauses,[]).
+   type_def(Type, adt, Defs, Clauses,[]).
+expand_type_declaration((Constructor :: Type), Clauses) :- !,
+   % check_not_defined(Type),
+   constructor(Type, gadt, Constructor, Clauses,[]).
+expand_type_declaration(Type, Clauses) :-
+   % check_not_defined(Type),
+   type_decl(Type, gadt, Clauses,[]).
 
-type_def(Type,Defs) -->
-   [ typedef:user_type_def(Type) ],
-   [ error:has_type(Type, Value) :- typedef:has_type(Type,Value) ],
-   constructors(Type,Defs).
+type_decl(Type, Class) -->
+   [ typedef:user_type_def(Type, Class) ],
+   [ error:has_type(Type, Value) :- typedef:has_type(Type,Value) ].
 
-constructors(Type,C1;CX) --> !, constructor(Type,C1), constructors(Type,CX).
-constructors(Type,CZ) --> constructor(Type,CZ).
-constructor(Type,C) --> [ typedef:user_type_constructor(Type,C) ].
+type_def(Type,Class,Defs) --> type_decl(Type,Class), constructors(Type,Defs).
+
+constructors(Type,C1;CX) --> !, constructor(Type,adt,C1), constructors(Type,CX).
+constructors(Type,CZ) --> constructor(Type,adt,CZ).
+constructor(Type,Cl,C) --> [ typedef:user_type_constructor(Type,Cl,C) ].
 
 error:has_type(partial(Type),Term) :- !,
    var(Term) -> true; error:has_type(Type,Term).
 
 has_type(Type,Term) :-
-   user_type_def(Type), !, nonvar(Term),
-   user_type_constructor(Type,Cons),
+   user_type_def(Type, _), !, nonvar(Term),
+   user_type_constructor(Type,_,Cons),
    (  atomic(Cons) -> Cons=Term
    ;  functor(Cons,F,A),
       functor(Term,F,A),
       forall( arg(N,Cons,ArgType), (arg(N,Term,ArgVal), error:has_type(ArgType,ArgVal)))
    ).
 
+check_type(T) :- check_type([], T).
+check_type(_, T) :- var(T), !.
+check_type(Ctx, T) :- typedef:user_type_syn(T,T2), !, check_type([T-syn | Ctx], T2).
+check_type(Ctx, T) :- member(T1-_, Ctx), subsumes_term(T1, T), !.
+check_type(Ctx, T) :-
+   typedef:user_type_def(T, Class), !,
+   maplist([_, 0'*]>>true, Ctx, Indent),
+   debug(typedef, "~s Checking type ~w...", [Indent, T]),
+   copy_term(T, T1),
+   forall(typedef:user_type_constructor(T1, CClass, C),
+      ( debug(typedef, "~s . Checking constructor ~w...", [Indent, C]),
+        ( CClass = Class
+        -> ( atomic(C)
+           ; compound(C),
+             forall(arg(N, C, Arg), check_type([T-arg(N) | Ctx], Arg))
+           )
+        ;  throw(error(type_constructor_mismatch(T,Class,C,CClass), _))
+        ))).
+check_type(_, T) :- error:current_type(T, _, _), !.
+check_type(Ctx, T) :- throw(unknown_type(T, Ctx)).
+
+prolog:message(error(type_constructor_mismatch(T,TC,C,CC),_)) -->
+   {numbervars(t(T,TC,C,CC),0,_)},
+   [ "Type ~w is an ~w but has ~w constructor ~w."-[T,TC,CC,C], nl].
 prolog:message(error(duplicate_type(Type),_)) -->
    {numbervars(Type,0,_)},
    [ 'Redefinition of type ~w.'-[Type], nl].
