@@ -17,3 +17,15 @@ test(A,B) :-
 	must_be(natural,A),
 	must_be(maybe(natural),B).
 ==
+
+As of version 0.2.0, =|typedef|= supports generalised algebraic data
+types, where a parameterised type can have individually declared
+constructors with different instantiations of the type parameter,
+eg things like this:
+==
+:- type expr(_).
+:- type int(integer) :: expr(integer).
+:- type fl(float) :: expr(float).
+:- type expr(A) + expr(A) :: expr(A).
+==
+See the file =|test/example.pl|= for more examples.

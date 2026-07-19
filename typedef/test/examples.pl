@@ -3,6 +3,7 @@
 :- type pair(A,B) ---> A-B.
 :- type either(A,B) ---> left(A); right(B).
 :- type option(A) ---> none; some(A).
+:- type tree(A) ---> leaf(A); branch(tree(A), tree(A)).
 
 :- type expr(_).
 :- type int(integer) :: expr(integer).
