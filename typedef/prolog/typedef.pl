@@ -141,7 +141,7 @@ error:has_type(partial(Type),Term) :- !,
 has_type(Type,Term) :-
    user_type_def(Type), !, nonvar(Term),
    user_type_constructor(Type,Cons),
-   (  atomic(Cons) -> Cons=Term
+   (  atomic(Cons) -> error:has_type(Cons,Term)
    ;  functor(Cons,F,A),
       functor(Term,F,A),
       forall( arg(N,Cons,ArgType), (arg(N,Term,ArgVal), error:has_type(ArgType,ArgVal)))
